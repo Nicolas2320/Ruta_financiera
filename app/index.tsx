@@ -1,13 +1,6 @@
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import {
-  CalendarCheck,
-  Coffee,
-  LockKeyhole,
-  PiggyBank,
-  ShieldCheck,
-  TrendingUp
-} from "lucide-react-native";
+import { CalendarCheck, Coffee, LockKeyhole, PiggyBank, TrendingUp } from "lucide-react-native";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -56,11 +49,6 @@ export default function WelcomeScreen() {
           </View>
 
           <View style={styles.heroCard}>
-            <View style={styles.trustBadge}>
-              <ShieldCheck color={colors.support} size={17} strokeWidth={2.5} />
-              <Text style={styles.trustBadgeText}>No necesitas conectar tu banco.</Text>
-            </View>
-
             <Text style={styles.title}>
               Organiza tu dinero y construye un plan para tus metas
             </Text>
@@ -87,13 +75,8 @@ export default function WelcomeScreen() {
 
               <View style={styles.insightMetrics}>
                 <View>
-                  <Text style={styles.metricValue}>3 min</Text>
-                  <Text style={styles.metricLabel}>aprox.</Text>
-                </View>
-                <View style={styles.metricDivider} />
-                <View>
-                  <Text style={styles.metricValue}>0 datos</Text>
-                  <Text style={styles.metricLabel}>bancarios</Text>
+                  <Text style={styles.metricValue}>5-10 min</Text>
+                  <Text style={styles.metricLabel}>estimados</Text>
                 </View>
               </View>
             </View>
@@ -114,22 +97,17 @@ export default function WelcomeScreen() {
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel="Crear mi diagnóstico financiero"
+              icon={null}
               onPress={() => router.push("/privacy")}
               title="Crear mi diagnóstico"
             />
             <PrimaryButton
               accessibilityLabel="Explorar la demo de Ruta Financiera"
+              icon={null}
               onPress={() => router.push("/demo")}
               title="Explorar demo"
               variant="secondary"
             />
-          </View>
-
-          <View style={styles.privacyMessage}>
-            <LockKeyhole color={colors.textSubtle} size={16} strokeWidth={2.3} />
-            <Text style={styles.privacyText}>
-              Sin cédula, sin claves bancarias y sin conexión automática con tu banco.
-            </Text>
           </View>
         </View>
       </ScrollView>
@@ -181,22 +159,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.lg
-  },
-  trustBadge: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: colors.supportSoft,
-    borderRadius: radius.pill,
-    flexDirection: "row",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  trustBadgeText: {
-    color: colors.support,
-    flexShrink: 1,
-    fontSize: typography.caption,
-    fontWeight: "800"
   },
   title: {
     color: colors.text,
@@ -270,28 +232,10 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     marginTop: 2
   },
-  metricDivider: {
-    backgroundColor: colors.border,
-    height: 36,
-    width: 1
-  },
   benefitsSection: {
     gap: spacing.md
   },
   actions: {
     gap: spacing.sm
-  },
-  privacyMessage: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: spacing.sm,
-    paddingBottom: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
-  privacyText: {
-    color: colors.textSubtle,
-    flex: 1,
-    fontSize: typography.caption,
-    lineHeight: 19
   }
 });
