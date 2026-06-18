@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Ruta Financiera",
+    "slug": "ruta-financiera",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "rutafinanciera",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F7FAFC"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    }
+  }
+}
