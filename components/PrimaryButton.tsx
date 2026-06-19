@@ -20,6 +20,7 @@ type PrimaryButtonProps = {
   variant?: ButtonVariant;
   icon?: ComponentType<IconProps> | null;
   style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
 };
 
 export function PrimaryButton({
@@ -28,25 +29,35 @@ export function PrimaryButton({
   accessibilityLabel,
   variant = "primary",
   icon: Icon = ArrowRight,
-  style
+  style,
+  disabled = false
 }: PrimaryButtonProps) {
   const isPrimary = variant === "primary";
-  const contentColor = isPrimary ? colors.surface : colors.primary;
+  const contentColor = disabled ? colors.textSubtle : isPrimary ? colors.surface : colors.primary;
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
         isPrimary ? styles.primary : styles.secondary,
-        pressed && styles.pressed,
+        pressed && !disabled && styles.pressed,
+        disabled && styles.disabled,
         style
       ]}
     >
       <View style={styles.content}>
-        <Text style={[styles.text, isPrimary ? styles.primaryText : styles.secondaryText]}>
+        <Text
+          style={[
+            styles.text,
+            isPrimary ? styles.primaryText : styles.secondaryText,
+            disabled && styles.disabledText
+          ]}
+        >
           {title}
         </Text>
         {Icon ? <Icon color={contentColor} size={18} strokeWidth={2.4} /> : null}
@@ -71,6 +82,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderWidth: 1
   },
+  disabled: {
+    backgroundColor: "#E2E8F0",
+    borderColor: colors.border,
+    opacity: 0.86
+  },
   pressed: {
     opacity: 0.82,
     transform: [{ scale: 0.99 }]
@@ -90,5 +106,8 @@ const styles = StyleSheet.create({
   },
   secondaryText: {
     color: colors.primary
+  },
+  disabledText: {
+    color: colors.textSubtle
   }
 });
