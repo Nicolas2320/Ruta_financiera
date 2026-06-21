@@ -14,6 +14,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
+import { useAuth } from "../context/AuthContext";
+import { useOnboarding } from "../context/OnboardingContext";
 
 const welcomeRoute = require("../assets/illustrations/welcome-route.png");
 
@@ -71,6 +73,11 @@ const featureAccents = {
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { session } = useAuth();
+  const { hasCompletedOnboarding, onboardingSyncStatus } = useOnboarding();
+  const isLoadingProfile = Boolean(session && onboardingSyncStatus === "loading");
+  const primaryButtonTitle =
+    session && hasCompletedOnboarding ? "Ir a mi inicio" : "Crear mi diagnóstico";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -138,10 +145,23 @@ export default function WelcomeScreen() {
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel="Crear mi diagnóstico financiero"
+              disabled={isLoadingProfile}
               iconPosition="right"
-              onPress={() => router.push("/privacy")}
+              onPress={() => {
+                if (!session) {
+                  router.push("/auth");
+                  return;
+                }
+
+                if (hasCompletedOnboarding) {
+                  router.push("/dashboard");
+                  return;
+                }
+
+                router.push("/privacy");
+              }}
               style={styles.primaryButton}
-              title="Crear mi diagnóstico"
+              title={isLoadingProfile ? "Cargando..." : primaryButtonTitle}
             />
             <PrimaryButton
               accessibilityLabel="Explorar la demo de Ruta Financiera"

@@ -48,6 +48,27 @@ npm run typecheck
 npx expo install --check
 ```
 
+## Supabase
+
+La app puede persistir el onboarding y el progreso del plan mensual en Supabase.
+
+1. Crea un proyecto en Supabase.
+2. Ejecuta el SQL de `docs/supabase-schema.sql` en el SQL Editor.
+3. Copia `.env.example` a `.env` y completa:
+
+```bash
+EXPO_PUBLIC_SUPABASE_URL=...
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+```
+
+Para pruebas, puedes crear un usuario desde `/auth`. Si Supabase exige confirmacion por correo, confirma el email o desactiva temporalmente esa opcion en el proyecto de pruebas.
+
+### Naming convention
+
+- Technical structure uses English: files, functions, database tables, columns, policies, and environment variables.
+- User-facing copy stays in Spanish.
+- Values selected by the user can stay in Spanish because they are product/content data, not schema.
+
 ## Pantallas actuales
 
 - `/`: Pantalla de bienvenida.
