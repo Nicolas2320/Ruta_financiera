@@ -31,11 +31,43 @@ export const radius = {
 };
 
 export const typography = {
+  display: 35,
   title: 30,
+  heroTitle: 27,
+  cardTitle: 24,
+  brand: 21,
+  sectionTitle: 20,
+  question: 17,
+  option: 15,
+  button: 16,
   subtitle: 16,
   body: 15,
   caption: 13,
-  small: 12
+  badge: 12,
+  small: 11,
+  lineHeight: {
+    display: 41,
+    title: 36,
+    heroTitle: 32,
+    cardTitle: 29,
+    brand: 26,
+    sectionTitle: 26,
+    question: 23,
+    button: 22,
+    subtitle: 24,
+    body: 22,
+    option: 20,
+    caption: 18,
+    badge: 17,
+    small: 15
+  },
+  weight: {
+    regular: "400",
+    medium: "600",
+    semibold: "700",
+    bold: "800",
+    black: "900"
+  } as const
 };
 
 export const shadows = {

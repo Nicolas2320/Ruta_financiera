@@ -644,13 +644,13 @@ const styles = StyleSheet.create({
   title: {
     color: colors.text,
     fontSize: typography.title,
-    fontWeight: "900",
-    lineHeight: 36
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.title
   },
   subtitle: {
     color: colors.textMuted,
     fontSize: typography.subtitle,
-    lineHeight: 24
+    lineHeight: typography.lineHeight.subtitle
   },
   trustMessage: {
     alignItems: "flex-start",
@@ -664,8 +664,8 @@ const styles = StyleSheet.create({
     color: colors.support,
     flex: 1,
     fontSize: typography.caption,
-    fontWeight: "700",
-    lineHeight: 20
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
   },
   sectionCard: {
     ...shadows.card,
@@ -692,29 +692,29 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.text,
     flex: 1,
-    fontSize: 18,
-    fontWeight: "900",
-    lineHeight: 24
+    fontSize: typography.sectionTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.sectionTitle
   },
   sectionContent: {
     gap: spacing.md
   },
   highlightTitle: {
     color: colors.primaryDark,
-    fontSize: 18,
-    fontWeight: "900",
-    lineHeight: 24
+    fontSize: typography.sectionTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.sectionTitle
   },
   text: {
     color: colors.textMuted,
     fontSize: typography.body,
-    lineHeight: 22
+    lineHeight: typography.lineHeight.body
   },
   helperText: {
     color: colors.textSubtle,
     fontSize: typography.caption,
-    fontWeight: "700",
-    lineHeight: 18
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
   },
   warningBox: {
     backgroundColor: colors.warningSoft,
@@ -726,8 +726,8 @@ const styles = StyleSheet.create({
   warningText: {
     color: "#9A3412",
     fontSize: typography.caption,
-    fontWeight: "800",
-    lineHeight: 19
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption
   },
   valueRows: {
     borderColor: colors.border,
@@ -745,14 +745,15 @@ const styles = StyleSheet.create({
   valueLabel: {
     color: colors.textSubtle,
     fontSize: typography.caption,
-    fontWeight: "900",
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption,
     textTransform: "uppercase"
   },
   valueText: {
     color: colors.text,
     fontSize: typography.body,
-    fontWeight: "900",
-    lineHeight: 22
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
   },
   scenariosList: {
     gap: spacing.md
@@ -784,9 +785,9 @@ const styles = StyleSheet.create({
   scenarioTitle: {
     color: colors.text,
     flex: 1,
-    fontSize: 17,
-    fontWeight: "900",
-    lineHeight: 23,
+    fontSize: typography.question,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.question,
     minWidth: 170
   },
   contributionBox: {
@@ -800,20 +801,21 @@ const styles = StyleSheet.create({
   contributionLabel: {
     color: colors.textSubtle,
     fontSize: typography.caption,
-    fontWeight: "900",
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption,
     textTransform: "uppercase"
   },
   contributionValue: {
     color: colors.text,
-    fontSize: 18,
-    fontWeight: "900",
-    lineHeight: 24
+    fontSize: typography.sectionTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.sectionTitle
   },
   contributionDetail: {
     color: colors.textMuted,
     fontSize: typography.caption,
-    fontWeight: "700",
-    lineHeight: 19
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
   },
   assumptionBox: {
     backgroundColor: colors.supportSoft,
@@ -826,20 +828,21 @@ const styles = StyleSheet.create({
   assumptionLabel: {
     color: colors.support,
     fontSize: typography.caption,
-    fontWeight: "900",
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption,
     textTransform: "uppercase"
   },
   assumptionText: {
     color: colors.text,
     fontSize: typography.body,
-    fontWeight: "800",
-    lineHeight: 22
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.body
   },
   assumptionMuted: {
     color: colors.textMuted,
     fontSize: typography.caption,
-    fontWeight: "700",
-    lineHeight: 19
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
   },
   noticeBox: {
     backgroundColor: colors.surfaceMuted,
@@ -851,8 +854,8 @@ const styles = StyleSheet.create({
   noticeText: {
     color: colors.primaryDark,
     fontSize: typography.caption,
-    fontWeight: "800",
-    lineHeight: 19
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption
   },
   progressTrack: {
     backgroundColor: colors.surfaceMuted,
@@ -894,7 +897,8 @@ const styles = StyleSheet.create({
   tagText: {
     color: colors.primary,
     fontSize: typography.caption,
-    fontWeight: "900"
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   tagTextRecommended: {
     color: colors.support

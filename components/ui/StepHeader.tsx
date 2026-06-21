@@ -1,27 +1,42 @@
 import type { DimensionValue } from "react-native";
-import { StyleSheet, Text, View } from "react-native";
+import { ChevronLeft } from "lucide-react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { colors, radius, spacing, typography } from "../constants/theme";
+import { colors, radius, spacing, typography } from "../../constants/theme";
 
-type StepIndicatorProps = {
+type StepHeaderProps = {
   currentStep: number;
   totalSteps: number;
-  label: string;
+  title: string;
+  onBack: () => void;
 };
 
-export function StepIndicator({ currentStep, totalSteps, label }: StepIndicatorProps) {
+export function StepHeader({ currentStep, totalSteps, title, onBack }: StepHeaderProps) {
   const progress = `${((currentStep - 1) / (totalSteps - 1)) * 100}%` as DimensionValue;
 
   return (
     <View
-      accessibilityLabel={`Paso ${currentStep} de ${totalSteps}: ${label}`}
+      accessibilityLabel={`Paso ${currentStep} de ${totalSteps}: ${title}`}
       accessible
       style={styles.container}
     >
       <View style={styles.header}>
-        <Text style={styles.stepText}>Paso {currentStep} de {totalSteps}</Text>
-        <Text style={styles.label}>{label}</Text>
+        <Pressable
+          accessibilityLabel="Volver"
+          accessibilityRole="button"
+          onPress={onBack}
+          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+        >
+          <ChevronLeft color="#0B1B3F" size={21} strokeWidth={2.5} />
+        </Pressable>
+
+        <View style={styles.stepPill}>
+          <Text style={styles.stepPillText}>Paso {currentStep} de {totalSteps}</Text>
+        </View>
+
+        <Text style={styles.title}>{title}</Text>
       </View>
+
       <View style={styles.progressWrap}>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: progress }]} />
@@ -56,29 +71,42 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
     justifyContent: "space-between"
   },
-  stepText: {
+  backButton: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: "#D6E4F7",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: "center",
+    width: 38
+  },
+  pressed: {
+    opacity: 0.76,
+    transform: [{ scale: 0.98 }]
+  },
+  stepPill: {
     backgroundColor: colors.primarySoft,
     borderRadius: radius.pill,
-    color: colors.primary,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.caption,
-    overflow: "hidden",
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 18,
     paddingVertical: spacing.xs
   },
-  label: {
+  stepPillText: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  title: {
     color: colors.textSubtle,
+    flexBasis: 92,
     flexShrink: 1,
     fontSize: typography.caption,
-    fontWeight: typography.weight.bold,
+    fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption,
-    textAlign: "right",
-    textTransform: "uppercase"
+    textAlign: "right"
   },
   progressWrap: {
     height: 20,

@@ -53,7 +53,8 @@ const styles = StyleSheet.create({
   text: {
     color: colors.text,
     fontSize: typography.caption,
-    fontWeight: "800"
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption
   },
   textSelected: {
     color: colors.primary

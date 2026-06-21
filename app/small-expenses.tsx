@@ -1,31 +1,137 @@
+import type { ComponentType } from "react";
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { Coffee, ShieldCheck } from "lucide-react-native";
+import {
+  Store,
+  CarTaxiFront,
+  CircleEllipsis,
+  MessageCircleQuestionMark,
+  Hamburger,
+  CreditCard,
+  ArrowDown,
+  Gamepad2,
+  IceCreamBowl,
+  Leaf,
+  Search,
+  ShoppingBag,
+  Smartphone,
+  HandCoins,
+  Target,
+  Timer,
+  Wine,
+  PiggyBank
+} from "lucide-react-native";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
-import { SelectableChip } from "../components/SelectableChip";
-import { SelectableOption } from "../components/SelectableOption";
-import { StepIndicator } from "../components/StepIndicator";
+import { CategoryChip } from "../components/ui/CategoryChip";
+import { HeroInfoCard } from "../components/ui/HeroInfoCard";
+import { SelectableCard } from "../components/ui/SelectableCard";
+import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 
-const smallExpensePresence = ["Sí", "No", "No estoy seguro"] as const;
+const smallExpensesImage = require("../assets/illustrations/small-expenses.png");
 
-const smallExpenseCategories = [
-  "Cafés o snacks",
-  "Domicilios",
-  "Transporte extra",
-  "Suscripciones",
-  "Compras pequeñas",
-  "Salidas",
-  "Juegos o entretenimiento digital",
-  "Apps o servicios digitales",
-  "Antojos",
-  "Otros"
+type IconProps = {
+  color?: string;
+  size?: number;
+  strokeWidth?: number;
+};
+
+const smallExpensePresence = [
+  {
+    title: "Sí",
+    subtitle: "Sí, me pasa seguido.",
+    icon: HandCoins,
+    color: colors.primary,
+    backgroundColor: colors.primarySoft
+  },
+  {
+    title: "No",
+    subtitle: "No creo que gaste en cosas pequeñas.",
+    icon: PiggyBank,
+    color: colors.support,
+    backgroundColor: colors.supportSoft
+  },
+  {
+    title: "No estoy seguro",
+    subtitle: "No lo tengo claro.",
+    icon: MessageCircleQuestionMark,
+    color: "#8B5CF6",
+    backgroundColor: "#F1E8FF"
+  }
 ] as const;
+
+const smallExpenseCategories: Array<{
+  label: string;
+  icon: ComponentType<IconProps>;
+  color: string;
+  backgroundColor: string;
+}> = [
+  {
+    label: "Cafés o snacks",
+    icon: Hamburger,
+    color: "#9A5B20",
+    backgroundColor: "#FFF3E4"
+  },
+  {
+    label: "Domicilios",
+    icon: Store,
+    color: "#F97316",
+    backgroundColor: "#FFF1E7"
+  },
+  {
+    label: "Transporte extra",
+    icon: CarTaxiFront,
+    color: colors.primary,
+    backgroundColor: colors.primarySoft
+  },
+  {
+    label: "Suscripciones",
+    icon: CreditCard,
+    color: "#6D28D9",
+    backgroundColor: "#F1E8FF"
+  },
+  {
+    label: "Compras pequeñas",
+    icon: ShoppingBag,
+    color: colors.support,
+    backgroundColor: colors.supportSoft
+  },
+  {
+    label: "Salidas",
+    icon: Wine,
+    color: "#DB2777",
+    backgroundColor: "#FCE7F3"
+  },
+  {
+    label: "Juegos o entretenimiento digital",
+    icon: Gamepad2,
+    color: "#4F46E5",
+    backgroundColor: "#EEF2FF"
+  },
+  {
+    label: "Apps o servicios digitales",
+    icon: Smartphone,
+    color: "#0E7490",
+    backgroundColor: "#E6F7FB"
+  },
+  {
+    label: "Antojos",
+    icon: IceCreamBowl,
+    color: "#DB2777",
+    backgroundColor: "#FCE7F3"
+  },
+  {
+    label: "Otros",
+    icon: CircleEllipsis,
+    color: "#64748B",
+    backgroundColor: "#EEF2F7"
+  }
+];
 
 const smallExpenseRanges = [
   "Menos de $100.000",
@@ -36,11 +142,36 @@ const smallExpenseRanges = [
 ] as const;
 
 const smallExpenseIntentions = [
-  "Mantenerlos como están",
-  "Establecer un límite mensual",
-  "Reducir algunos",
-  "Redirigir una parte a una meta",
-  "Primero quiero entenderlos mejor"
+  {
+    title: "Mantenerlos como están",
+    icon: Leaf,
+    color: colors.support,
+    backgroundColor: colors.supportSoft
+  },
+  {
+    title: "Establecer un límite mensual",
+    icon: Timer,
+    color: "#F59E0B",
+    backgroundColor: colors.warningSoft
+  },
+  {
+    title: "Reducir algunos",
+    icon: ArrowDown,
+    color: "#7C9EFF",
+    backgroundColor: "#EEF4FF"
+  },
+  {
+    title: "Redirigir una parte a una meta",
+    icon: Target,
+    color: "#7C3AED",
+    backgroundColor: "#F1E8FF"
+  },
+  {
+    title: "Primero quiero entenderlos mejor",
+    icon: Search,
+    color: "#0E7490",
+    backgroundColor: "#E6F7FB"
+  }
 ] as const;
 
 export default function SmallExpensesScreen() {
@@ -113,41 +244,46 @@ export default function SmallExpensesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <StepIndicator currentStep={6} label="GASTOS HORMIGA" totalSteps={8} />
+          <StepHeader
+            currentStep={6}
+            onBack={() => router.push("/expenses")}
+            title="Gastos hormiga"
+            totalSteps={8}
+          />
 
-          <View style={styles.card}>
-            <View style={styles.iconWrap}>
-              <Coffee color={colors.primary} size={28} strokeWidth={2.4} />
-            </View>
-
-            <Text style={styles.title}>Pequeños gastos frecuentes</Text>
-
-            <Text style={styles.subtitle}>
-              No todos los gastos pequeños son malos. La idea es entenderlos y decidir cuáles
-              quieres mantener, limitar o redirigir a una meta.
-            </Text>
-
-            <View style={styles.trustMessage}>
-              <ShieldCheck color={colors.support} size={18} strokeWidth={2.4} />
-              <Text style={styles.supportText}>
-                Tú decides qué gastos conservar y cuáles ajustar.
-              </Text>
-            </View>
-          </View>
+          <HeroInfoCard
+            badge="Tú decides qué gastos conservar y cuáles ajustar."
+            image={smallExpensesImage}
+            imageStyle={styles.heroImage}
+            text="No todos los gastos pequeños son malos. La idea es entenderlos y decidir cuáles quieres mantener, limitar o redirigir a una meta."
+            title="Pequeños gastos frecuentes"
+          />
 
           <View style={styles.card}>
             <Text style={styles.questionTitle}>
               ¿Sientes que tienes gastos pequeños frecuentes?
             </Text>
-            <View style={styles.optionsList}>
-              {smallExpensePresence.map((presence) => (
-                <SelectableOption
-                  key={presence}
-                  label={presence}
-                  onPress={() => handlePresenceSelect(presence)}
-                  selected={selectedPresence === presence}
-                />
-              ))}
+            <View style={styles.presenceGrid}>
+              {smallExpensePresence.map((presence) => {
+                const Icon = presence.icon;
+
+                return (
+                  <SelectableCard
+                    key={presence.title}
+                    leading={
+                      <View style={[styles.softIcon, { backgroundColor: presence.backgroundColor }]}>
+                        <Icon color={presence.color} size={23} strokeWidth={2.5} />
+                      </View>
+                    }
+                    onPress={() => handlePresenceSelect(presence.title)}
+                    selected={selectedPresence === presence.title}
+                    style={styles.presenceCard}
+                    subtitle={presence.subtitle}
+                    title={presence.title}
+                    variant="tile"
+                  />
+                );
+              })}
             </View>
           </View>
 
@@ -157,13 +293,17 @@ export default function SmallExpensesScreen() {
               <Text style={styles.helperText}>
                 Puedes elegir varias categorías. Si respondiste “Sí”, elige al menos una.
               </Text>
-              <View style={styles.chipsList}>
+              <View style={styles.categoryGrid}>
                 {smallExpenseCategories.map((category) => (
-                  <SelectableChip
-                    key={category}
-                    label={category}
-                    onPress={() => toggleCategory(category)}
-                    selected={selectedCategories.includes(category)}
+                  <CategoryChip
+                    key={category.label}
+                    backgroundColor={category.backgroundColor}
+                    color={category.color}
+                    icon={category.icon}
+                    label={category.label}
+                    onPress={() => toggleCategory(category.label)}
+                    selected={selectedCategories.includes(category.label)}
+                    style={styles.smallChip}
                   />
                 ))}
               </View>
@@ -178,33 +318,49 @@ export default function SmallExpensesScreen() {
             </View>
           )}
 
-          <View style={styles.card}>
-            <Text style={styles.questionTitle}>
-              ¿Cuánto crees que gastas al mes en estos consumos?
-            </Text>
-            <View style={styles.optionsList}>
-              {smallExpenseRanges.map((range) => (
-                <SelectableOption
-                  key={range}
-                  label={range}
-                  onPress={() => setSelectedRange(range)}
-                  selected={selectedRange === range}
-                />
-              ))}
+          <View style={styles.twoColumnSection}>
+            <View style={styles.card}>
+              <Text style={styles.questionTitle}>
+                ¿Cuánto crees que gastas al mes en estos consumos?
+              </Text>
+              <View style={styles.optionList}>
+                {smallExpenseRanges.map((range) => (
+                  <SelectableCard
+                    key={range}
+                    onPress={() => setSelectedRange(range)}
+                    selected={selectedRange === range}
+                    title={range}
+                  />
+                ))}
+              </View>
             </View>
-          </View>
 
-          <View style={styles.card}>
-            <Text style={styles.questionTitle}>¿Qué te gustaría hacer con estos gastos?</Text>
-            <View style={styles.optionsList}>
-              {smallExpenseIntentions.map((intention) => (
-                <SelectableOption
-                  key={intention}
-                  label={intention}
-                  onPress={() => setSelectedIntention(intention)}
-                  selected={selectedIntention === intention}
-                />
-              ))}
+            <View style={styles.card}>
+              <Text style={styles.questionTitle}>¿Qué te gustaría hacer con estos gastos?</Text>
+              <View style={styles.optionList}>
+                {smallExpenseIntentions.map((intention) => {
+                  const Icon = intention.icon;
+
+                  return (
+                    <SelectableCard
+                      key={intention.title}
+                      leading={
+                        <View
+                          style={[
+                            styles.rowIcon,
+                            { backgroundColor: intention.backgroundColor }
+                          ]}
+                        >
+                          <Icon color={intention.color} size={20} strokeWidth={2.5} />
+                        </View>
+                      }
+                      onPress={() => setSelectedIntention(intention.title)}
+                      selected={selectedIntention === intention.title}
+                      title={intention.title}
+                    />
+                  );
+                })}
+              </View>
             </View>
           </View>
 
@@ -212,14 +368,16 @@ export default function SmallExpensesScreen() {
             <PrimaryButton
               accessibilityLabel="Continuar hacia ahorros y deudas"
               disabled={!canContinue}
-              icon={null}
+              iconPosition="right"
               onPress={handleContinue}
+              style={styles.primaryButton}
               title="Continuar"
             />
             <PrimaryButton
               accessibilityLabel="Volver a gastos mensuales"
               icon={null}
               onPress={() => router.push("/expenses")}
+              style={styles.secondaryButton}
               title="Volver"
               variant="secondary"
             />
@@ -230,15 +388,24 @@ export default function SmallExpensesScreen() {
   );
 }
 
+function NumberBadge({ value }: { value: number }) {
+  return (
+    <View style={styles.numberBadge}>
+      <Text style={styles.numberBadgeText}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: colors.background,
+    backgroundColor: "#F3F7FC",
     flex: 1
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: spacing.lg,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md
+    paddingTop: spacing.sm
   },
   container: {
     alignSelf: "center",
@@ -247,84 +414,107 @@ const styles = StyleSheet.create({
     maxWidth: 520,
     width: "100%"
   },
+  heroImage: {
+    height: 126,
+    width: 126,
+  },
   card: {
     ...shadows.card,
     backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
+    borderColor: "#E1EAF7",
+    borderRadius: 22,
     borderWidth: 1,
     gap: spacing.md,
-    padding: spacing.lg
+    padding: spacing.md
   },
   softCard: {
     backgroundColor: colors.surfaceMuted,
     borderColor: "#D7E7FF",
-    borderRadius: radius.lg,
+    borderRadius: 22,
     borderWidth: 1,
-    gap: spacing.sm,
-    padding: spacing.lg
-  },
-  iconWrap: {
-    alignItems: "center",
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    height: 54,
-    justifyContent: "center",
-    width: 54
-  },
-  title: {
-    color: colors.text,
-    fontSize: typography.title,
-    fontWeight: "900",
-    lineHeight: 36
-  },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: typography.subtitle,
-    lineHeight: 24
-  },
-  trustMessage: {
-    alignItems: "flex-start",
-    backgroundColor: colors.supportSoft,
-    borderRadius: radius.md,
-    flexDirection: "row",
     gap: spacing.sm,
     padding: spacing.md
   },
-  supportText: {
-    color: colors.support,
-    flex: 1,
+  numberBadge: {
+    alignItems: "center",
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    height: 28,
+    justifyContent: "center",
+    width: 28
+  },
+  numberBadgeText: {
+    color: colors.surface,
     fontSize: typography.caption,
-    fontWeight: "700",
-    lineHeight: 20
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   questionTitle: {
     color: colors.text,
-    fontSize: 18,
-    fontWeight: "800",
-    lineHeight: 24
+    fontSize: typography.question,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.question
   },
   helperText: {
-    color: colors.textSubtle,
+    color: colors.textMuted,
     fontSize: typography.caption,
-    fontWeight: "700",
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption,
     marginTop: -spacing.sm
   },
   softText: {
     color: colors.textMuted,
     fontSize: typography.body,
-    lineHeight: 22
+    lineHeight: typography.lineHeight.body
   },
-  optionsList: {
+  presenceGrid: {
+    flexDirection: "row",
     gap: spacing.sm
   },
-  chipsList: {
+  presenceCard: {
+    minHeight: 130
+  },
+  softIcon: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    height: 42,
+    justifyContent: "center",
+    width: 42
+  },
+  categoryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
   },
+  smallChip: {
+    flexBasis: "46%",
+    minWidth: 145
+  },
+  twoColumnSection: {
+    gap: spacing.md
+  },
+  optionList: {
+    gap: spacing.sm
+  },
+  rowIcon: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    height: 36,
+    justifyContent: "center",
+    width: 36
+  },
   actions: {
     gap: spacing.sm,
     paddingBottom: spacing.md
+  },
+  primaryButton: {
+    borderRadius: 17,
+    minHeight: 56
+  },
+  secondaryButton: {
+    backgroundColor: colors.surface,
+    borderColor: "#CFE0FF",
+    borderRadius: 17,
+    minHeight: 54
   }
 });

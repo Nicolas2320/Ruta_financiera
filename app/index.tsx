@@ -112,7 +112,7 @@ export default function WelcomeScreen() {
             source={welcomeRoute}
             style={styles.routeCard}
           >
-            <View pointerEvents="none" style={styles.routeTextVeil} />
+            <View style={styles.routeTextVeil} />
             <View style={styles.routeCopy}>
               <Text style={styles.routeTitle}>Un camino claro hacia tus metas</Text>
               <Text style={styles.routeText}>Paso a paso, a tu ritmo.</Text>
@@ -207,18 +207,19 @@ const styles = StyleSheet.create({
     width: 42
   },
   brandName: {
-    color: "#08122E",
-    fontSize: 21,
-    fontWeight: "900"
+    color: colors.text,
+    fontSize: typography.brand,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.brand
   },
   headlineBlock: {
     gap: spacing.sm
   },
   titleLine: {
-    color: "#08122E",
-    fontSize: 35,
-    fontWeight: "900",
-    lineHeight: 41
+    color: colors.text,
+    fontSize: typography.display,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.display
   },
   goalLine: {
     alignItems: "flex-start",
@@ -239,9 +240,9 @@ const styles = StyleSheet.create({
     width: "92%"
   },
   subtitle: {
-    color: "#465876",
+    color: colors.textMuted,
     fontSize: typography.body,
-    lineHeight: 24,
+    lineHeight: typography.lineHeight.body,
     maxWidth: 440,
     paddingTop: spacing.xs
   },
@@ -263,6 +264,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 120,
     height: 164,
     left: 0,
+    pointerEvents: "none",
     position: "absolute",
     top: 0,
     width: "82%"
@@ -274,15 +276,15 @@ const styles = StyleSheet.create({
     zIndex: 1
   },
   routeTitle: {
-    color: "#08122E",
-    fontSize: 26,
-    fontWeight: "900",
-    lineHeight: 31
+    color: colors.text,
+    fontSize: typography.heroTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.heroTitle
   },
   routeText: {
-    color: "#354766",
+    color: colors.textMuted,
     fontSize: typography.subtitle,
-    lineHeight: 23,
+    lineHeight: typography.lineHeight.subtitle,
     marginTop: spacing.sm
   },
   trustBadge: {
@@ -309,15 +311,15 @@ const styles = StyleSheet.create({
     flex: 1
   },
   trustTitle: {
-    color: "#08122E",
-    fontSize: 12,
-    fontWeight: "900",
-    lineHeight: 16
+    color: colors.text,
+    fontSize: typography.badge,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.badge
   },
   trustText: {
-    color: "#465876",
-    fontSize: 11,
-    lineHeight: 15
+    color: colors.textMuted,
+    fontSize: typography.small,
+    lineHeight: typography.lineHeight.small
   },
   featuresGrid: {
     flexDirection: "row",
@@ -341,15 +343,15 @@ const styles = StyleSheet.create({
     width: 40
   },
   featureTitle: {
-    color: "#08122E",
-    fontSize: 13,
-    fontWeight: "900",
-    lineHeight: 17
+    color: colors.text,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   featureText: {
-    color: "#465876",
-    fontSize: 11,
-    lineHeight: 16,
+    color: colors.textMuted,
+    fontSize: typography.small,
+    lineHeight: typography.lineHeight.small,
     marginTop: spacing.xs
   },
   actions: {

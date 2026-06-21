@@ -83,12 +83,12 @@ const styles = StyleSheet.create({
   title: {
     color: colors.text,
     fontSize: typography.title,
-    fontWeight: "900",
-    lineHeight: 36
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.title
   },
   subtitle: {
     color: colors.textMuted,
     fontSize: typography.subtitle,
-    lineHeight: 24
+    lineHeight: typography.lineHeight.subtitle
   }
 });

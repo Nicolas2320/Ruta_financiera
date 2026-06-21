@@ -286,13 +286,13 @@ const styles = StyleSheet.create({
   title: {
     color: colors.text,
     fontSize: typography.title,
-    fontWeight: "900",
-    lineHeight: 36
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.title
   },
   subtitle: {
     color: colors.textMuted,
     fontSize: typography.subtitle,
-    lineHeight: 24
+    lineHeight: typography.lineHeight.subtitle
   },
   trustMessage: {
     alignItems: "flex-start",
@@ -306,8 +306,8 @@ const styles = StyleSheet.create({
     color: colors.support,
     flex: 1,
     fontSize: typography.caption,
-    fontWeight: "700",
-    lineHeight: 20
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
   },
   noticeCard: {
     backgroundColor: colors.surfaceMuted,
@@ -319,8 +319,8 @@ const styles = StyleSheet.create({
   noticeText: {
     color: colors.primaryDark,
     fontSize: typography.body,
-    fontWeight: "800",
-    lineHeight: 22
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.body
   },
   sectionCard: {
     ...shadows.card,
@@ -340,9 +340,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.text,
     flex: 1,
-    fontSize: 18,
-    fontWeight: "900",
-    lineHeight: 24
+    fontSize: typography.sectionTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.sectionTitle
   },
   editButton: {
     backgroundColor: colors.primarySoft,
@@ -359,7 +359,8 @@ const styles = StyleSheet.create({
   editButtonText: {
     color: colors.primary,
     fontSize: typography.caption,
-    fontWeight: "900"
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   fieldsList: {
     gap: spacing.md
@@ -370,14 +371,15 @@ const styles = StyleSheet.create({
   fieldLabel: {
     color: colors.textSubtle,
     fontSize: typography.caption,
-    fontWeight: "800",
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption,
     textTransform: "uppercase"
   },
   fieldValue: {
     color: colors.text,
     fontSize: typography.body,
-    fontWeight: "800",
-    lineHeight: 22
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.body
   },
   emptyValue: {
     color: colors.textSubtle
@@ -398,7 +400,8 @@ const styles = StyleSheet.create({
   valueChipText: {
     color: colors.primary,
     fontSize: typography.caption,
-    fontWeight: "800"
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption
   },
   actions: {
     gap: spacing.sm,

@@ -1,16 +1,49 @@
+import type { ComponentType } from "react";
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { Coffee, ShieldCheck } from "lucide-react-native";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Apple,
+  BusFront,
+  Cable,
+  CalendarCheck,
+  CircleEllipsis,
+  CreditCard,
+  Frown,
+  Gamepad2,
+  GraduationCap,
+  HandHeart,
+  House,
+  Meh,
+  ShoppingBag,
+  Smile,
+  Users
+} from "lucide-react-native";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
-import { SelectableChip } from "../components/SelectableChip";
-import { SelectableOption } from "../components/SelectableOption";
-import { StepIndicator } from "../components/StepIndicator";
-import { colors, radius, shadows, spacing, typography } from "../constants/theme";
+import { CategoryChip } from "../components/ui/CategoryChip";
+import { HeroInfoCard } from "../components/ui/HeroInfoCard";
+import { SelectableCard } from "../components/ui/SelectableCard";
+import { StepHeader } from "../components/ui/StepHeader";
+import { colors, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+
+const expensesCupReceipt = require("../assets/illustrations/expenses-cup-receipt.png");
+
+type IconProps = {
+  color?: string;
+  size?: number;
+  strokeWidth?: number;
+};
 
 const expenseRanges = [
   "Menos de $1.000.000",
@@ -21,30 +54,116 @@ const expenseRanges = [
   "No estoy seguro"
 ] as const;
 
-const expenseCategories = [
-  "Arriendo o vivienda",
-  "Alimentación",
-  "Transporte",
-  "Servicios públicos",
-  "Deudas",
-  "Educación",
-  "Salud",
-  "Familia",
-  "Entretenimiento",
-  "Suscripciones",
-  "Compras",
-  "Otros"
-] as const;
+const expenseCategories: Array<{
+  label: string;
+  icon: ComponentType<IconProps>;
+  color: string;
+  backgroundColor: string;
+}> = [
+  {
+    label: "Vivienda",
+    icon: House,
+    color: "#7C3AED",
+    backgroundColor: "#EFE7FF"
+  },
+  {
+    label: "Alimentación",
+    icon: Apple,
+    color: "#2F9E57",
+    backgroundColor: "#E8F8EF"
+  },
+  {
+    label: "Transporte",
+    icon: BusFront,
+    color: colors.primary,
+    backgroundColor: colors.primarySoft
+  },
+  {
+    label: "Servicios públicos",
+    icon: Cable,
+    color: "#1C7ED6",
+    backgroundColor: "#E5F2FF"
+  },
+  {
+    label: "Deudas",
+    icon: CreditCard,
+    color: "#2563EB",
+    backgroundColor: "#EAF1FF"
+  },
+  {
+    label: "Educación",
+    icon: GraduationCap,
+    color: "#2563EB",
+    backgroundColor: "#EAF1FF"
+  },
+  {
+    label: "Salud",
+    icon: HandHeart,
+    color: "#EF4444",
+    backgroundColor: "#FFE8E8"
+  },
+  {
+    label: "Familia",
+    icon: Users,
+    color: "#7C3AED",
+    backgroundColor: "#EFE7FF"
+  },
+  {
+    label: "Entretenimiento",
+    icon: Gamepad2,
+    color: "#F59E0B",
+    backgroundColor: "#FFF5E7"
+  },
+  {
+    label: "Suscripciones",
+    icon: CalendarCheck,
+    color: colors.primary,
+    backgroundColor: colors.primarySoft
+  },
+  {
+    label: "Compras",
+    icon: ShoppingBag,
+    color: "#EF4444",
+    backgroundColor: "#FFE8E8"
+  },
+  {
+    label: "Otros",
+    icon: CircleEllipsis,
+    color: "#64748B",
+    backgroundColor: "#EEF2F7"
+  }
+];
 
 const expenseFeelings = [
-  "Los tengo bajo control",
-  "A veces gasto más de lo planeado",
-  "No sé exactamente en qué se va mi dinero",
-  "Me preocupa no poder ahorrar"
+  {
+    title: "Los tengo bajo control",
+    value: "Los tengo bajo control",
+    icon: Smile,
+    color: colors.support,
+    backgroundColor: "#F0FBF4",
+    borderColor: "#CDEFE0"
+  },
+  {
+    title: "Gasto más de lo planeado",
+    value: "Gasto más de lo planeado",
+    icon: Meh,
+    color: "#C88416",
+    backgroundColor: "#FFF8E8",
+    borderColor: "#F5E2B9"
+  },
+  {
+    title: "No sé en qué se me va el dinero",
+    value: "No sé en qué se va mi dinero",
+    icon: Frown,
+    color: "#E5484D",
+    backgroundColor: "#FFF0F1",
+    borderColor: "#F7D0D4"
+  }
 ] as const;
 
 export default function ExpensesScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const { onboarding, updateOnboarding } = useOnboarding();
   const [selectedExpenseRange, setSelectedExpenseRange] = useState<string | null>(
     onboarding.expensesRange
@@ -59,6 +178,7 @@ export default function ExpensesScreen() {
   const canContinue = Boolean(
     selectedExpenseRange && selectedCategories.length > 0 && selectedExpenseFeeling
   );
+  const showSideBySide = width >= 390;
 
   const toggleCategory = (category: string) => {
     setSelectedCategories((currentCategories) =>
@@ -90,64 +210,65 @@ export default function ExpensesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <StepIndicator currentStep={5} label="GASTOS" totalSteps={8} />
+          <StepHeader
+            currentStep={5}
+            onBack={() => router.push("/income")}
+            title="Gastos"
+            totalSteps={8}
+          />
 
-          <View style={styles.card}>
-            <View style={styles.iconWrap}>
-              <Coffee color={colors.primary} size={28} strokeWidth={2.4} />
+          <HeroInfoCard
+            badge="Podrás ajustar tus gastos más adelante."
+            image={expensesCupReceipt}
+            imageStyle={styles.heroImage}
+            text="No necesitas calcular cada peso. Con un rango aproximado podemos entender cómo se distribuye tu dinero."
+            title="Tus gastos mensuales"
+          />
+
+          <View style={[styles.midsection, showSideBySide && styles.midsectionRow]}>
+            <View style={[styles.card, showSideBySide && styles.rangePanel]}>
+              <Text style={styles.questionTitle}>¿Cuál es tu rango de gastos mensuales?</Text>
+              <View style={styles.compactList}>
+                {expenseRanges.map((expenseRange) => (
+                  <SelectableCard
+                    key={expenseRange}
+                    onPress={() => setSelectedExpenseRange(expenseRange)}
+                    selected={selectedExpenseRange === expenseRange}
+                    style={styles.compactOption}
+                    title={expenseRange}
+                  />
+                ))}
+              </View>
             </View>
 
-            <Text style={styles.title}>Tus gastos mensuales</Text>
-
-            <Text style={styles.subtitle}>
-              No necesitas calcular cada peso. Empecemos con un rango aproximado para entender cómo
-              se distribuye tu dinero.
-            </Text>
-
-            <View style={styles.trustMessage}>
-              <ShieldCheck color={colors.support} size={18} strokeWidth={2.4} />
-              <Text style={styles.supportText}>Podrás ajustar tus gastos más adelante.</Text>
-            </View>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.questionTitle}>¿Cuál es tu rango de gastos mensuales?</Text>
-            <View style={styles.optionsList}>
-              {expenseRanges.map((expenseRange) => (
-                <SelectableOption
-                  key={expenseRange}
-                  label={expenseRange}
-                  onPress={() => setSelectedExpenseRange(expenseRange)}
-                  selected={selectedExpenseRange === expenseRange}
-                />
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.questionTitle}>¿Cuáles son tus gastos principales?</Text>
-            <Text style={styles.helperText}>Puedes elegir varias categorías.</Text>
-            <View style={styles.chipsList}>
-              {expenseCategories.map((category) => (
-                <SelectableChip
-                  key={category}
-                  label={category}
-                  onPress={() => toggleCategory(category)}
-                  selected={selectedCategories.includes(category)}
-                />
-              ))}
+            <View style={[styles.card, showSideBySide && styles.categoryPanel]}>
+              <Text style={styles.questionTitle}>¿Cuáles son tus gastos principales?</Text>
+              <Text style={styles.helperText}>Puedes elegir varias categorías.</Text>
+              <View style={styles.categoryGrid}>
+                {expenseCategories.map((category) => (
+                  <CategoryChip
+                    key={category.label}
+                    backgroundColor={category.backgroundColor}
+                    color={category.color}
+                    icon={category.icon}
+                    label={category.label}
+                    onPress={() => toggleCategory(category.label)}
+                    selected={selectedCategories.includes(category.label)}
+                  />
+                ))}
+              </View>
             </View>
           </View>
 
           <View style={styles.card}>
             <Text style={styles.questionTitle}>¿Cómo sientes tus gastos actualmente?</Text>
-            <View style={styles.optionsList}>
+            <View style={styles.feelingGrid}>
               {expenseFeelings.map((feeling) => (
-                <SelectableOption
-                  key={feeling}
-                  label={feeling}
-                  onPress={() => setSelectedExpenseFeeling(feeling)}
-                  selected={selectedExpenseFeeling === feeling}
+                <FeelingCard
+                  key={feeling.value}
+                  feeling={feeling}
+                  onPress={() => setSelectedExpenseFeeling(feeling.value)}
+                  selected={selectedExpenseFeeling === feeling.value}
                 />
               ))}
             </View>
@@ -157,14 +278,16 @@ export default function ExpensesScreen() {
             <PrimaryButton
               accessibilityLabel="Continuar hacia gastos hormiga"
               disabled={!canContinue}
-              icon={null}
+              iconPosition="right"
               onPress={handleContinue}
+              style={styles.primaryButton}
               title="Continuar"
             />
             <PrimaryButton
               accessibilityLabel="Volver a ingresos"
               icon={null}
               onPress={() => router.push("/income")}
+              style={styles.secondaryButton}
               title="Volver"
               variant="secondary"
             />
@@ -175,15 +298,50 @@ export default function ExpensesScreen() {
   );
 }
 
+function FeelingCard({
+  feeling,
+  selected,
+  onPress
+}: {
+  feeling: (typeof expenseFeelings)[number];
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const Icon = feeling.icon;
+
+  return (
+    <Pressable
+      accessibilityLabel={feeling.title}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[
+        styles.feelingCard,
+        {
+          backgroundColor: feeling.backgroundColor,
+          borderColor: selected ? colors.primary : feeling.borderColor
+        },
+        selected && styles.feelingCardSelected
+      ]}
+    >
+      <Icon color={feeling.color} size={46} strokeWidth={2.4} />
+      <Text style={[styles.feelingText, selected && styles.feelingTextSelected]}>
+        {feeling.title}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: colors.background,
+    backgroundColor: "#F3F7FC",
     flex: 1
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: spacing.lg,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md
+    paddingTop: spacing.sm
   },
   container: {
     alignSelf: "center",
@@ -192,71 +350,101 @@ const styles = StyleSheet.create({
     maxWidth: 520,
     width: "100%"
   },
+  heroImage: {
+    height: 126,
+    width: 126
+  },
   card: {
     ...shadows.card,
     backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
+    borderColor: "#E1EAF7",
+    borderRadius: 22,
     borderWidth: 1,
-    gap: spacing.md,
-    padding: spacing.lg
-  },
-  iconWrap: {
-    alignItems: "center",
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    height: 54,
-    justifyContent: "center",
-    width: 54
-  },
-  title: {
-    color: colors.text,
-    fontSize: typography.title,
-    fontWeight: "900",
-    lineHeight: 36
-  },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: typography.subtitle,
-    lineHeight: 24
-  },
-  trustMessage: {
-    alignItems: "flex-start",
-    backgroundColor: colors.supportSoft,
-    borderRadius: radius.md,
-    flexDirection: "row",
     gap: spacing.sm,
     padding: spacing.md
   },
-  supportText: {
-    color: colors.support,
-    flex: 1,
-    fontSize: typography.caption,
-    fontWeight: "700",
-    lineHeight: 20
-  },
   questionTitle: {
     color: colors.text,
-    fontSize: 18,
-    fontWeight: "800",
-    lineHeight: 24
+    fontSize: typography.question,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.question
   },
   helperText: {
-    color: colors.textSubtle,
-    fontSize: typography.caption,
-    fontWeight: "700",
-    marginTop: -spacing.sm
+    color: colors.textMuted,
+    fontSize: typography.small,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.small,
+    marginTop: -spacing.xs
   },
-  optionsList: {
+  midsection: {
+    gap: spacing.md
+  },
+  midsectionRow: {
+    alignItems: "stretch",
+    flexDirection: "row",
     gap: spacing.sm
   },
-  chipsList: {
+  rangePanel: {
+    flex: 0.82,
+    paddingHorizontal: spacing.sm
+  },
+  categoryPanel: {
+    flex: 1.22,
+    paddingHorizontal: spacing.sm
+  },
+  compactList: {
+    gap: spacing.xs
+  },
+  compactOption: {
+    minHeight: 42,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  categoryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
+    gap: spacing.xs
+  },
+  feelingGrid: {
+    flexDirection: "row",
     gap: spacing.sm
+  },
+  feelingCard: {
+    alignItems: "center",
+    borderRadius: 17,
+    borderWidth: 1,
+    flex: 1,
+    gap: spacing.lg,
+    justifyContent: "center",
+    minHeight: 150,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md
+  },
+  feelingCardSelected: {
+    borderWidth: 2
+  },
+  feelingText: {
+    color: colors.text,
+    fontSize: typography.option,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.option,
+    textAlign: "center"
+  },
+  feelingTextSelected: {
+    color: colors.primary
   },
   actions: {
     gap: spacing.sm,
     paddingBottom: spacing.md
+  },
+  primaryButton: {
+    borderRadius: 17,
+    minHeight: 56
+  },
+  secondaryButton: {
+    backgroundColor: colors.surface,
+    borderColor: "#CFE0FF",
+    borderRadius: 17,
+    minHeight: 54
   }
 });

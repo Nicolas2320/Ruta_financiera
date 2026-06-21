@@ -165,8 +165,9 @@ function StepProgress({ currentStep, totalSteps }: { currentStep: number; totalS
       accessible
       style={styles.progressWrap}
     >
-      <View style={styles.progressTrack} />
-      <View style={[styles.progressFill, { width: progressWidth }]} />
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: progressWidth }]} />
+      </View>
       <View style={styles.progressDots}>
         {Array.from({ length: totalSteps }).map((_, index) => {
           const step = index + 1;
@@ -255,12 +256,14 @@ const styles = StyleSheet.create({
   stepPillText: {
     color: colors.primary,
     fontSize: typography.caption,
-    fontWeight: "900"
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   headerTitle: {
-    color: "#41506C",
+    color: colors.textSubtle,
     fontSize: typography.caption,
-    fontWeight: "900"
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   progressWrap: {
     height: 18,
@@ -272,6 +275,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     height: 3,
     left: 10,
+    overflow: "hidden",
     position: "absolute",
     right: 10
   },
@@ -279,7 +283,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: radius.pill,
     height: 3,
-    left: 10,
+    left: 0,
     position: "absolute"
   },
   progressDots: {
@@ -331,15 +335,15 @@ const styles = StyleSheet.create({
     width: 36
   },
   title: {
-    color: "#08122E",
-    fontSize: 27,
-    fontWeight: "900",
-    lineHeight: 32
+    color: colors.text,
+    fontSize: typography.heroTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.heroTitle
   },
   mainText: {
-    color: "#465876",
-    fontSize: 13,
-    lineHeight: 20
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
   },
   shieldImage: {
     height: 178,
@@ -368,8 +372,8 @@ const styles = StyleSheet.create({
     color: colors.support,
     flex: 1,
     fontSize: typography.caption,
-    fontWeight: "900",
-    lineHeight: 18
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   sectionHeader: {
     alignItems: "center",
@@ -378,10 +382,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs
   },
   sectionTitle: {
-    color: "#08122E",
-    fontSize: 20,
-    fontWeight: "900",
-    lineHeight: 26
+    color: colors.text,
+    fontSize: typography.sectionTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.sectionTitle
   },
   greenText: {
     color: colors.support
@@ -449,11 +453,11 @@ const styles = StyleSheet.create({
     width: 38
   },
   dataText: {
-    color: "#08122E",
+    color: colors.text,
     flex: 1,
-    fontSize: 15,
-    fontWeight: "900",
-    lineHeight: 20
+    fontSize: typography.option,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.option
   },
   actions: {
     gap: spacing.sm,

@@ -3,7 +3,7 @@ import type { StyleProp, TextStyle, ViewStyle } from "react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ArrowRight } from "lucide-react-native";
 
-import { colors, radius, spacing } from "../constants/theme";
+import { colors, radius, spacing, typography } from "../constants/theme";
 
 type ButtonVariant = "primary" | "secondary";
 
@@ -114,8 +114,8 @@ const styles = StyleSheet.create({
     right: 0
   },
   text: {
-    fontSize: 16,
-    fontWeight: "700"
+    fontSize: typography.button,
+    fontWeight: typography.weight.semibold
   } satisfies TextStyle,
   trailingText: {
     paddingHorizontal: spacing.xl

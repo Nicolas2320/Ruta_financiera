@@ -1,15 +1,22 @@
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { PiggyBank, ShieldCheck } from "lucide-react-native";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ArrowLeftRight, CalendarCheck, PiggyBank } from "lucide-react-native";
+import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
-import { SelectableOption } from "../components/SelectableOption";
-import { StepIndicator } from "../components/StepIndicator";
+import { HeroInfoCard } from "../components/ui/HeroInfoCard";
+import { SelectableCard } from "../components/ui/SelectableCard";
+import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+
+const incomePiggy = require("../assets/illustrations/income-piggy.png");
+const frequencyMonthly = require("../assets/icons/frequency-monthly.png");
+const frequencyBiweekly = require("../assets/icons/frequency-biweekly.png");
+const frequencyWeekly = require("../assets/icons/frequency-weekly.png");
+const frequencyIrregular = require("../assets/icons/frequency-irregular.png");
 
 const incomeRanges = [
   "Menos de $1.500.000",
@@ -19,8 +26,48 @@ const incomeRanges = [
   "Más de $8.000.000"
 ] as const;
 
-const incomeTypes = ["Fijo", "Variable", "Mixto"] as const;
-const incomeFrequencies = ["Mensual", "Quincenal", "Semanal", "Irregular"] as const;
+const incomeTypes = [
+  {
+    title: "Fijo",
+    subtitle: "Ingresas estable todos los meses",
+    icon: CalendarCheck,
+    color: colors.primary,
+    backgroundColor: colors.primarySoft
+  },
+  {
+    title: "Variable",
+    subtitle: "Tus ingresos cambian",
+    icon: ArrowLeftRight,
+    color: colors.support,
+    backgroundColor: colors.supportSoft
+  },
+  {
+    title: "Mixto",
+    subtitle: "Combinación de fijo y variable",
+    icon: PiggyBank,
+    color: "#C88416",
+    backgroundColor: colors.warningSoft
+  }
+] as const;
+
+const incomeFrequencies = [
+  {
+    title: "Mensual",
+    image: frequencyMonthly
+  },
+  {
+    title: "Quincenal",
+    image: frequencyBiweekly
+  },
+  {
+    title: "Semanal",
+    image: frequencyWeekly
+  },
+  {
+    title: "Irregular",
+    image: frequencyIrregular
+  }
+] as const;
 
 export default function IncomeScreen() {
   const router = useRouter();
@@ -61,37 +108,30 @@ export default function IncomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <StepIndicator currentStep={4} label="Ingresos" totalSteps={8} />
+          <StepHeader
+            currentStep={4}
+            onBack={() => router.push("/profile")}
+            title="Ingresos"
+            totalSteps={8}
+          />
 
-          <View style={styles.card}>
-            <View style={styles.iconWrap}>
-              <PiggyBank color={colors.primary} size={28} strokeWidth={2.4} />
-            </View>
-
-            <Text style={styles.title}>Tus ingresos</Text>
-
-            <Text style={styles.subtitle}>
-              No necesitamos saber tu salario exacto. Con un rango aproximado podemos darte una
-              primera orientación.
-            </Text>
-
-            <View style={styles.trustMessage}>
-              <ShieldCheck color={colors.support} size={18} strokeWidth={2.4} />
-              <Text style={styles.supportText}>
-                Puedes ajustar esta información más adelante.
-              </Text>
-            </View>
-          </View>
+          <HeroInfoCard
+            badge="Puedes ajustar esta información más adelante."
+            image={incomePiggy}
+            imageStyle={styles.heroImage}
+            text="No necesitamos saber tu salario exacto. Con un rango aproximado podemos darte una primera orientación."
+            title="Tus ingresos"
+          />
 
           <View style={styles.card}>
             <Text style={styles.questionTitle}>¿Cuál es tu rango de ingresos mensuales?</Text>
-            <View style={styles.optionsList}>
+            <View style={styles.optionList}>
               {incomeRanges.map((incomeRange) => (
-                <SelectableOption
+                <SelectableCard
                   key={incomeRange}
-                  label={incomeRange}
                   onPress={() => setSelectedIncomeRange(incomeRange)}
                   selected={selectedIncomeRange === incomeRange}
+                  title={incomeRange}
                 />
               ))}
             </View>
@@ -99,27 +139,53 @@ export default function IncomeScreen() {
 
           <View style={styles.card}>
             <Text style={styles.questionTitle}>¿Qué tipo de ingreso tienes?</Text>
-            <View style={styles.optionsList}>
-              {incomeTypes.map((incomeType) => (
-                <SelectableOption
-                  key={incomeType}
-                  label={incomeType}
-                  onPress={() => setSelectedIncomeType(incomeType)}
-                  selected={selectedIncomeType === incomeType}
-                />
-              ))}
+            <View style={styles.typeGrid}>
+              {incomeTypes.map((incomeType) => {
+                const Icon = incomeType.icon;
+
+                return (
+                  <SelectableCard
+                    key={incomeType.title}
+                    leading={
+                      <View
+                        style={[
+                          styles.typeIcon,
+                          { backgroundColor: incomeType.backgroundColor }
+                        ]}
+                      >
+                        <Icon color={incomeType.color} size={25} strokeWidth={2.4} />
+                      </View>
+                    }
+                    onPress={() => setSelectedIncomeType(incomeType.title)}
+                    selected={selectedIncomeType === incomeType.title}
+                    subtitle={incomeType.subtitle}
+                    title={incomeType.title}
+                    variant="tile"
+                  />
+                );
+              })}
             </View>
           </View>
 
           <View style={styles.card}>
             <Text style={styles.questionTitle}>¿Con qué frecuencia recibes ingresos?</Text>
-            <View style={styles.optionsList}>
-              {incomeFrequencies.map((incomeFrequency) => (
-                <SelectableOption
-                  key={incomeFrequency}
-                  label={incomeFrequency}
-                  onPress={() => setSelectedIncomeFrequency(incomeFrequency)}
-                  selected={selectedIncomeFrequency === incomeFrequency}
+            <View style={styles.frequencyGrid}>
+              {incomeFrequencies.map((frequency) => (
+                <SelectableCard
+                  key={frequency.title}
+                  leading={
+                    <Image
+                      accessibilityIgnoresInvertColors
+                      resizeMode="contain"
+                      source={frequency.image}
+                      style={styles.frequencyImage}
+                    />
+                  }
+                  onPress={() => setSelectedIncomeFrequency(frequency.title)}
+                  selected={selectedIncomeFrequency === frequency.title}
+                  style={styles.frequencyCard}
+                  title={frequency.title}
+                  variant="center"
                 />
               ))}
             </View>
@@ -129,14 +195,16 @@ export default function IncomeScreen() {
             <PrimaryButton
               accessibilityLabel="Continuar hacia preguntas de gastos"
               disabled={!canContinue}
-              icon={null}
+              iconPosition="right"
               onPress={handleContinue}
+              style={styles.primaryButton}
               title="Continuar"
             />
             <PrimaryButton
               accessibilityLabel="Volver al perfil básico"
               icon={null}
               onPress={() => router.push("/profile")}
+              style={styles.secondaryButton}
               title="Volver"
               variant="secondary"
             />
@@ -149,13 +217,14 @@ export default function IncomeScreen() {
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: colors.background,
+    backgroundColor: "#F3F7FC",
     flex: 1
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: spacing.lg,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md
+    paddingTop: spacing.sm
   },
   container: {
     alignSelf: "center",
@@ -164,60 +233,66 @@ const styles = StyleSheet.create({
     maxWidth: 520,
     width: "100%"
   },
+  heroImage: {
+    height: 126,
+    width: 126
+  },
   card: {
     ...shadows.card,
     backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
+    borderColor: "#E1EAF7",
+    borderRadius: 22,
     borderWidth: 1,
     gap: spacing.md,
-    padding: spacing.lg
-  },
-  iconWrap: {
-    alignItems: "center",
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    height: 54,
-    justifyContent: "center",
-    width: 54
-  },
-  title: {
-    color: colors.text,
-    fontSize: typography.title,
-    fontWeight: "900",
-    lineHeight: 36
-  },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: typography.subtitle,
-    lineHeight: 24
-  },
-  trustMessage: {
-    alignItems: "flex-start",
-    backgroundColor: colors.supportSoft,
-    borderRadius: radius.md,
-    flexDirection: "row",
-    gap: spacing.sm,
     padding: spacing.md
-  },
-  supportText: {
-    color: colors.support,
-    flex: 1,
-    fontSize: typography.caption,
-    fontWeight: "700",
-    lineHeight: 20
   },
   questionTitle: {
     color: colors.text,
-    fontSize: 18,
-    fontWeight: "800",
-    lineHeight: 24
+    fontSize: typography.question,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.question
   },
-  optionsList: {
+  optionList: {
+    gap: spacing.xs
+  },
+  typeGrid: {
+    flexDirection: "row",
     gap: spacing.sm
+  },
+  typeIcon: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    height: 42,
+    justifyContent: "center",
+    marginBottom: spacing.xs,
+    width: 42
+  },
+  frequencyGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  frequencyCard: {
+    flexBasis: "47%",
+    flexGrow: 1,
+    minHeight: 82
+  },
+  frequencyImage: {
+    height: 34,
+    width: 34
   },
   actions: {
     gap: spacing.sm,
     paddingBottom: spacing.md
+  },
+  primaryButton: {
+    borderRadius: 17,
+    minHeight: 56
+  },
+  secondaryButton: {
+    backgroundColor: colors.surface,
+    borderColor: "#CFE0FF",
+    borderRadius: 17,
+    minHeight: 54
   }
 });

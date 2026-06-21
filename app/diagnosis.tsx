@@ -256,7 +256,7 @@ function getMainPriority(onboarding: OnboardingSnapshot, metrics: FinancialMetri
 
   if (
     onboarding.expensesFeeling === "Me preocupa no poder ahorrar" ||
-    onboarding.expensesFeeling === "No sé exactamente en qué se va mi dinero"
+    onboarding.expensesFeeling === "No sé en qué se va mi dinero"
   ) {
     return {
       key: "expenses",
@@ -478,7 +478,7 @@ function getRecommendedActions(onboarding: OnboardingSnapshot, metrics: Financia
   if (
     (metrics.expensePercentage !== null && metrics.expensePercentage >= 85) ||
     onboarding.expensesFeeling === "Me preocupa no poder ahorrar" ||
-    onboarding.expensesFeeling === "No sé exactamente en qué se va mi dinero"
+    onboarding.expensesFeeling === "No sé en qué se va mi dinero"
   ) {
     addAction("Revisa tus gastos variables esta semana.");
   }
@@ -873,13 +873,13 @@ const styles = StyleSheet.create({
   title: {
     color: colors.text,
     fontSize: typography.title,
-    fontWeight: "900",
-    lineHeight: 36
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.title
   },
   subtitle: {
     color: colors.textMuted,
     fontSize: typography.subtitle,
-    lineHeight: 24
+    lineHeight: typography.lineHeight.subtitle
   },
   trustMessage: {
     alignItems: "flex-start",
@@ -893,8 +893,8 @@ const styles = StyleSheet.create({
     color: colors.support,
     flex: 1,
     fontSize: typography.caption,
-    fontWeight: "700",
-    lineHeight: 20
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
   },
   sectionCard: {
     ...shadows.card,
@@ -921,29 +921,29 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.text,
     flex: 1,
-    fontSize: 18,
-    fontWeight: "900",
-    lineHeight: 24
+    fontSize: typography.sectionTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.sectionTitle
   },
   sectionContent: {
     gap: spacing.md
   },
   highlightTitle: {
     color: colors.primaryDark,
-    fontSize: 18,
-    fontWeight: "900",
-    lineHeight: 24
+    fontSize: typography.sectionTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.sectionTitle
   },
   text: {
     color: colors.textMuted,
     fontSize: typography.body,
-    lineHeight: 22
+    lineHeight: typography.lineHeight.body
   },
   helperText: {
     color: colors.textSubtle,
     fontSize: typography.caption,
-    fontWeight: "700",
-    lineHeight: 18
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
   },
   metricsGrid: {
     flexDirection: "row",
@@ -972,20 +972,20 @@ const styles = StyleSheet.create({
   metricLabel: {
     color: colors.textSubtle,
     fontSize: typography.small,
-    fontWeight: "900",
-    lineHeight: 16,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.small,
     textTransform: "uppercase"
   },
   metricValue: {
     color: colors.text,
-    fontSize: 17,
-    fontWeight: "900",
-    lineHeight: 22
+    fontSize: typography.question,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.question
   },
   metricDetail: {
     color: colors.textMuted,
     fontSize: typography.caption,
-    lineHeight: 18
+    lineHeight: typography.lineHeight.caption
   },
   valueRows: {
     borderColor: colors.border,
@@ -1003,14 +1003,15 @@ const styles = StyleSheet.create({
   valueLabel: {
     color: colors.textSubtle,
     fontSize: typography.caption,
-    fontWeight: "900",
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption,
     textTransform: "uppercase"
   },
   valueText: {
     color: colors.text,
     fontSize: typography.body,
-    fontWeight: "900",
-    lineHeight: 22
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
   },
   flowBarTrack: {
     backgroundColor: colors.surfaceMuted,
@@ -1051,7 +1052,8 @@ const styles = StyleSheet.create({
   legendText: {
     color: colors.textMuted,
     fontSize: typography.caption,
-    fontWeight: "800"
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption
   },
   subsection: {
     gap: spacing.xs
@@ -1059,8 +1061,8 @@ const styles = StyleSheet.create({
   subsectionTitle: {
     color: colors.text,
     fontSize: typography.body,
-    fontWeight: "900",
-    lineHeight: 22
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
   },
   actionsList: {
     gap: spacing.sm
@@ -1086,14 +1088,15 @@ const styles = StyleSheet.create({
   actionNumberText: {
     color: colors.primary,
     fontSize: typography.caption,
-    fontWeight: "900"
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   actionText: {
     color: colors.text,
     flex: 1,
     fontSize: typography.body,
-    fontWeight: "800",
-    lineHeight: 21
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.body
   },
   actions: {
     gap: spacing.sm,
@@ -1111,6 +1114,7 @@ const styles = StyleSheet.create({
   tertiaryText: {
     color: colors.textSubtle,
     fontSize: typography.body,
-    fontWeight: "800"
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.body
   }
 });
