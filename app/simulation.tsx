@@ -16,16 +16,10 @@ import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import {
-  formatCOP,
-  getFinancialDataSourceLabel,
-  getGoalTargetAmountDisplay,
-  getMonthlyExpensesDisplay,
-  getMonthlyIncomeDisplay,
-  getPreferredMonthlyExpenses,
-  getPreferredMonthlyIncome,
-  getSmallExpenseRangeEstimate,
-  type FinancialRangeEstimate
-} from "../utils/financialRanges";
+  calculateFinancialSnapshot,
+  type FinancialSnapshot
+} from "../utils/financialCalculations";
+import { formatCOP, type FinancialRangeEstimate } from "../utils/financialRanges";
 import type { ExactFinancialValues } from "../types/financial";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
@@ -38,6 +32,7 @@ type FinancialDisplay = {
 };
 
 type SimulationBase = {
+  snapshot: FinancialSnapshot;
   incomeDisplay: FinancialDisplay;
   expenseDisplay: FinancialDisplay;
   incomeValue: number | null;
@@ -134,24 +129,86 @@ function toPercentWidth(value: number): `${number}%` {
   return `${value}%`;
 }
 
+function toFinancialDisplaySource(source: "exact" | "estimated" | "missing"): FinancialDisplay["source"] {
+  if (source === "exact") {
+    return "exact";
+  }
+
+  if (source === "estimated") {
+    return "range";
+  }
+
+  return "empty";
+}
+
+function getSnapshotDisplay({
+  exactLabel,
+  estimatedLabel,
+  source,
+  value
+}: {
+  exactLabel: string;
+  estimatedLabel: string;
+  source: "exact" | "estimated" | "missing";
+  value: number | null;
+}): FinancialDisplay {
+  if (value === null) {
+    return {
+      label: estimatedLabel,
+      value: "No disponible",
+      source: "empty",
+      helper: "Aun no tenemos suficiente informacion para estimar este dato."
+    };
+  }
+
+  const isExact = source === "exact";
+
+  return {
+    label: isExact ? exactLabel : estimatedLabel,
+    value: isExact ? formatCOP(value) : `${formatCOP(value)} aprox.`,
+    source: toFinancialDisplaySource(source),
+    helper: isExact
+      ? "Basado en tus datos ingresados."
+      : "Estimado a partir del rango seleccionado."
+  };
+}
+
 function getSimulationBase(
   onboarding: OnboardingSnapshot,
   exactValues: ExactFinancialValues
 ): SimulationBase {
-  const financialProfile = { onboarding, exactValues };
-  const incomeDisplay = getMonthlyIncomeDisplay(financialProfile);
-  const expenseDisplay = getMonthlyExpensesDisplay(financialProfile);
-  const smallExpenseEstimate = getSmallExpenseRangeEstimate(onboarding.smallExpensesRange);
-  const incomeMidpoint = getPreferredMonthlyIncome(financialProfile);
-  const expenseMidpoint = getPreferredMonthlyExpenses(financialProfile);
-  const estimatedMargin =
-    incomeMidpoint !== null && expenseMidpoint !== null ? incomeMidpoint - expenseMidpoint : null;
+  const snapshot = calculateFinancialSnapshot({ onboarding, exactValues });
+  const incomeDisplay = getSnapshotDisplay({
+    exactLabel: "Ingreso mensual",
+    estimatedLabel: "Rango de ingresos",
+    source: snapshot.sourceMap.monthlyIncome,
+    value: snapshot.cashflow.monthlyIncome
+  });
+  const expenseDisplay = getSnapshotDisplay({
+    exactLabel: "Gasto mensual",
+    estimatedLabel: "Rango de gastos",
+    source: snapshot.sourceMap.monthlyExpenses,
+    value: snapshot.cashflow.monthlyExpenses
+  });
+  const smallExpenseEstimate: FinancialRangeEstimate = {
+    min: null,
+    max: null,
+    midpoint: snapshot.values.smallExpenses,
+    label:
+      snapshot.values.smallExpenses !== null
+        ? `${formatCOP(snapshot.values.smallExpenses)} aprox.`
+        : "No disponible"
+  };
+  const incomeMidpoint = snapshot.cashflow.monthlyIncome;
+  const expenseMidpoint = snapshot.cashflow.monthlyExpenses;
+  const estimatedMargin = snapshot.cashflow.monthlyMargin;
   const expensePercentage =
-    incomeMidpoint !== null && incomeMidpoint > 0 && expenseMidpoint !== null
-      ? Math.round((expenseMidpoint / incomeMidpoint) * 100)
+    snapshot.cashflow.expensesToIncomeRatio !== null
+      ? Math.round(snapshot.cashflow.expensesToIncomeRatio * 100)
       : null;
 
   return {
+    snapshot,
     incomeDisplay,
     expenseDisplay,
     incomeValue: incomeMidpoint,
@@ -202,13 +259,23 @@ function sumAvailableParts(parts: Array<number | null>) {
 
 function getScenarios(metrics: SimulationBase): Scenario[] {
   const marginWasUsed = metrics.estimatedMargin !== null && metrics.estimatedMargin > 0;
-  const currentPaceContribution = contributionFromPositiveValue(metrics.estimatedMargin, 0.1);
-  const balancedBase = contributionFromPositiveValue(metrics.estimatedMargin, 0.2);
+  const suggestedContribution =
+    metrics.snapshot.cashflow.suggestedMonthlyContribution > 0
+      ? metrics.snapshot.cashflow.suggestedMonthlyContribution
+      : null;
+  const currentPaceContribution = suggestedContribution;
+  const balancedBase =
+    suggestedContribution !== null
+      ? suggestedContribution
+      : contributionFromPositiveValue(metrics.estimatedMargin, 0.2);
   const balancedSmallExpenseAdjustment = contributionFromPositiveValue(
     metrics.smallExpenseEstimate.midpoint,
     0.2
   );
-  const intensiveBase = contributionFromPositiveValue(metrics.estimatedMargin, 0.35);
+  const intensiveBase =
+    suggestedContribution !== null
+      ? suggestedContribution * 1.25
+      : contributionFromPositiveValue(metrics.estimatedMargin, 0.35);
   const intensiveSmallExpenseAdjustment = contributionFromPositiveValue(
     metrics.smallExpenseEstimate.midpoint,
     0.3
@@ -226,7 +293,7 @@ function getScenarios(metrics: SimulationBase): Scenario[] {
       description:
         "Separar una parte pequeña de tu margen mensual puede ayudarte a avanzar de forma gradual.",
       monthlyContribution: currentPaceContribution,
-      assumption: "10% del margen mensual estimado.",
+      assumption: "Aporte mensual sugerido con las reglas v0.1.",
       marginWasUsed,
       tags: ["Esfuerzo bajo", "Avance gradual", "Riesgo bajo"],
       comment: "Avance lento, pero más fácil de sostener.",
@@ -241,7 +308,7 @@ function getScenarios(metrics: SimulationBase): Scenario[] {
       description:
         "Combinar una parte de tu margen mensual con una reducción moderada de gastos pequeños puede liberar dinero para tu meta sin cambios extremos.",
       monthlyContribution: sumAvailableParts([balancedBase, balancedSmallExpenseAdjustment]),
-      assumption: "20% del margen mensual estimado + 20% de gastos pequeños frecuentes.",
+      assumption: "Aporte sugerido + 20% de gastos pequeños frecuentes.",
       marginWasUsed,
       tags: ["Recomendado", "Ajustes pequeños", "Más sostenible"],
       comment: "Pequeños cambios pueden acumularse con el tiempo.",
@@ -254,7 +321,7 @@ function getScenarios(metrics: SimulationBase): Scenario[] {
       description:
         "Un esfuerzo mayor puede acelerar tu avance, pero debe ser sostenible para tu vida diaria.",
       monthlyContribution: sumAvailableParts([intensiveBase, intensiveSmallExpenseAdjustment]),
-      assumption: "35% del margen mensual estimado + 30% de gastos pequeños frecuentes.",
+      assumption: "Aporte sugerido ampliado + 30% de gastos pequeños frecuentes.",
       marginWasUsed,
       tags: ["Esfuerzo alto", "Más exigente", "Revisar sostenibilidad"],
       comment: "Úsalo solo como referencia. Un plan exigente debe adaptarse a tu realidad.",
@@ -294,6 +361,11 @@ function getMostImpactfulVariable(
   metrics: SimulationBase,
   exactValues: ExactFinancialValues
 ): ImpactfulVariable {
+  return {
+    title: metrics.snapshot.priority.title,
+    text: metrics.snapshot.priority.description
+  };
+
   if (
     onboarding.debtSituation === "Son una preocupación importante" ||
     onboarding.debtPaymentShare === "Más del 40%"
@@ -311,7 +383,7 @@ function getMostImpactfulVariable(
     };
   }
 
-  if (metrics.expensePercentage !== null && metrics.expensePercentage >= 85) {
+  if ((metrics.expensePercentage ?? 0) >= 85) {
     return {
       title: "Revisar gastos variables",
       text: "Tus gastos parecen ocupar una parte alta de tus ingresos. Revisar categorías variables puede darte más margen."
@@ -456,11 +528,11 @@ function ScenarioCard({
 export default function SimulationScreen() {
   const router = useRouter();
   const { exactValues, onboarding } = useOnboarding();
-  const financialProfile = { onboarding, exactValues };
   const metrics = useMemo(
     () => getSimulationBase(onboarding, exactValues),
     [exactValues, onboarding]
   );
+  const snapshot = metrics.snapshot;
   const scenarios = useMemo(() => getScenarios(metrics), [metrics]);
   const impactfulVariable = useMemo(
     () => getMostImpactfulVariable(onboarding, metrics, exactValues),
@@ -471,13 +543,23 @@ export default function SimulationScreen() {
     0
   );
   const canCalculateMargin = metrics.estimatedMargin !== null;
-  const goalAmountDisplay = getGoalTargetAmountDisplay(financialProfile);
-  const needsGoalAmountDefinition =
-    !hasGoalTargetAmount(exactValues) && goalAmountNeedsDefinition(onboarding.goalAmountRange);
+  const needsGoalAmountDefinition = snapshot.goal.targetAmount === null;
+  const goalAmountLabel =
+    snapshot.sourceMap.goalTargetAmount === "exact"
+      ? "Monto objetivo ingresado"
+      : "Monto objetivo estimado";
   const goalAmountRangeLabel =
-    goalAmountDisplay.source === "exact"
-      ? goalAmountDisplay.value
+    snapshot.goal.targetAmount !== null
+      ? `${formatCOP(snapshot.goal.targetAmount)}${snapshot.sourceMap.goalTargetAmount === "exact" ? "" : " aprox."}`
       : getGoalAmountRangeLabel(onboarding.goalAmountRange);
+  const suggestedContributionLabel =
+    snapshot.cashflow.suggestedMonthlyContribution > 0
+      ? `${formatCOP(snapshot.cashflow.suggestedMonthlyContribution)} aprox.`
+      : "Por definir con margen mensual";
+  const estimatedMonthsToGoalLabel =
+    snapshot.goal.estimatedMonthsToGoal !== null
+      ? `Podria tomar cerca de ${snapshot.goal.estimatedMonthsToGoal} meses con estos datos.`
+      : snapshot.goal.label;
   const isInvestmentGoal = onboarding.financialGoal === "Empezar a invertir";
 
   return (
@@ -518,9 +600,18 @@ export default function SimulationScreen() {
               <ValueRow label="Meta principal" value={onboarding.financialGoal ?? "No definida"} />
               <ValueRow label="Horizonte" value={onboarding.goalHorizon ?? "No definido"} />
               <ValueRow
-                label={goalAmountDisplay.label}
+                label={goalAmountLabel}
                 value={goalAmountRangeLabel}
               />
+              <ValueRow
+                label="Monto restante estimado"
+                value={
+                  snapshot.goal.remainingAmount !== null
+                    ? `${formatCOP(snapshot.goal.remainingAmount)} aprox.`
+                    : "Por calcular"
+                }
+              />
+              <ValueRow label="Tiempo estimado" value={estimatedMonthsToGoalLabel} />
             </View>
 
             {needsGoalAmountDefinition ? (
@@ -562,11 +653,13 @@ export default function SimulationScreen() {
                 label="Gastos pequeños estimados"
                 value={getSmallExpenseLabel(onboarding, metrics.smallExpenseEstimate)}
               />
+              <ValueRow label="Aporte mensual sugerido" value={suggestedContributionLabel} />
+              <ValueRow label="Precisión del plan" value={snapshot.precision.label} />
             </View>
 
             {canCalculateMargin ? (
               <Text style={styles.helperText}>
-                {getFinancialDataSourceLabel(financialProfile)}
+                {snapshot.precision.message}
               </Text>
             ) : (
               <Text style={styles.text}>

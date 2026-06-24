@@ -16,17 +16,11 @@ import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import {
-  formatCOP,
-  getCurrentSavingsDisplay,
-  getFinancialDataSourceLabel,
-  getMonthlyExpensesDisplay,
-  getMonthlyIncomeDisplay,
-  getPreferredCurrentSavings,
-  getPreferredMonthlyExpenses,
-  getPreferredMonthlyIncome,
-  getSmallExpenseRangeEstimate,
-  type FinancialRangeEstimate
-} from "../utils/financialRanges";
+  calculateFinancialSnapshot,
+  generateMonthlyActions,
+  type FinancialSnapshot
+} from "../utils/financialCalculations";
+import { formatCOP, type FinancialRangeEstimate } from "../utils/financialRanges";
 import type { ExactFinancialValues } from "../types/financial";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
@@ -47,6 +41,7 @@ type MainPriority = {
 };
 
 type FinancialMetrics = {
+  snapshot: FinancialSnapshot;
   incomeDisplay: FinancialDisplay;
   expenseDisplay: FinancialDisplay;
   currentSavingsDisplay: FinancialDisplay;
@@ -170,26 +165,90 @@ function getDebtPaymentLabel(debtPaymentShare: string | null) {
   return `${debtPaymentShare} de ingresos`;
 }
 
+function toFinancialDisplaySource(source: "exact" | "estimated" | "missing"): FinancialDisplay["source"] {
+  if (source === "exact") {
+    return "exact";
+  }
+
+  if (source === "estimated") {
+    return "range";
+  }
+
+  return "empty";
+}
+
+function getSnapshotDisplay({
+  exactLabel,
+  estimatedLabel,
+  source,
+  value
+}: {
+  exactLabel: string;
+  estimatedLabel: string;
+  source: "exact" | "estimated" | "missing";
+  value: number | null;
+}): FinancialDisplay {
+  if (value === null) {
+    return {
+      label: estimatedLabel,
+      value: "No disponible",
+      source: "empty",
+      helper: "Aun no tenemos suficiente informacion para estimar este dato."
+    };
+  }
+
+  const isExact = source === "exact";
+
+  return {
+    label: isExact ? exactLabel : estimatedLabel,
+    value: isExact ? formatCOP(value) : `${formatCOP(value)} aprox.`,
+    source: toFinancialDisplaySource(source),
+    helper: isExact
+      ? "Basado en tus datos ingresados."
+      : "Estimado a partir del rango seleccionado."
+  };
+}
+
 function getFinancialMetrics(
   onboarding: OnboardingSnapshot,
   exactValues: ExactFinancialValues
 ): FinancialMetrics {
-  const financialProfile = { onboarding, exactValues };
-  const incomeDisplay = getMonthlyIncomeDisplay(financialProfile);
-  const expenseDisplay = getMonthlyExpensesDisplay(financialProfile);
-  const currentSavingsDisplay = getCurrentSavingsDisplay(financialProfile);
-  const smallExpenseEstimate = getSmallExpenseRangeEstimate(onboarding.smallExpensesRange);
-  const incomeMidpoint = getPreferredMonthlyIncome(financialProfile);
-  const expenseMidpoint = getPreferredMonthlyExpenses(financialProfile);
-  const currentSavingsValue = getPreferredCurrentSavings(financialProfile);
-  const smallExpenseMidpoint = smallExpenseEstimate.midpoint;
-  const estimatedMargin =
-    incomeMidpoint !== null && incomeMidpoint > 0 && expenseMidpoint !== null
-      ? incomeMidpoint - expenseMidpoint
-      : null;
+  const snapshot = calculateFinancialSnapshot({ onboarding, exactValues });
+  const incomeDisplay = getSnapshotDisplay({
+    exactLabel: "Ingreso mensual",
+    estimatedLabel: "Rango de ingresos",
+    source: snapshot.sourceMap.monthlyIncome,
+    value: snapshot.cashflow.monthlyIncome
+  });
+  const expenseDisplay = getSnapshotDisplay({
+    exactLabel: "Gasto mensual",
+    estimatedLabel: "Rango de gastos",
+    source: snapshot.sourceMap.monthlyExpenses,
+    value: snapshot.cashflow.monthlyExpenses
+  });
+  const currentSavingsDisplay = getSnapshotDisplay({
+    exactLabel: "Ahorro actual",
+    estimatedLabel: "Rango de ahorros",
+    source: snapshot.sourceMap.currentSavings,
+    value: snapshot.values.currentSavings
+  });
+  const smallExpenseEstimate: FinancialRangeEstimate = {
+    min: null,
+    max: null,
+    midpoint: snapshot.values.smallExpenses,
+    label:
+      snapshot.values.smallExpenses !== null
+        ? `${formatCOP(snapshot.values.smallExpenses)} aprox.`
+        : "No disponible"
+  };
+  const incomeMidpoint = snapshot.cashflow.monthlyIncome;
+  const expenseMidpoint = snapshot.cashflow.monthlyExpenses;
+  const currentSavingsValue = snapshot.values.currentSavings;
+  const smallExpenseMidpoint = snapshot.values.smallExpenses;
+  const estimatedMargin = snapshot.cashflow.monthlyMargin;
   const expensePercentage =
-    incomeMidpoint !== null && incomeMidpoint > 0 && expenseMidpoint !== null
-      ? Math.round((expenseMidpoint / incomeMidpoint) * 100)
+    snapshot.cashflow.expensesToIncomeRatio !== null
+      ? Math.round(snapshot.cashflow.expensesToIncomeRatio * 100)
       : null;
   const smallExpensePercentage =
     incomeMidpoint !== null && incomeMidpoint > 0 && smallExpenseMidpoint !== null
@@ -219,6 +278,7 @@ function getFinancialMetrics(
         : "No disponible";
 
   return {
+    snapshot,
     incomeDisplay,
     expenseDisplay,
     currentSavingsDisplay,
@@ -247,6 +307,22 @@ function getFinancialMetrics(
 }
 
 function getMainPriority(onboarding: OnboardingSnapshot, metrics: FinancialMetrics): MainPriority {
+  const priorityKeyMap: Record<FinancialSnapshot["priority"]["key"], PriorityKey> = {
+    debt_pressure: "debt",
+    organize_cashflow: "expenses",
+    build_emergency_fund: "emergency",
+    review_small_expenses: "smallExpenses",
+    advance_goal: "goal",
+    learn_investing: "investment",
+    keep_tracking: "goal"
+  };
+
+  return {
+    key: priorityKeyMap[metrics.snapshot.priority.key],
+    title: metrics.snapshot.priority.title,
+    text: metrics.snapshot.priority.description
+  };
+
   if (onboarding.debtSituation === "Son una preocupación importante") {
     return {
       key: "debt",
@@ -282,7 +358,7 @@ function getMainPriority(onboarding: OnboardingSnapshot, metrics: FinancialMetri
     };
   }
 
-  if (metrics.expensePercentage !== null && metrics.expensePercentage >= 85) {
+  if ((metrics.expensePercentage ?? 0) >= 85) {
     return {
       key: "expenses",
       title: "Tu prioridad podría ser organizar tus gastos",
@@ -505,6 +581,8 @@ function getRecommendedActions(
   metrics: FinancialMetrics,
   exactValues: ExactFinancialValues
 ) {
+  return generateMonthlyActions(metrics.snapshot).map((action) => action.title);
+
   const actions: string[] = [];
   const addAction = (action: string) => {
     if (!actions.includes(action)) {
@@ -521,7 +599,7 @@ function getRecommendedActions(
   }
 
   if (
-    (metrics.expensePercentage !== null && metrics.expensePercentage >= 85) ||
+    (metrics.expensePercentage ?? 0) >= 85 ||
     onboarding.expensesFeeling === "Me preocupa no poder ahorrar" ||
     onboarding.expensesFeeling === "No sé en qué se va mi dinero"
   ) {
@@ -655,7 +733,6 @@ function ValueRow({ label, value }: { label: string; value: string }) {
 export default function DiagnosisScreen() {
   const router = useRouter();
   const { exactValues, onboarding } = useOnboarding();
-  const financialProfile = { onboarding, exactValues };
   const metrics = useMemo(
     () => getFinancialMetrics(onboarding, exactValues),
     [exactValues, onboarding]
@@ -706,6 +783,11 @@ export default function DiagnosisScreen() {
       detail: metrics.debtPaymentInterpretation
     }
   ];
+  const emergencyMessage =
+    metrics.snapshot.emergencyFund.coverageMonths !== null
+      ? `${metrics.snapshot.emergencyFund.label}. Con estos datos, tu ahorro cubre cerca de ${metrics.snapshot.emergencyFund.coverageMonths.toFixed(1).replace(".0", "")} meses de gasto mensual.`
+      : metrics.snapshot.emergencyFund.label;
+  const debtMessage = metrics.snapshot.debt.label;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -760,7 +842,7 @@ export default function DiagnosisScreen() {
               ))}
             </View>
             <Text style={styles.helperText}>
-              {getFinancialDataSourceLabel(financialProfile)}
+              {metrics.snapshot.precision.message}
             </Text>
           </InfoCard>
 
@@ -807,7 +889,7 @@ export default function DiagnosisScreen() {
             icon={<ShieldCheck color={colors.primary} size={18} strokeWidth={2.4} />}
             title="Fondo de emergencia"
           >
-            <Text style={styles.text}>{getEmergencyMessage(onboarding.emergencyCoverage)}</Text>
+            <Text style={styles.text}>{emergencyMessage}</Text>
           </InfoCard>
 
           <InfoCard
@@ -827,7 +909,7 @@ export default function DiagnosisScreen() {
           >
             <View style={styles.subsection}>
               <Text style={styles.subsectionTitle}>Deudas</Text>
-              <Text style={styles.text}>{getDebtMessage(onboarding)}</Text>
+              <Text style={styles.text}>{debtMessage}</Text>
             </View>
             <View style={styles.subsection}>
               <Text style={styles.subsectionTitle}>Inversiones</Text>

@@ -1,12 +1,12 @@
 import {
-  formatCOP,
-  getPreferredCurrentSavings,
-  getPreferredGoalTargetAmount,
-  getPreferredMonthlyExpenses,
-  getPreferredMonthlyIncome,
-  getSmallExpenseRangeEstimate
-} from "./financialRanges";
-import type { ExactFinancialValues } from "../types/financial";
+  calculateFinancialSnapshot,
+  generateMonthlyActions,
+  type FinancialSnapshot,
+  type PriorityKey
+} from "./financialCalculations";
+import { formatCOP } from "./financialRanges";
+import type { CompletedActionsState, ExactFinancialValues, OnboardingData } from "../types/financial";
+import { initialOnboarding } from "../types/financial";
 
 export type MonthlyPlanData = {
   ageRange: string | null;
@@ -39,6 +39,7 @@ export type MonthlyPlanMetrics = {
   goalTargetAmount: number | null;
   smallExpenseMidpoint: number | null;
   balancedScenarioAmount: number;
+  snapshot: FinancialSnapshot;
 };
 
 export type MonthlyFocus = {
@@ -54,6 +55,51 @@ export type MonthlyAction = {
   estimatedImpact: string;
   difficulty: "Baja" | "Media" | "Alta";
   category: string;
+};
+
+const monthlyPlanProgressVersion = "monthly-plan-v0.1";
+const monthlyPlanProgressKeyPrefix = `${monthlyPlanProgressVersion}:`;
+const monthlyPlanPriorityKeys: PriorityKey[] = [
+  "debt_pressure",
+  "organize_cashflow",
+  "build_emergency_fund",
+  "review_small_expenses",
+  "advance_goal",
+  "learn_investing",
+  "keep_tracking"
+];
+
+const monthlyFocusByPriority: Record<PriorityKey, MonthlyFocus> = {
+  debt_pressure: {
+    title: "Reducir presiÃ³n de deudas",
+    text: "Antes de acelerar otras metas, conviene entender cuÃ¡nto pesan tus deudas en el mes."
+  },
+  organize_cashflow: {
+    title: "Ordenar ingresos y gastos",
+    text: "Tu primera oportunidad estÃ¡ en recuperar margen mensual."
+  },
+  build_emergency_fund: {
+    title: "Construir fondo de emergencia",
+    text:
+      "Crear una base para imprevistos puede darte mÃ¡s estabilidad antes de avanzar a metas grandes."
+  },
+  review_small_expenses: {
+    title: "Revisar gastos pequeÃ±os",
+    text:
+      "Puedes redirigir una parte de tus pequeÃ±os consumos hacia tu meta sin eliminarlos todos."
+  },
+  advance_goal: {
+    title: "Avanzar hacia tu meta",
+    text: "Tu plan puede enfocarse en separar un monto mensual realista para tu objetivo."
+  },
+  learn_investing: {
+    title: "Aprender antes de invertir",
+    text: "Puedes empezar entendiendo riesgo, plazo y liquidez antes de tomar decisiones."
+  },
+  keep_tracking: {
+    title: "Mantener claridad mensual",
+    text: "Revisar tu plan cada mes te ayuda a tomar mejores decisiones."
+  }
 };
 
 const noConcreteGoalAmountValues = [
@@ -112,36 +158,29 @@ export function getMonthlyPlanMetrics(
   data: MonthlyPlanData,
   exactValues: ExactFinancialValues = {}
 ): MonthlyPlanMetrics {
-  const financialProfile = {
-    onboarding: data,
-    exactValues
+  const onboarding: OnboardingData = {
+    ...initialOnboarding,
+    ...data,
+    city: data.city ?? ""
   };
-  const smallExpenseEstimate = getSmallExpenseRangeEstimate(data.smallExpensesRange);
-  const incomeMidpoint = getPreferredMonthlyIncome(financialProfile);
-  const expenseMidpoint = getPreferredMonthlyExpenses(financialProfile);
-  const currentSavings = getPreferredCurrentSavings(financialProfile);
-  const goalTargetAmount = getPreferredGoalTargetAmount(financialProfile);
-  const smallExpenseMidpoint = smallExpenseEstimate.midpoint;
-  const estimatedMargin =
-    incomeMidpoint !== null && expenseMidpoint !== null ? incomeMidpoint - expenseMidpoint : null;
+  const snapshot = calculateFinancialSnapshot({ onboarding, exactValues });
   const expensePercentage =
-    incomeMidpoint !== null && incomeMidpoint > 0 && expenseMidpoint !== null
-      ? Math.round((expenseMidpoint / incomeMidpoint) * 100)
+    snapshot.cashflow.expensesToIncomeRatio !== null
+      ? Math.round(snapshot.cashflow.expensesToIncomeRatio * 100)
       : null;
-  const safeMarginContribution =
-    estimatedMargin !== null && estimatedMargin > 0 ? estimatedMargin * 0.2 : 0;
-  const smallExpenseContribution =
-    smallExpenseMidpoint !== null && smallExpenseMidpoint > 0 ? smallExpenseMidpoint * 0.2 : 0;
 
   return {
-    incomeMidpoint,
-    expenseMidpoint,
-    estimatedMargin,
+    incomeMidpoint: snapshot.cashflow.monthlyIncome,
+    expenseMidpoint: snapshot.cashflow.monthlyExpenses,
+    estimatedMargin: snapshot.cashflow.monthlyMargin,
     expensePercentage,
-    currentSavings,
-    goalTargetAmount,
-    smallExpenseMidpoint,
-    balancedScenarioAmount: safeMarginContribution + smallExpenseContribution
+    currentSavings: snapshot.values.currentSavings,
+    goalTargetAmount: snapshot.values.goalTargetAmount,
+    smallExpenseMidpoint: snapshot.values.smallExpenses,
+    balancedScenarioAmount:
+      snapshot.cashflow.suggestedMonthlyContribution +
+      (snapshot.smallExpenses.opportunityAmount ?? 0),
+    snapshot
   };
 }
 
@@ -204,8 +243,11 @@ function wantsInvestmentEducation(investmentSituation: string | null) {
 
 export function getMonthlyFocus(
   data: MonthlyPlanData,
-  metrics: MonthlyPlanMetrics
+  metrics: MonthlyPlanMetrics,
+  priorityKey = metrics.snapshot.priority.key
 ): MonthlyFocus {
+  return monthlyFocusByPriority[priorityKey];
+
   if (hasHighDebtPressure(data.debtSituation, data.debtPaymentShare)) {
     return {
       title: "Revisar el peso de tus deudas",
@@ -228,7 +270,7 @@ export function getMonthlyFocus(
     };
   }
 
-  if (metrics.expensePercentage !== null && metrics.expensePercentage >= 85) {
+  if ((metrics.expensePercentage ?? 0) >= 85) {
     return {
       title: "Recuperar margen mensual",
       text:
@@ -349,8 +391,11 @@ function getActionCatalog(metrics: MonthlyPlanMetrics): MonthlyAction[] {
 
 export function getMonthlyActions(
   data: MonthlyPlanData,
-  metrics: MonthlyPlanMetrics
+  metrics: MonthlyPlanMetrics,
+  priorityKey = metrics.snapshot.priority.key
 ): MonthlyAction[] {
+  return generateMonthlyActions(metrics.snapshot, priorityKey);
+
   const catalog = getActionCatalog(metrics);
   const actions: MonthlyAction[] = [];
   const addAction = (id: string) => {
@@ -394,4 +439,91 @@ export function getMonthlyActions(
   });
 
   return actions.slice(0, 3);
+}
+
+export function getMonthlyPlanProgressKey(
+  metrics: MonthlyPlanMetrics,
+  actions: MonthlyAction[],
+  priorityKey = metrics.snapshot.priority.key
+) {
+  const actionIds = actions.map((action) => action.id).join("|");
+
+  return `${monthlyPlanProgressVersion}:${priorityKey}:${actionIds}`;
+}
+
+export function getMonthlyPlanKeyFromActionProgressId(progressId: string) {
+  if (!progressId.startsWith(monthlyPlanProgressKeyPrefix)) {
+    return null;
+  }
+
+  const actionSeparatorIndex = progressId.lastIndexOf(":");
+
+  if (actionSeparatorIndex <= monthlyPlanProgressKeyPrefix.length) {
+    return null;
+  }
+
+  return progressId.slice(0, actionSeparatorIndex);
+}
+
+export function getMonthlyPlanPriorityKey(planProgressKey: string): PriorityKey | null {
+  if (!planProgressKey.startsWith(monthlyPlanProgressKeyPrefix)) {
+    return null;
+  }
+
+  const priorityKey = planProgressKey.split(":")[1] as PriorityKey | undefined;
+
+  if (!priorityKey || !monthlyPlanPriorityKeys.includes(priorityKey)) {
+    return null;
+  }
+
+  return priorityKey;
+}
+
+export function getActiveMonthlyPlanProgressKey(
+  completedActions: CompletedActionsState,
+  suggestedPlanProgressKey: string
+) {
+  const completedPlanCounts: Record<string, number> = {};
+
+  Object.entries(completedActions).forEach(([progressId, completed]) => {
+    if (!completed) {
+      return;
+    }
+
+    const planProgressKey = getMonthlyPlanKeyFromActionProgressId(progressId);
+
+    if (!planProgressKey || !getMonthlyPlanPriorityKey(planProgressKey)) {
+      return;
+    }
+
+    completedPlanCounts[planProgressKey] = (completedPlanCounts[planProgressKey] ?? 0) + 1;
+  });
+
+  if (completedPlanCounts[suggestedPlanProgressKey]) {
+    return suggestedPlanProgressKey;
+  }
+
+  return Object.entries(completedPlanCounts).reduce(
+    (activePlanKey, [planProgressKey, completedCount]) =>
+      completedCount > (completedPlanCounts[activePlanKey] ?? 0)
+        ? planProgressKey
+        : activePlanKey,
+    suggestedPlanProgressKey
+  );
+}
+
+export function getMonthlyActionProgressId(planProgressKey: string, actionId: string) {
+  return `${planProgressKey}:${actionId}`;
+}
+
+export function isMonthlyActionCompleted({
+  actionId,
+  completedActions,
+  planProgressKey
+}: {
+  actionId: string;
+  completedActions: CompletedActionsState;
+  planProgressKey: string;
+}) {
+  return Boolean(completedActions[getMonthlyActionProgressId(planProgressKey, actionId)]);
 }

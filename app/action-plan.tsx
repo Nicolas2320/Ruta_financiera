@@ -26,10 +26,15 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
 import { formatCOP, getFinancialDataSourceLabel } from "../utils/financialRanges";
 import {
+  getActiveMonthlyPlanProgressKey,
   getMonthlyActions,
+  getMonthlyActionProgressId,
   getMonthlyFocus,
   getMonthlyPlanData,
   getMonthlyPlanMetrics,
+  getMonthlyPlanPriorityKey,
+  getMonthlyPlanProgressKey,
+  isMonthlyActionCompleted,
   type MonthlyAction
 } from "../utils/monthlyPlan";
 
@@ -247,9 +252,35 @@ export default function ActionPlanScreen() {
   const { completedActions, toggleActionCompleted } = usePlan();
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
-  const focus = useMemo(() => getMonthlyFocus(data, metrics), [data, metrics]);
-  const actions = useMemo(() => getMonthlyActions(data, metrics), [data, metrics]);
-  const completedCount = actions.filter((action) => completedActions[action.id]).length;
+  const suggestedActions = useMemo(() => getMonthlyActions(data, metrics), [data, metrics]);
+  const suggestedPlanProgressKey = useMemo(
+    () => getMonthlyPlanProgressKey(metrics, suggestedActions),
+    [metrics, suggestedActions]
+  );
+  const activePlanProgressKey = useMemo(
+    () => getActiveMonthlyPlanProgressKey(completedActions, suggestedPlanProgressKey),
+    [completedActions, suggestedPlanProgressKey]
+  );
+  const activePlanPriorityKey = getMonthlyPlanPriorityKey(activePlanProgressKey);
+  const actions = useMemo(
+    () => getMonthlyActions(data, metrics, activePlanPriorityKey ?? undefined),
+    [activePlanPriorityKey, data, metrics]
+  );
+  const focus = useMemo(
+    () => getMonthlyFocus(data, metrics, activePlanPriorityKey ?? undefined),
+    [activePlanPriorityKey, data, metrics]
+  );
+  const planProgressKey = useMemo(
+    () => getMonthlyPlanProgressKey(metrics, actions, activePlanPriorityKey ?? undefined),
+    [activePlanPriorityKey, actions, metrics]
+  );
+  const completedCount = actions.filter((action) =>
+    isMonthlyActionCompleted({
+      actionId: action.id,
+      completedActions,
+      planProgressKey
+    })
+  ).length;
   const progressPercentage = Math.round((completedCount / actions.length) * 100);
   const contributionLabel =
     metrics.balancedScenarioAmount > 0
@@ -341,15 +372,19 @@ export default function ActionPlanScreen() {
             title="Tus 3 acciones para este mes"
           >
             <View style={styles.actionsList}>
-              {actions.map((action, index) => (
-                <ActionCard
-                  key={action.id}
-                  action={action}
-                  actionNumber={index + 1}
-                  completed={Boolean(completedActions[action.id])}
-                  onToggle={() => toggleActionCompleted(action.id)}
-                />
-              ))}
+              {actions.map((action, index) => {
+                const actionProgressId = getMonthlyActionProgressId(planProgressKey, action.id);
+
+                return (
+                  <ActionCard
+                    key={actionProgressId}
+                    action={action}
+                    actionNumber={index + 1}
+                    completed={Boolean(completedActions[actionProgressId])}
+                    onToggle={() => toggleActionCompleted(actionProgressId)}
+                  />
+                );
+              })}
             </View>
           </SectionCard>
 

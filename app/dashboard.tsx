@@ -30,18 +30,19 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
+import { formatCOP } from "../utils/financialRanges";
 import {
-  formatCOP,
-  getPlanPrecisionStatus,
-  hasExactFinancialValue
-} from "../utils/financialRanges";
-import {
+  getActiveMonthlyPlanProgressKey,
   getMonthlyActions,
+  getMonthlyActionProgressId,
   getMonthlyFocus,
   getMonthlyPlanData,
   getMonthlyPlanMetrics,
+  getMonthlyPlanPriorityKey,
+  getMonthlyPlanProgressKey,
   goalNeedsAmount,
   hasLowEmergencyCoverage,
+  isMonthlyActionCompleted,
   type MonthlyAction
 } from "../utils/monthlyPlan";
 
@@ -303,6 +304,30 @@ function getToneColors(tone: Tone) {
     border: "#CFE0FF",
     text: colors.primary
   };
+}
+
+function getEmergencyTone(status: string): Tone {
+  if (status === "none" || status === "starter") {
+    return "warning";
+  }
+
+  if (status === "building" || status === "solid" || status === "strong") {
+    return "support";
+  }
+
+  return "neutral";
+}
+
+function getGoalTone(status: string): Tone {
+  if (status === "completed_or_ready" || status === "near" || status === "reachable") {
+    return "support";
+  }
+
+  if (status === "needs_margin" || status === "needs_target" || status === "long_term") {
+    return "warning";
+  }
+
+  return "primary";
 }
 
 function Chip({ label, tone = "primary" }: { label: string; tone?: Tone }) {
@@ -685,40 +710,67 @@ export default function DashboardScreen() {
   const { completedActions, toggleActionCompleted } = usePlan();
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
-  const focus = useMemo(() => getMonthlyFocus(data, metrics), [data, metrics]);
-  const actions = useMemo(() => getMonthlyActions(data, metrics), [data, metrics]);
-  const completedCount = actions.filter((action) => completedActions[action.id]).length;
+  const snapshot = metrics.snapshot;
+  const suggestedActions = useMemo(() => getMonthlyActions(data, metrics), [data, metrics]);
+  const suggestedPlanProgressKey = useMemo(
+    () => getMonthlyPlanProgressKey(metrics, suggestedActions),
+    [metrics, suggestedActions]
+  );
+  const activePlanProgressKey = useMemo(
+    () => getActiveMonthlyPlanProgressKey(completedActions, suggestedPlanProgressKey),
+    [completedActions, suggestedPlanProgressKey]
+  );
+  const activePlanPriorityKey = getMonthlyPlanPriorityKey(activePlanProgressKey);
+  const actions = useMemo(
+    () => getMonthlyActions(data, metrics, activePlanPriorityKey ?? undefined),
+    [activePlanPriorityKey, data, metrics]
+  );
+  const focus = useMemo(
+    () => getMonthlyFocus(data, metrics, activePlanPriorityKey ?? undefined),
+    [activePlanPriorityKey, data, metrics]
+  );
+  const planProgressKey = useMemo(
+    () => getMonthlyPlanProgressKey(metrics, actions, activePlanPriorityKey ?? undefined),
+    [activePlanPriorityKey, actions, metrics]
+  );
+  const completedCount = actions.filter((action) =>
+    isMonthlyActionCompleted({
+      actionId: action.id,
+      completedActions,
+      planProgressKey
+    })
+  ).length;
   const progressPercentage = Math.round((completedCount / actions.length) * 100);
-  const nextAction = actions.find((action) => !completedActions[action.id]);
-  const precisionStatus = useMemo(() => getPlanPrecisionStatus(exactValues), [exactValues]);
-  const exactMonthlyIncome = hasExactFinancialValue(exactValues.monthlyIncome)
-    ? exactValues.monthlyIncome
-    : null;
-  const exactMonthlyExpenses = hasExactFinancialValue(exactValues.monthlyExpenses)
-    ? exactValues.monthlyExpenses
-    : null;
-  const exactCurrentSavings = hasExactFinancialValue(exactValues.currentSavings)
-    ? exactValues.currentSavings
-    : null;
-  const exactGoalTargetAmount = hasExactFinancialValue(exactValues.goalTargetAmount)
-    ? exactValues.goalTargetAmount
-    : null;
-  const hasExactMonthlyAmounts = exactMonthlyIncome !== null && exactMonthlyExpenses !== null;
-  const exactEmergencyStatus = getEmergencyStatusFromExactValues({
-    currentSavings: exactCurrentSavings,
-    monthlyExpenses: metrics.expenseMidpoint
-  });
-  const emergencyStatus = exactEmergencyStatus ?? getEmergencyStatus(data.emergencyCoverage);
-  const goalStatus = getGoalStatus({
-    financialGoal: data.financialGoal,
-    goalHorizon: data.goalHorizon,
-    goalAmountRange: data.goalAmountRange,
-    emergencyCoverage: data.emergencyCoverage,
-    hasGoalTargetAmount: exactGoalTargetAmount !== null
-  });
+  const nextAction = actions.find(
+    (action) =>
+      !isMonthlyActionCompleted({
+        actionId: action.id,
+        completedActions,
+        planProgressKey
+      })
+  );
+  const precisionStatus = snapshot.precision;
+  const exactMonthlyIncome =
+    snapshot.sourceMap.monthlyIncome === "exact" ? snapshot.cashflow.monthlyIncome : null;
+  const exactMonthlyExpenses =
+    snapshot.sourceMap.monthlyExpenses === "exact" ? snapshot.cashflow.monthlyExpenses : null;
+  const currentSavingsIsExact = snapshot.sourceMap.currentSavings === "exact";
+  const hasExactMonthlyAmounts =
+    snapshot.sourceMap.monthlyIncome === "exact" &&
+    snapshot.sourceMap.monthlyExpenses === "exact";
+  const emergencyTone = getEmergencyTone(snapshot.emergencyFund.status);
+  const emergencyStatus = {
+    state: snapshot.emergencyFund.label,
+    text:
+      snapshot.emergencyFund.coverageMonths !== null
+        ? `Con estos datos, tu ahorro cubre cerca de ${getRoundedMonthsLabel(snapshot.emergencyFund.coverageMonths)} meses de gasto mensual.`
+        : snapshot.emergencyFund.label,
+    tone: emergencyTone
+  };
+  const goalStatus = snapshot.goal.label;
   const goalProgressPercentage =
-    exactCurrentSavings !== null && exactGoalTargetAmount !== null && exactGoalTargetAmount > 0
-      ? Math.min(Math.round((exactCurrentSavings / exactGoalTargetAmount) * 100), 100)
+    snapshot.goal.progressPercentage !== null
+      ? Math.round(snapshot.goal.progressPercentage)
       : null;
   const expenseBarWidth =
     metrics.expensePercentage !== null ? Math.min(metrics.expensePercentage, 100) : 0;
@@ -726,19 +778,22 @@ export default function DashboardScreen() {
     metrics.expensePercentage !== null && metrics.expensePercentage > 100;
   const categoryLabels = data.smallExpenseCategories.slice(0, 4);
   const summarySubtitle =
-    precisionStatus.count > 0
+    precisionStatus.exactValuesCount > 0
       ? "Usa tus datos ingresados y completa con rangos cuando hace falta."
       : "Basado en los rangos que seleccionaste.";
   const goalDetailText =
-    exactGoalTargetAmount !== null
-      ? goalProgressPercentage !== null
-        ? `Objetivo ingresado: ${formatCOP(exactGoalTargetAmount)}. Base actual frente a tu objetivo: ${goalProgressPercentage}% aprox.`
-        : `Objetivo ingresado: ${formatCOP(exactGoalTargetAmount)}. Horizonte: ${getDefinedLabel(data.goalHorizon)}.`
+    snapshot.goal.targetAmount !== null
+      ? snapshot.goal.progressPercentage !== null
+        ? `Objetivo: ${formatCOP(snapshot.goal.targetAmount)}. Base actual frente a tu objetivo: ${Math.round(snapshot.goal.progressPercentage)}% aprox.`
+        : `Objetivo: ${formatCOP(snapshot.goal.targetAmount)}. Horizonte: ${getDefinedLabel(data.goalHorizon)}.`
       : `Horizonte: ${getDefinedLabel(data.goalHorizon)}. Cifra aproximada: ${getDefinedLabel(data.goalAmountRange, "No definida")}.`;
-  const goalStatusTone: Tone =
-    goalStatus === "Lista para revisar escenarios" || goalStatus === "Monto más claro"
-      ? "support"
-      : "warning";
+  const goalStatusTone = getGoalTone(snapshot.goal.status);
+  const smallExpensesValue =
+    snapshot.smallExpenses.amount !== null
+      ? `${formatCOP(snapshot.smallExpenses.amount)} aprox.`
+      : snapshot.sourceMap.smallExpenses === "unknown"
+        ? "Por estimar"
+        : `Rango: ${getDefinedLabel(data.smallExpensesRange)}`;
   const navigate = (route: Route) => router.push(route);
 
   return (
@@ -773,7 +828,7 @@ export default function DashboardScreen() {
             action={nextAction}
             onComplete={() => {
               if (nextAction) {
-                toggleActionCompleted(nextAction.id);
+                toggleActionCompleted(getMonthlyActionProgressId(planProgressKey, nextAction.id));
               }
             }}
             onOpenPlan={() => router.push("/action-plan")}
@@ -842,9 +897,9 @@ export default function DashboardScreen() {
               title="Mejorar mi plan financiero"
             >
               <ImprovePlanSummaryCard
-                count={precisionStatus.count}
+                count={precisionStatus.exactValuesCount}
                 onPress={() => router.push("/improve-plan")}
-                state={precisionStatus.state}
+                state={precisionStatus.label}
               />
             </PanelCard>
           </View>
@@ -855,8 +910,8 @@ export default function DashboardScreen() {
             title="Fondo de emergencia"
             tone={emergencyStatus.tone}
             value={
-              exactCurrentSavings !== null
-                ? `Ahorro actual: ${formatCOP(exactCurrentSavings)}`
+              snapshot.values.currentSavings !== null
+                ? `Ahorro actual: ${getAmountLabel(snapshot.values.currentSavings, currentSavingsIsExact)}`
                 : getDefinedLabel(data.emergencyCoverage)
             }
           >
@@ -867,15 +922,16 @@ export default function DashboardScreen() {
             actionLabel="Revisar gastos"
             icon={<Coffee color="#B45309" size={36} strokeWidth={2.4} />}
             onPress={() => router.push("/small-expenses")}
-            text="No significa que debas eliminarlos. La idea es decidir cuáles mantener, limitar o redirigir."
+            text={snapshot.smallExpenses.recommendation}
             title="Gastos pequeños"
             tone="warning"
-            value={`Rango: ${getDefinedLabel(data.smallExpensesRange)}`}
+            value={smallExpensesValue}
           >
             <View style={styles.categoryChipLine}>
               <Text style={styles.rowInlineText}>
                 Intención: {getDefinedLabel(data.smallExpensesIntention, "No definida")}
               </Text>
+              <Chip label={snapshot.smallExpenses.label} tone="warning" />
               {categoryLabels.map((category) => (
                 <Chip key={category} label={category} tone="warning" />
               ))}
