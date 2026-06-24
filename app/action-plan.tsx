@@ -24,7 +24,7 @@ import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
-import { formatCOP } from "../utils/financialRanges";
+import { formatCOP, getFinancialDataSourceLabel } from "../utils/financialRanges";
 import {
   getMonthlyActions,
   getMonthlyFocus,
@@ -243,10 +243,10 @@ function ActionCard({
 
 export default function ActionPlanScreen() {
   const router = useRouter();
-  const { onboarding } = useOnboarding();
+  const { exactValues, onboarding } = useOnboarding();
   const { completedActions, toggleActionCompleted } = usePlan();
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
-  const metrics = useMemo(() => getMonthlyPlanMetrics(data), [data]);
+  const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const focus = useMemo(() => getMonthlyFocus(data, metrics), [data, metrics]);
   const actions = useMemo(() => getMonthlyActions(data, metrics), [data, metrics]);
   const completedCount = actions.filter((action) => completedActions[action.id]).length;
@@ -330,7 +330,7 @@ export default function ActionPlanScreen() {
                   />
                 </View>
                 <Text style={styles.helperText}>
-                  Los valores son aproximados y se basan en los rangos que seleccionaste.
+                  {getFinancialDataSourceLabel({ onboarding, exactValues })}
                 </Text>
               </SectionCard>
             </View>

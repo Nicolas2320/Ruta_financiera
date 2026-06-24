@@ -7,6 +7,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import {
+  getCurrentSavingsDisplay,
+  getGoalTargetAmountDisplay,
+  getMonthlyExpensesDisplay,
+  getMonthlyIncomeDisplay
+} from "../utils/financialRanges";
 
 type SummaryField = {
   label: string;
@@ -108,7 +114,12 @@ function SummarySection({
 
 export default function SummaryScreen() {
   const router = useRouter();
-  const { onboarding } = useOnboarding();
+  const { exactValues, onboarding } = useOnboarding();
+  const financialProfile = { onboarding, exactValues };
+  const incomeDisplay = getMonthlyIncomeDisplay(financialProfile);
+  const expensesDisplay = getMonthlyExpensesDisplay(financialProfile);
+  const savingsDisplay = getCurrentSavingsDisplay(financialProfile);
+  const goalAmountDisplay = getGoalTargetAmountDisplay(financialProfile);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -159,7 +170,7 @@ export default function SummaryScreen() {
           <SummarySection
             editAccessibilityLabel="Editar ingresos"
             fields={[
-              { label: "Rango de ingresos", value: onboarding.incomeRange },
+              { label: incomeDisplay.label, value: incomeDisplay.value },
               { label: "Tipo de ingreso", value: onboarding.incomeType },
               { label: "Frecuencia de ingreso", value: onboarding.incomeFrequency }
             ]}
@@ -170,7 +181,7 @@ export default function SummaryScreen() {
           <SummarySection
             editAccessibilityLabel="Editar gastos"
             fields={[
-              { label: "Rango de gastos", value: onboarding.expensesRange },
+              { label: expensesDisplay.label, value: expensesDisplay.value },
               { label: "Categorías principales", value: onboarding.expenseCategories },
               { label: "Cómo siente sus gastos", value: onboarding.expensesFeeling }
             ]}
@@ -202,7 +213,7 @@ export default function SummaryScreen() {
           <SummarySection
             editAccessibilityLabel="Editar ahorros, deudas e inversiones"
             fields={[
-              { label: "Rango de ahorros", value: onboarding.savingsRange },
+              { label: savingsDisplay.label, value: savingsDisplay.value },
               { label: "Cobertura de gastos esenciales", value: onboarding.emergencyCoverage },
               { label: "Situación de deudas", value: onboarding.debtSituation },
               { label: "PESO MENSUAL DE DEUDAS", value: onboarding.debtPaymentShare },
@@ -219,8 +230,11 @@ export default function SummaryScreen() {
               { label: "Horizonte", value: onboarding.goalHorizon },
               { label: "Importancia", value: onboarding.goalPriority },
               {
-                label: getGoalDetailLabel(onboarding.financialGoal),
-                value: onboarding.goalAmountRange,
+                label:
+                  goalAmountDisplay.source === "exact"
+                    ? goalAmountDisplay.label
+                    : getGoalDetailLabel(onboarding.financialGoal),
+                value: goalAmountDisplay.source === "empty" ? null : goalAmountDisplay.value,
                 optional: true
               }
             ]}

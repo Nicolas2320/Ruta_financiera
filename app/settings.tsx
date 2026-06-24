@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { LogOut, Settings, UserRound } from "lucide-react-native";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ChevronRight, LineChart, LogOut, Settings, UserRound } from "lucide-react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
@@ -56,6 +56,24 @@ export default function SettingsScreen() {
               <StatusPill label="Plan" value={planSyncStatus} />
             </View>
           </View>
+
+          <Pressable
+            accessibilityLabel="Mejorar mi plan financiero"
+            accessibilityRole="button"
+            onPress={() => router.push("/improve-plan")}
+            style={({ pressed }) => [styles.settingsLinkCard, pressed && styles.pressed]}
+          >
+            <View style={styles.settingsLinkIcon}>
+              <LineChart color={colors.primary} size={24} strokeWidth={2.4} />
+            </View>
+            <View style={styles.settingsLinkBody}>
+              <Text style={styles.settingsLinkTitle}>Mejorar mi plan financiero</Text>
+              <Text style={styles.settingsLinkText}>
+                Edita ingresos, gastos, ahorro actual y monto objetivo para mejorar tus cálculos.
+              </Text>
+            </View>
+            <ChevronRight color={colors.primary} size={22} strokeWidth={2.5} />
+          </Pressable>
 
           <PrimaryButton
             accessibilityLabel="Volver al inicio"
@@ -202,5 +220,45 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
+  },
+  settingsLinkCard: {
+    ...shadows.card,
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  settingsLinkIcon: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    height: 48,
+    justifyContent: "center",
+    width: 48
+  },
+  settingsLinkBody: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  settingsLinkTitle: {
+    color: colors.text,
+    fontSize: typography.question,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.question
+  },
+  settingsLinkText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.medium,
+    lineHeight: typography.lineHeight.caption
+  },
+  pressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.99 }]
   }
 });

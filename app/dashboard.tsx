@@ -4,7 +4,6 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   ArrowDownCircle,
-  BarChart3,
   Bot,
   CalendarCheck,
   ChartColumnIncreasing,
@@ -23,8 +22,7 @@ import {
   ShieldCheck,
   Target,
   TrendingUp,
-  UserRound,
-  Wallet
+  UserRound
 } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -32,7 +30,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
-import { formatCOP } from "../utils/financialRanges";
+import {
+  formatCOP,
+  getPlanPrecisionStatus,
+  hasExactFinancialValue
+} from "../utils/financialRanges";
 import {
   getMonthlyActions,
   getMonthlyFocus,
@@ -66,11 +68,15 @@ function getDefinedLabel(value: string | null | undefined, fallback = "No defini
   return value;
 }
 
-function getAmountLabel(value: number | null) {
-  return value !== null ? `${formatCOP(value)} aprox.` : "No disponible";
+function getAmountLabel(value: number | null, isExact = false) {
+  if (value === null) {
+    return "No disponible";
+  }
+
+  return isExact ? formatCOP(value) : `${formatCOP(value)} aprox.`;
 }
 
-function getMarginLabel(value: number | null) {
+function getMarginLabel(value: number | null, isMorePrecise = false) {
   if (value === null) {
     return "No disponible";
   }
@@ -79,11 +85,19 @@ function getMarginLabel(value: number | null) {
     return "Margen ajustado";
   }
 
-  return `${formatCOP(value)} aprox.`;
+  return isMorePrecise ? formatCOP(value) : `${formatCOP(value)} aprox.`;
 }
 
-function getExpensePercentageLabel(value: number | null) {
-  return value !== null ? `${value}% aprox.` : "No disponible";
+function getExpensePercentageLabel(value: number | null, isMorePrecise = false) {
+  if (value === null) {
+    return "No disponible";
+  }
+
+  return isMorePrecise ? `${value}%` : `${value}% aprox.`;
+}
+
+function getRoundedMonthsLabel(value: number) {
+  return value < 10 ? value.toFixed(1).replace(".0", "") : Math.round(value).toString();
 }
 
 function getEmergencyStatus(emergencyCoverage: string | null): {
@@ -122,23 +136,78 @@ function getEmergencyStatus(emergencyCoverage: string | null): {
   };
 }
 
+function getEmergencyStatusFromExactValues({
+  currentSavings,
+  monthlyExpenses
+}: {
+  currentSavings: number | null;
+  monthlyExpenses: number | null;
+}): {
+  state: string;
+  text: string;
+  tone: Tone;
+} | null {
+  if (currentSavings === null) {
+    return null;
+  }
+
+  if (monthlyExpenses === null || monthlyExpenses <= 0) {
+    return {
+      state: "Dato ingresado",
+      text: "Usaremos tu ahorro actual ingresado como base para estimar tu fondo de emergencia.",
+      tone: "primary"
+    };
+  }
+
+  const months = currentSavings / monthlyExpenses;
+  const monthsLabel = getRoundedMonthsLabel(months);
+
+  if (months < 1) {
+    return {
+      state: "Base por fortalecer",
+      text: `Con tus datos ingresados, tu ahorro actual cubriría cerca de ${monthsLabel} meses de gasto mensual.`,
+      tone: "warning"
+    };
+  }
+
+  if (months < 3) {
+    return {
+      state: "Base inicial",
+      text: `Con tus datos ingresados, tu ahorro actual cubriría cerca de ${monthsLabel} meses de gasto mensual.`,
+      tone: "support"
+    };
+  }
+
+  return {
+    state: "Base más clara",
+    text: `Con tus datos ingresados, tu ahorro actual cubriría cerca de ${monthsLabel} meses de gasto mensual.`,
+    tone: "support"
+  };
+}
+
 function getGoalStatus({
   financialGoal,
   goalHorizon,
   goalAmountRange,
-  emergencyCoverage
+  emergencyCoverage,
+  hasGoalTargetAmount
 }: {
   financialGoal: string | null;
   goalHorizon: string | null;
   goalAmountRange: string | null;
   emergencyCoverage: string | null;
+  hasGoalTargetAmount?: boolean;
 }) {
   if (financialGoal === "Empezar a invertir" && hasLowEmergencyCoverage(emergencyCoverage)) {
     return "Primero fortalece tu base financiera";
   }
 
-  if (goalNeedsAmount(goalAmountRange)) {
+  if (!hasGoalTargetAmount && goalNeedsAmount(goalAmountRange)) {
     return "Falta concretar una cifra";
+  }
+
+  if (hasGoalTargetAmount) {
+    return "Monto más claro";
   }
 
   if (financialGoal && goalHorizon && goalAmountRange) {
@@ -146,6 +215,30 @@ function getGoalStatus({
   }
 
   return "En definición";
+}
+
+function getImprovePlanDashboardText(count: number) {
+  if (count === 0) {
+    return "Agrega 4 datos opcionales para calcular mejor tu margen mensual, fondo de emergencia y avance hacia tu meta.";
+  }
+
+  if (count < 4) {
+    return "Ya estamos usando algunos datos más claros en tus cálculos.";
+  }
+
+  return "Tu Dashboard ya usa estos valores para mostrar cálculos más útiles.";
+}
+
+function getImprovePlanActionLabel(count: number) {
+  if (count === 0) {
+    return "Mejorar mi plan";
+  }
+
+  if (count < 4) {
+    return "Completar o editar";
+  }
+
+  return "Editar datos";
 }
 
 function getActionTone(action: MonthlyAction): Tone {
@@ -433,24 +526,55 @@ function MetricCard({
   );
 }
 
-function FutureCard({
-  title,
-  message,
-  icon
+function ImprovePlanSummaryCard({
+  count,
+  state,
+  onPress
 }: {
-  title: string;
-  message: string;
-  icon: ReactNode;
+  count: number;
+  state: string;
+  onPress: () => void;
 }) {
+  const isComplete = count === 4;
+  const tone: Tone = count === 0 ? "neutral" : isComplete ? "support" : "primary";
+
   return (
-    <View style={styles.futureCard}>
-      <View style={styles.futureHeader}>
-        <IconBubble icon={icon} size="small" />
-        <Chip label="En desarrollo" tone="neutral" />
+    <View style={styles.improveSummary}>
+      <View style={styles.improveHeader}>
+        <IconBubble
+          icon={<LineChart color={getToneColors(tone).text} size={23} strokeWidth={2.4} />}
+          size="small"
+          tone={tone}
+        />
+        <Chip label={state} tone={tone} />
       </View>
-      <Text style={styles.futureTitle}>{title}</Text>
-      <Text style={styles.futureValue}>Próximamente</Text>
-      <Text style={styles.futureText}>{message}</Text>
+
+      <Text style={styles.improveText}>{getImprovePlanDashboardText(count)}</Text>
+
+      <View style={styles.precisionProgressBlock}>
+        <View style={styles.comparisonHeader}>
+          <Text style={styles.precisionProgressText}>{count} de 4 datos agregados</Text>
+          <Text style={styles.precisionProgressValue}>{Math.round((count / 4) * 100)}%</Text>
+        </View>
+        <View style={styles.progressTrack}>
+          <View
+            style={[
+              styles.progressFill,
+              isComplete && styles.progressFillComplete,
+              { width: toPercentWidth((count / 4) * 100) }
+            ]}
+          />
+        </View>
+      </View>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({ pressed }) => [styles.improveButton, pressed && styles.pressed]}
+      >
+        <Text style={styles.improveButtonText}>{getImprovePlanActionLabel(count)}</Text>
+        <ChevronRight color={colors.surface} size={20} strokeWidth={2.5} />
+      </Pressable>
     </View>
   );
 }
@@ -557,27 +681,64 @@ function BottomNavItem({
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { onboarding } = useOnboarding();
+  const { exactValues, onboarding } = useOnboarding();
   const { completedActions, toggleActionCompleted } = usePlan();
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
-  const metrics = useMemo(() => getMonthlyPlanMetrics(data), [data]);
+  const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const focus = useMemo(() => getMonthlyFocus(data, metrics), [data, metrics]);
   const actions = useMemo(() => getMonthlyActions(data, metrics), [data, metrics]);
   const completedCount = actions.filter((action) => completedActions[action.id]).length;
   const progressPercentage = Math.round((completedCount / actions.length) * 100);
   const nextAction = actions.find((action) => !completedActions[action.id]);
-  const emergencyStatus = getEmergencyStatus(data.emergencyCoverage);
+  const precisionStatus = useMemo(() => getPlanPrecisionStatus(exactValues), [exactValues]);
+  const exactMonthlyIncome = hasExactFinancialValue(exactValues.monthlyIncome)
+    ? exactValues.monthlyIncome
+    : null;
+  const exactMonthlyExpenses = hasExactFinancialValue(exactValues.monthlyExpenses)
+    ? exactValues.monthlyExpenses
+    : null;
+  const exactCurrentSavings = hasExactFinancialValue(exactValues.currentSavings)
+    ? exactValues.currentSavings
+    : null;
+  const exactGoalTargetAmount = hasExactFinancialValue(exactValues.goalTargetAmount)
+    ? exactValues.goalTargetAmount
+    : null;
+  const hasExactMonthlyAmounts = exactMonthlyIncome !== null && exactMonthlyExpenses !== null;
+  const exactEmergencyStatus = getEmergencyStatusFromExactValues({
+    currentSavings: exactCurrentSavings,
+    monthlyExpenses: metrics.expenseMidpoint
+  });
+  const emergencyStatus = exactEmergencyStatus ?? getEmergencyStatus(data.emergencyCoverage);
   const goalStatus = getGoalStatus({
     financialGoal: data.financialGoal,
     goalHorizon: data.goalHorizon,
     goalAmountRange: data.goalAmountRange,
-    emergencyCoverage: data.emergencyCoverage
+    emergencyCoverage: data.emergencyCoverage,
+    hasGoalTargetAmount: exactGoalTargetAmount !== null
   });
+  const goalProgressPercentage =
+    exactCurrentSavings !== null && exactGoalTargetAmount !== null && exactGoalTargetAmount > 0
+      ? Math.min(Math.round((exactCurrentSavings / exactGoalTargetAmount) * 100), 100)
+      : null;
   const expenseBarWidth =
     metrics.expensePercentage !== null ? Math.min(metrics.expensePercentage, 100) : 0;
   const expensesMayExceedIncome =
     metrics.expensePercentage !== null && metrics.expensePercentage > 100;
   const categoryLabels = data.smallExpenseCategories.slice(0, 4);
+  const summarySubtitle =
+    precisionStatus.count > 0
+      ? "Usa tus datos ingresados y completa con rangos cuando hace falta."
+      : "Basado en los rangos que seleccionaste.";
+  const goalDetailText =
+    exactGoalTargetAmount !== null
+      ? goalProgressPercentage !== null
+        ? `Objetivo ingresado: ${formatCOP(exactGoalTargetAmount)}. Base actual frente a tu objetivo: ${goalProgressPercentage}% aprox.`
+        : `Objetivo ingresado: ${formatCOP(exactGoalTargetAmount)}. Horizonte: ${getDefinedLabel(data.goalHorizon)}.`
+      : `Horizonte: ${getDefinedLabel(data.goalHorizon)}. Cifra aproximada: ${getDefinedLabel(data.goalAmountRange, "No definida")}.`;
+  const goalStatusTone: Tone =
+    goalStatus === "Lista para revisar escenarios" || goalStatus === "Monto más claro"
+      ? "support"
+      : "warning";
   const navigate = (route: Route) => router.push(route);
 
   return (
@@ -620,33 +781,33 @@ export default function DashboardScreen() {
 
           <View style={styles.twoColumnGrid}>
             <PanelCard
-              subtitle="Basado en los rangos que seleccionaste."
+              subtitle={summarySubtitle}
               title="Resumen financiero estimado"
             >
               <View style={styles.metricsGrid}>
                 <MetricCard
                   icon={<PiggyBank color={colors.support} size={23} strokeWidth={2.4} />}
-                  label="Ingreso estimado"
+                  label="Ingreso mensual"
                   tone="support"
-                  value={getAmountLabel(metrics.incomeMidpoint)}
+                  value={getAmountLabel(metrics.incomeMidpoint, exactMonthlyIncome !== null)}
                 />
                 <MetricCard
                   icon={<ArrowDownCircle color="#C2410C" size={23} strokeWidth={2.4} />}
-                  label="Gasto estimado"
+                  label="Gasto mensual"
                   tone="danger"
-                  value={getAmountLabel(metrics.expenseMidpoint)}
+                  value={getAmountLabel(metrics.expenseMidpoint, exactMonthlyExpenses !== null)}
                 />
                 <MetricCard
                   icon={<TrendingUp color={colors.support} size={23} strokeWidth={2.4} />}
                   label="Margen mensual"
                   tone={metrics.estimatedMargin !== null && metrics.estimatedMargin > 0 ? "support" : "warning"}
-                  value={getMarginLabel(metrics.estimatedMargin)}
+                  value={getMarginLabel(metrics.estimatedMargin, hasExactMonthlyAmounts)}
                 />
                 <MetricCard
                   icon={<PieChart color={colors.primary} size={23} strokeWidth={2.4} />}
                   label="Gastos / ingresos"
                   tone={metrics.expensePercentage !== null && metrics.expensePercentage >= 85 ? "warning" : "primary"}
-                  value={getExpensePercentageLabel(metrics.expensePercentage)}
+                  value={getExpensePercentageLabel(metrics.expensePercentage, hasExactMonthlyAmounts)}
                 />
               </View>
 
@@ -654,7 +815,7 @@ export default function DashboardScreen() {
                 <View style={styles.comparisonHeader}>
                   <Text style={styles.comparisonTitle}>Comparación gastos vs ingresos</Text>
                   <Text style={styles.comparisonValue}>
-                    {getExpensePercentageLabel(metrics.expensePercentage)}
+                    {getExpensePercentageLabel(metrics.expensePercentage, hasExactMonthlyAmounts)}
                   </Text>
                 </View>
                 <View style={styles.progressTrack}>
@@ -668,38 +829,23 @@ export default function DashboardScreen() {
                 </View>
                 <Text style={styles.helperText}>
                   {expensesMayExceedIncome
-                    ? "Tus gastos podrían superar tus ingresos estimados."
-                    : "Tus gastos representan aproximadamente esta parte de tus ingresos."}
+                    ? "Tus gastos podrían superar tus ingresos mensuales según los datos disponibles."
+                    : hasExactMonthlyAmounts
+                      ? "Tus datos ingresados muestran esta relación entre gastos e ingresos."
+                      : "Tus gastos representan aproximadamente esta parte de tus ingresos."}
                 </Text>
               </View>
             </PanelCard>
 
             <PanelCard
-              subtitle="Estas métricas estarán disponibles cuando puedas ingresar valores exactos o actualizar tu información con más detalle."
-              title="Cifras exactas"
+              subtitle={precisionStatus.message}
+              title="Mejorar mi plan financiero"
             >
-              <View style={styles.futureGrid}>
-                <FutureCard
-                  icon={<PiggyBank color={colors.primary} size={22} strokeWidth={2.4} />}
-                  message="Podrás registrar una cifra exacta de ahorro."
-                  title="Ahorro actual exacto"
-                />
-                <FutureCard
-                  icon={<Target color={colors.primary} size={22} strokeWidth={2.4} />}
-                  message="Podrás definir un monto objetivo más preciso."
-                  title="Meta financiera exacta"
-                />
-                <FutureCard
-                  icon={<LineChart color={colors.primary} size={22} strokeWidth={2.4} />}
-                  message="Mostraremos tu avance cuando exista una cifra objetivo."
-                  title="Progreso hacia la meta"
-                />
-                <FutureCard
-                  icon={<Wallet color={colors.primary} size={22} strokeWidth={2.4} />}
-                  message="Podrás comparar ahorros, deudas e inversiones."
-                  title="Patrimonio neto estimado"
-                />
-              </View>
+              <ImprovePlanSummaryCard
+                count={precisionStatus.count}
+                onPress={() => router.push("/improve-plan")}
+                state={precisionStatus.state}
+              />
             </PanelCard>
           </View>
 
@@ -708,7 +854,11 @@ export default function DashboardScreen() {
             text={emergencyStatus.text}
             title="Fondo de emergencia"
             tone={emergencyStatus.tone}
-            value={getDefinedLabel(data.emergencyCoverage)}
+            value={
+              exactCurrentSavings !== null
+                ? `Ahorro actual: ${formatCOP(exactCurrentSavings)}`
+                : getDefinedLabel(data.emergencyCoverage)
+            }
           >
             <Chip label={emergencyStatus.state} tone={emergencyStatus.tone} />
           </RowCard>
@@ -736,15 +886,15 @@ export default function DashboardScreen() {
             actionLabel="Ver simulación"
             icon={<Flag color={colors.primary} size={36} strokeWidth={2.4} />}
             onPress={() => router.push("/simulation")}
-            text={`Horizonte: ${getDefinedLabel(data.goalHorizon)}. Cifra aproximada: ${getDefinedLabel(data.goalAmountRange, "No definida")}.`}
+            text={goalDetailText}
             title="Meta principal"
             tone="primary"
             value={`Meta: ${getDefinedLabel(data.financialGoal, "No definida")}`}
           >
-            <Chip
-              label={goalStatus}
-              tone={goalStatus === "Lista para revisar escenarios" ? "support" : "warning"}
-            />
+            <Chip label={goalStatus} tone={goalStatusTone} />
+            {goalProgressPercentage !== null ? (
+              <Chip label={`Avance estimado ${goalProgressPercentage}%`} tone="primary" />
+            ) : null}
           </RowCard>
 
           <View style={styles.quickSection}>
@@ -1041,6 +1191,53 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.sectionTitle
   },
+  improveSummary: {
+    gap: spacing.md
+  },
+  improveHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    justifyContent: "space-between"
+  },
+  improveText: {
+    color: colors.textMuted,
+    fontSize: typography.body,
+    lineHeight: typography.lineHeight.body
+  },
+  precisionProgressBlock: {
+    gap: spacing.sm
+  },
+  precisionProgressText: {
+    color: colors.text,
+    flex: 1,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  precisionProgressValue: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  improveButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 48,
+    paddingHorizontal: spacing.md
+  },
+  improveButtonText: {
+    color: colors.surface,
+    fontSize: typography.button,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.button
+  },
   comparisonBox: {
     gap: spacing.sm,
     marginTop: spacing.xs
@@ -1085,47 +1282,6 @@ const styles = StyleSheet.create({
   },
   expenseFillWarning: {
     backgroundColor: "#F97316"
-  },
-  futureGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  futureCard: {
-    backgroundColor: "#FBFCFF",
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexBasis: "47%",
-    flexGrow: 1,
-    gap: spacing.xs,
-    minWidth: 150,
-    padding: spacing.md
-  },
-  futureHeader: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    justifyContent: "space-between"
-  },
-  futureTitle: {
-    color: colors.text,
-    fontSize: typography.badge,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.badge
-  },
-  futureValue: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
-  },
-  futureText: {
-    color: colors.textMuted,
-    fontSize: typography.small,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.small
   },
   rowCard: {
     ...shadows.card,

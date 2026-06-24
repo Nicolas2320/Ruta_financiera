@@ -2,9 +2,13 @@ create table if not exists public.financial_profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   onboarding jsonb not null default '{}'::jsonb,
   completed_actions jsonb not null default '{}'::jsonb,
+  exact_values jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.financial_profiles
+add column if not exists exact_values jsonb not null default '{}'::jsonb;
 
 alter table public.financial_profiles enable row level security;
 

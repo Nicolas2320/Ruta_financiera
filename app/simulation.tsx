@@ -17,17 +17,31 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 import { useOnboarding } from "../context/OnboardingContext";
 import {
   formatCOP,
-  getExpenseRangeEstimate,
-  getIncomeRangeEstimate,
+  getFinancialDataSourceLabel,
+  getGoalTargetAmountDisplay,
+  getMonthlyExpensesDisplay,
+  getMonthlyIncomeDisplay,
+  getPreferredMonthlyExpenses,
+  getPreferredMonthlyIncome,
   getSmallExpenseRangeEstimate,
   type FinancialRangeEstimate
 } from "../utils/financialRanges";
+import type { ExactFinancialValues } from "../types/financial";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
 
+type FinancialDisplay = {
+  label: string;
+  value: string;
+  source: "exact" | "range" | "empty";
+  helper: string;
+};
+
 type SimulationBase = {
-  incomeEstimate: FinancialRangeEstimate;
-  expenseEstimate: FinancialRangeEstimate;
+  incomeDisplay: FinancialDisplay;
+  expenseDisplay: FinancialDisplay;
+  incomeValue: number | null;
+  expenseValue: number | null;
   smallExpenseEstimate: FinancialRangeEstimate;
   estimatedMargin: number | null;
   expensePercentage: number | null;
@@ -104,6 +118,10 @@ function goalAmountNeedsDefinition(goalAmountRange: string | null) {
   );
 }
 
+function hasGoalTargetAmount(exactValues: ExactFinancialValues) {
+  return exactValues.goalTargetAmount !== undefined;
+}
+
 function getGoalAmountRangeLabel(goalAmountRange: string | null) {
   if (!goalAmountRange || !validGoalAmountRanges.includes(goalAmountRange)) {
     return "No definida";
@@ -116,12 +134,16 @@ function toPercentWidth(value: number): `${number}%` {
   return `${value}%`;
 }
 
-function getSimulationBase(onboarding: OnboardingSnapshot): SimulationBase {
-  const incomeEstimate = getIncomeRangeEstimate(onboarding.incomeRange);
-  const expenseEstimate = getExpenseRangeEstimate(onboarding.expensesRange);
+function getSimulationBase(
+  onboarding: OnboardingSnapshot,
+  exactValues: ExactFinancialValues
+): SimulationBase {
+  const financialProfile = { onboarding, exactValues };
+  const incomeDisplay = getMonthlyIncomeDisplay(financialProfile);
+  const expenseDisplay = getMonthlyExpensesDisplay(financialProfile);
   const smallExpenseEstimate = getSmallExpenseRangeEstimate(onboarding.smallExpensesRange);
-  const incomeMidpoint = incomeEstimate.midpoint;
-  const expenseMidpoint = expenseEstimate.midpoint;
+  const incomeMidpoint = getPreferredMonthlyIncome(financialProfile);
+  const expenseMidpoint = getPreferredMonthlyExpenses(financialProfile);
   const estimatedMargin =
     incomeMidpoint !== null && expenseMidpoint !== null ? incomeMidpoint - expenseMidpoint : null;
   const expensePercentage =
@@ -130,20 +152,14 @@ function getSimulationBase(onboarding: OnboardingSnapshot): SimulationBase {
       : null;
 
   return {
-    incomeEstimate,
-    expenseEstimate,
+    incomeDisplay,
+    expenseDisplay,
+    incomeValue: incomeMidpoint,
+    expenseValue: expenseMidpoint,
     smallExpenseEstimate,
     estimatedMargin,
     expensePercentage
   };
-}
-
-function getEstimateLabel(estimate: FinancialRangeEstimate) {
-  if (estimate.midpoint !== null) {
-    return `${formatCOP(estimate.midpoint)} aprox.`;
-  }
-
-  return estimate.label;
 }
 
 function getSmallExpenseLabel(onboarding: OnboardingSnapshot, estimate: FinancialRangeEstimate) {
@@ -154,7 +170,7 @@ function getSmallExpenseLabel(onboarding: OnboardingSnapshot, estimate: Financia
   return estimate.label;
 }
 
-function getMarginLabel(estimatedMargin: number | null) {
+function getMarginLabel(estimatedMargin: number | null, isMorePrecise = false) {
   if (estimatedMargin === null) {
     return "No disponible";
   }
@@ -163,7 +179,7 @@ function getMarginLabel(estimatedMargin: number | null) {
     return "Margen ajustado";
   }
 
-  return `${formatCOP(estimatedMargin)} aprox.`;
+  return isMorePrecise ? formatCOP(estimatedMargin) : `${formatCOP(estimatedMargin)} aprox.`;
 }
 
 function contributionFromPositiveValue(value: number | null, share: number) {
@@ -275,7 +291,8 @@ function getInvestmentEducationMessage(onboarding: OnboardingSnapshot) {
 
 function getMostImpactfulVariable(
   onboarding: OnboardingSnapshot,
-  metrics: SimulationBase
+  metrics: SimulationBase,
+  exactValues: ExactFinancialValues
 ): ImpactfulVariable {
   if (
     onboarding.debtSituation === "Son una preocupación importante" ||
@@ -308,7 +325,7 @@ function getMostImpactfulVariable(
     };
   }
 
-  if (goalAmountNeedsDefinition(onboarding.goalAmountRange)) {
+  if (!hasGoalTargetAmount(exactValues) && goalAmountNeedsDefinition(onboarding.goalAmountRange)) {
     return {
       title: "Definir una cifra más concreta",
       text: "Una cifra aproximada puede ayudarte a convertir tu meta en un plan más claro."
@@ -438,20 +455,29 @@ function ScenarioCard({
 
 export default function SimulationScreen() {
   const router = useRouter();
-  const { onboarding } = useOnboarding();
-  const metrics = useMemo(() => getSimulationBase(onboarding), [onboarding]);
+  const { exactValues, onboarding } = useOnboarding();
+  const financialProfile = { onboarding, exactValues };
+  const metrics = useMemo(
+    () => getSimulationBase(onboarding, exactValues),
+    [exactValues, onboarding]
+  );
   const scenarios = useMemo(() => getScenarios(metrics), [metrics]);
   const impactfulVariable = useMemo(
-    () => getMostImpactfulVariable(onboarding, metrics),
-    [onboarding, metrics]
+    () => getMostImpactfulVariable(onboarding, metrics, exactValues),
+    [exactValues, onboarding, metrics]
   );
   const maxMonthlyContribution = Math.max(
     ...scenarios.map((scenario) => scenario.monthlyContribution ?? 0),
     0
   );
   const canCalculateMargin = metrics.estimatedMargin !== null;
-  const needsGoalAmountDefinition = goalAmountNeedsDefinition(onboarding.goalAmountRange);
-  const goalAmountRangeLabel = getGoalAmountRangeLabel(onboarding.goalAmountRange);
+  const goalAmountDisplay = getGoalTargetAmountDisplay(financialProfile);
+  const needsGoalAmountDefinition =
+    !hasGoalTargetAmount(exactValues) && goalAmountNeedsDefinition(onboarding.goalAmountRange);
+  const goalAmountRangeLabel =
+    goalAmountDisplay.source === "exact"
+      ? goalAmountDisplay.value
+      : getGoalAmountRangeLabel(onboarding.goalAmountRange);
   const isInvestmentGoal = onboarding.financialGoal === "Empezar a invertir";
 
   return (
@@ -492,7 +518,7 @@ export default function SimulationScreen() {
               <ValueRow label="Meta principal" value={onboarding.financialGoal ?? "No definida"} />
               <ValueRow label="Horizonte" value={onboarding.goalHorizon ?? "No definido"} />
               <ValueRow
-                label="Cifra aproximada"
+                label={goalAmountDisplay.label}
                 value={goalAmountRangeLabel}
               />
             </View>
@@ -522,11 +548,15 @@ export default function SimulationScreen() {
             title="Punto de partida"
           >
             <View style={styles.valueRows}>
-              <ValueRow label="Ingreso estimado" value={getEstimateLabel(metrics.incomeEstimate)} />
-              <ValueRow label="Gasto estimado" value={getEstimateLabel(metrics.expenseEstimate)} />
+              <ValueRow label={metrics.incomeDisplay.label} value={metrics.incomeDisplay.value} />
+              <ValueRow label={metrics.expenseDisplay.label} value={metrics.expenseDisplay.value} />
               <ValueRow
-                label="Margen mensual estimado"
-                value={getMarginLabel(metrics.estimatedMargin)}
+                label="Margen mensual"
+                value={getMarginLabel(
+                  metrics.estimatedMargin,
+                  metrics.incomeDisplay.source === "exact" &&
+                    metrics.expenseDisplay.source === "exact"
+                )}
               />
               <ValueRow
                 label="Gastos pequeños estimados"
@@ -536,8 +566,7 @@ export default function SimulationScreen() {
 
             {canCalculateMargin ? (
               <Text style={styles.helperText}>
-                Los cálculos usan puntos medios de los rangos seleccionados. Son aproximaciones,
-                no cifras exactas.
+                {getFinancialDataSourceLabel(financialProfile)}
               </Text>
             ) : (
               <Text style={styles.text}>

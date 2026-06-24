@@ -9,19 +9,27 @@ import {
 } from "react";
 
 import { useAuth } from "./AuthContext";
-import { fetchFinancialProfile, saveOnboardingData } from "../lib/financialProfile";
+import {
+  fetchFinancialProfile,
+  saveExactValues as persistExactValues,
+  saveOnboardingData
+} from "../lib/financialProfile";
 import {
   hasCompletedOnboarding as getHasCompletedOnboarding,
   initialOnboarding,
+  type ExactFinancialValues,
   type OnboardingData
 } from "../types/financial";
+import { normalizeExactValues } from "../utils/financialRanges";
 
 type OnboardingContextValue = {
+  exactValues: ExactFinancialValues;
   financialProfileExists: boolean;
   hasCompletedOnboarding: boolean;
   onboarding: OnboardingData;
   onboardingSyncError: string | null;
   onboardingSyncStatus: "idle" | "loading" | "saving" | "saved" | "error" | "not-configured";
+  saveExactValues: (values: ExactFinancialValues) => Promise<boolean>;
   updateOnboarding: (data: Partial<OnboardingData>) => void;
 };
 
@@ -30,6 +38,7 @@ const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 export function OnboardingProvider({ children }: PropsWithChildren) {
   const { isAuthReady, isSupabaseConfigured, user } = useAuth();
   const [onboarding, setOnboarding] = useState<OnboardingData>(initialOnboarding);
+  const [exactValues, setExactValues] = useState<ExactFinancialValues>({});
   const [financialProfileExists, setFinancialProfileExists] = useState(false);
   const [onboardingSyncStatus, setOnboardingSyncStatus] =
     useState<OnboardingContextValue["onboardingSyncStatus"]>("idle");
@@ -42,6 +51,7 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
 
     if (!user) {
       setOnboarding(initialOnboarding);
+      setExactValues({});
       setFinancialProfileExists(false);
       setOnboardingSyncStatus(isSupabaseConfigured ? "idle" : "not-configured");
       setOnboardingSyncError(null);
@@ -59,6 +69,7 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
         }
 
         setOnboarding(profile.onboarding);
+        setExactValues(profile.exactValues);
         setFinancialProfileExists(profile.profileExists);
         setOnboardingSyncStatus("saved");
       })
@@ -113,21 +124,58 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     [isSupabaseConfigured, user]
   );
 
+  const saveExactValues = useCallback(
+    async (values: ExactFinancialValues) => {
+      const nextValues = normalizeExactValues(values);
+      setExactValues(nextValues);
+
+      if (!isSupabaseConfigured) {
+        setOnboardingSyncStatus("not-configured");
+        return true;
+      }
+
+      if (!user) {
+        setOnboardingSyncStatus("idle");
+        return false;
+      }
+
+      setOnboardingSyncStatus("saving");
+      setOnboardingSyncError(null);
+
+      try {
+        await persistExactValues(user.id, nextValues);
+        setFinancialProfileExists(true);
+        setOnboardingSyncStatus("saved");
+        return true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "No pudimos guardar los datos.";
+        setOnboardingSyncStatus("error");
+        setOnboardingSyncError(message);
+        return false;
+      }
+    },
+    [isSupabaseConfigured, user]
+  );
+
   const value = useMemo(
     () => ({
+      exactValues,
       financialProfileExists,
       hasCompletedOnboarding:
         financialProfileExists && getHasCompletedOnboarding(onboarding),
       onboarding,
       onboardingSyncError,
       onboardingSyncStatus,
+      saveExactValues,
       updateOnboarding
     }),
     [
+      exactValues,
       financialProfileExists,
       onboarding,
       onboardingSyncError,
       onboardingSyncStatus,
+      saveExactValues,
       updateOnboarding
     ]
   );

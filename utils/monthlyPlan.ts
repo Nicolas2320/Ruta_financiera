@@ -1,9 +1,12 @@
 import {
   formatCOP,
-  getExpenseRangeEstimate,
-  getIncomeRangeEstimate,
+  getPreferredCurrentSavings,
+  getPreferredGoalTargetAmount,
+  getPreferredMonthlyExpenses,
+  getPreferredMonthlyIncome,
   getSmallExpenseRangeEstimate
 } from "./financialRanges";
+import type { ExactFinancialValues } from "../types/financial";
 
 export type MonthlyPlanData = {
   ageRange: string | null;
@@ -32,6 +35,8 @@ export type MonthlyPlanMetrics = {
   expenseMidpoint: number | null;
   estimatedMargin: number | null;
   expensePercentage: number | null;
+  currentSavings: number | null;
+  goalTargetAmount: number | null;
   smallExpenseMidpoint: number | null;
   balancedScenarioAmount: number;
 };
@@ -103,12 +108,19 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
   };
 }
 
-export function getMonthlyPlanMetrics(data: MonthlyPlanData): MonthlyPlanMetrics {
-  const incomeEstimate = getIncomeRangeEstimate(data.incomeRange);
-  const expenseEstimate = getExpenseRangeEstimate(data.expensesRange);
+export function getMonthlyPlanMetrics(
+  data: MonthlyPlanData,
+  exactValues: ExactFinancialValues = {}
+): MonthlyPlanMetrics {
+  const financialProfile = {
+    onboarding: data,
+    exactValues
+  };
   const smallExpenseEstimate = getSmallExpenseRangeEstimate(data.smallExpensesRange);
-  const incomeMidpoint = incomeEstimate.midpoint;
-  const expenseMidpoint = expenseEstimate.midpoint;
+  const incomeMidpoint = getPreferredMonthlyIncome(financialProfile);
+  const expenseMidpoint = getPreferredMonthlyExpenses(financialProfile);
+  const currentSavings = getPreferredCurrentSavings(financialProfile);
+  const goalTargetAmount = getPreferredGoalTargetAmount(financialProfile);
   const smallExpenseMidpoint = smallExpenseEstimate.midpoint;
   const estimatedMargin =
     incomeMidpoint !== null && expenseMidpoint !== null ? incomeMidpoint - expenseMidpoint : null;
@@ -126,6 +138,8 @@ export function getMonthlyPlanMetrics(data: MonthlyPlanData): MonthlyPlanMetrics
     expenseMidpoint,
     estimatedMargin,
     expensePercentage,
+    currentSavings,
+    goalTargetAmount,
     smallExpenseMidpoint,
     balancedScenarioAmount: safeMarginContribution + smallExpenseContribution
   };
@@ -137,6 +151,10 @@ export function hasLowEmergencyCoverage(emergencyCoverage: string | null) {
 
 export function goalNeedsAmount(goalAmountRange: string | null) {
   return !goalAmountRange || noConcreteGoalAmountValues.includes(goalAmountRange);
+}
+
+function hasGoalAmountReference(data: MonthlyPlanData, metrics: MonthlyPlanMetrics) {
+  return metrics.goalTargetAmount !== null || !goalNeedsAmount(data.goalAmountRange);
 }
 
 function hasDebtPressure(debtSituation: string | null, debtPaymentShare: string | null) {
@@ -233,7 +251,7 @@ export function getMonthlyFocus(
     };
   }
 
-  if (goalNeedsAmount(data.goalAmountRange)) {
+  if (!hasGoalAmountReference(data, metrics)) {
     return {
       title: "Aterrizar tu meta",
       text: "Este mes puedes convertir tu meta en una cifra aproximada y un primer paso."
@@ -363,7 +381,7 @@ export function getMonthlyActions(
     addAction("education");
   }
 
-  if (goalNeedsAmount(data.goalAmountRange)) {
+  if (!hasGoalAmountReference(data, metrics)) {
     addAction("goal-amount");
   }
 

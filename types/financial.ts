@@ -25,6 +25,17 @@ export type OnboardingData = {
 
 export type CompletedActionsState = Record<string, boolean>;
 
+export const exactFinancialValueKeys = [
+  "monthlyIncome",
+  "monthlyExpenses",
+  "currentSavings",
+  "goalTargetAmount"
+] as const;
+
+export type ExactFinancialValueKey = (typeof exactFinancialValueKeys)[number];
+
+export type ExactFinancialValues = Partial<Record<ExactFinancialValueKey, number>>;
+
 export const initialOnboarding: OnboardingData = {
   ageRange: null,
   country: null,

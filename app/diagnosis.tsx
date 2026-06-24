@@ -17,13 +17,26 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 import { useOnboarding } from "../context/OnboardingContext";
 import {
   formatCOP,
-  getExpenseRangeEstimate,
-  getIncomeRangeEstimate,
+  getCurrentSavingsDisplay,
+  getFinancialDataSourceLabel,
+  getMonthlyExpensesDisplay,
+  getMonthlyIncomeDisplay,
+  getPreferredCurrentSavings,
+  getPreferredMonthlyExpenses,
+  getPreferredMonthlyIncome,
   getSmallExpenseRangeEstimate,
   type FinancialRangeEstimate
 } from "../utils/financialRanges";
+import type { ExactFinancialValues } from "../types/financial";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
+
+type FinancialDisplay = {
+  label: string;
+  value: string;
+  source: "exact" | "range" | "empty";
+  helper: string;
+};
 
 type PriorityKey = "debt" | "emergency" | "expenses" | "smallExpenses" | "investment" | "goal";
 
@@ -34,8 +47,12 @@ type MainPriority = {
 };
 
 type FinancialMetrics = {
-  incomeEstimate: FinancialRangeEstimate;
-  expenseEstimate: FinancialRangeEstimate;
+  incomeDisplay: FinancialDisplay;
+  expenseDisplay: FinancialDisplay;
+  currentSavingsDisplay: FinancialDisplay;
+  incomeValue: number | null;
+  expenseValue: number | null;
+  currentSavingsValue: number | null;
   smallExpenseEstimate: FinancialRangeEstimate;
   estimatedMargin: number | null;
   expensePercentage: number | null;
@@ -153,12 +170,18 @@ function getDebtPaymentLabel(debtPaymentShare: string | null) {
   return `${debtPaymentShare} de ingresos`;
 }
 
-function getFinancialMetrics(onboarding: OnboardingSnapshot): FinancialMetrics {
-  const incomeEstimate = getIncomeRangeEstimate(onboarding.incomeRange);
-  const expenseEstimate = getExpenseRangeEstimate(onboarding.expensesRange);
+function getFinancialMetrics(
+  onboarding: OnboardingSnapshot,
+  exactValues: ExactFinancialValues
+): FinancialMetrics {
+  const financialProfile = { onboarding, exactValues };
+  const incomeDisplay = getMonthlyIncomeDisplay(financialProfile);
+  const expenseDisplay = getMonthlyExpensesDisplay(financialProfile);
+  const currentSavingsDisplay = getCurrentSavingsDisplay(financialProfile);
   const smallExpenseEstimate = getSmallExpenseRangeEstimate(onboarding.smallExpensesRange);
-  const incomeMidpoint = incomeEstimate.midpoint;
-  const expenseMidpoint = expenseEstimate.midpoint;
+  const incomeMidpoint = getPreferredMonthlyIncome(financialProfile);
+  const expenseMidpoint = getPreferredMonthlyExpenses(financialProfile);
+  const currentSavingsValue = getPreferredCurrentSavings(financialProfile);
   const smallExpenseMidpoint = smallExpenseEstimate.midpoint;
   const estimatedMargin =
     incomeMidpoint !== null && incomeMidpoint > 0 && expenseMidpoint !== null
@@ -176,7 +199,12 @@ function getFinancialMetrics(onboarding: OnboardingSnapshot): FinancialMetrics {
   let estimatedMarginLabel = "No disponible";
 
   if (estimatedMargin !== null) {
-    estimatedMarginLabel = estimatedMargin > 0 ? `${formatCOP(estimatedMargin)} aprox.` : "Margen ajustado";
+    estimatedMarginLabel =
+      estimatedMargin > 0
+        ? incomeDisplay.source === "exact" && expenseDisplay.source === "exact"
+          ? formatCOP(estimatedMargin)
+          : `${formatCOP(estimatedMargin)} aprox.`
+        : "Margen ajustado";
   }
 
   const smallExpensesMetricLabel =
@@ -185,20 +213,29 @@ function getFinancialMetrics(onboarding: OnboardingSnapshot): FinancialMetrics {
       : onboarding.smallExpensesRange ?? "No disponible";
   const smallExpensesDetail =
     smallExpensePercentage !== null
-      ? `Cerca del ${smallExpensePercentage}% de tus ingresos estimados.`
+      ? `Cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
       : onboarding.smallExpensesRange
         ? "Rango seleccionado, sin porcentaje calculado."
         : "No disponible";
 
   return {
-    incomeEstimate,
-    expenseEstimate,
+    incomeDisplay,
+    expenseDisplay,
+    currentSavingsDisplay,
+    incomeValue: incomeMidpoint,
+    expenseValue: expenseMidpoint,
+    currentSavingsValue,
     smallExpenseEstimate,
     estimatedMargin,
     expensePercentage,
     smallExpensePercentage,
     estimatedMarginLabel,
-    expensePercentageLabel: expensePercentage !== null ? `${expensePercentage}% aprox.` : "No disponible",
+    expensePercentageLabel:
+      expensePercentage !== null
+        ? incomeDisplay.source === "exact" && expenseDisplay.source === "exact"
+          ? `${expensePercentage}%`
+          : `${expensePercentage}% aprox.`
+        : "No disponible",
     expenseRatioInterpretation: getExpenseRatioInterpretation(expensePercentage),
     smallExpensesMetricLabel,
     smallExpensesDetail,
@@ -439,7 +476,10 @@ function getMeaningMessage(priority: MainPriority) {
   return "En tu caso, ya puedes empezar a traducir tu meta en una acción concreta y pequeña para esta semana, usando tus rangos como una primera referencia.";
 }
 
-function goalNeedsConcreteAmount(onboarding: OnboardingSnapshot) {
+function goalNeedsConcreteAmount(
+  onboarding: OnboardingSnapshot,
+  exactValues: ExactFinancialValues
+) {
   const goalsWithAmount = [
     "Crear un fondo de emergencia",
     "Pagar deudas",
@@ -453,13 +493,18 @@ function goalNeedsConcreteAmount(onboarding: OnboardingSnapshot) {
   return (
     onboarding.financialGoal !== null &&
     goalsWithAmount.includes(onboarding.financialGoal) &&
+    exactValues.goalTargetAmount === undefined &&
     (!onboarding.goalAmountRange ||
       onboarding.goalAmountRange === "No tengo una cifra todavía" ||
       onboarding.goalAmountRange === "Prefiero definirla después")
   );
 }
 
-function getRecommendedActions(onboarding: OnboardingSnapshot, metrics: FinancialMetrics) {
+function getRecommendedActions(
+  onboarding: OnboardingSnapshot,
+  metrics: FinancialMetrics,
+  exactValues: ExactFinancialValues
+) {
   const actions: string[] = [];
   const addAction = (action: string) => {
     if (!actions.includes(action)) {
@@ -495,7 +540,7 @@ function getRecommendedActions(onboarding: OnboardingSnapshot, metrics: Financia
     addAction("Aprende la diferencia entre ahorrar e invertir.");
   }
 
-  if (goalNeedsConcreteAmount(onboarding)) {
+  if (goalNeedsConcreteAmount(onboarding, exactValues)) {
     addAction("Define una cifra más concreta para tu meta.");
   }
 
@@ -511,7 +556,7 @@ function getRecommendedActions(onboarding: OnboardingSnapshot, metrics: Financia
 }
 
 function getMetricTone(label: string, metrics: FinancialMetrics, onboarding: OnboardingSnapshot) {
-  if (label === "Margen mensual estimado") {
+  if (label === "Margen mensual") {
     if (metrics.estimatedMargin === null) {
       return "neutral";
     }
@@ -527,14 +572,16 @@ function getMetricTone(label: string, metrics: FinancialMetrics, onboarding: Onb
     return metrics.expensePercentage >= 85 ? "warning" : "positive";
   }
 
-  if (label === "Fondo de emergencia") {
-    if (isLowEmergencyCoverage(onboarding.emergencyCoverage)) {
+  if (label === "Ahorro actual" || label === "Rango de ahorros") {
+    if (metrics.currentSavingsValue === null) {
+      return "neutral";
+    }
+
+    if (metrics.currentSavingsValue <= 0 || isLowEmergencyCoverage(onboarding.emergencyCoverage)) {
       return "warning";
     }
 
-    return onboarding.emergencyCoverage === "3 – 6 meses" || onboarding.emergencyCoverage === "Más de 6 meses"
-      ? "positive"
-      : "neutral";
+    return "positive";
   }
 
   if (label === "Peso de deudas") {
@@ -607,12 +654,16 @@ function ValueRow({ label, value }: { label: string; value: string }) {
 
 export default function DiagnosisScreen() {
   const router = useRouter();
-  const { onboarding } = useOnboarding();
-  const metrics = useMemo(() => getFinancialMetrics(onboarding), [onboarding]);
+  const { exactValues, onboarding } = useOnboarding();
+  const financialProfile = { onboarding, exactValues };
+  const metrics = useMemo(
+    () => getFinancialMetrics(onboarding, exactValues),
+    [exactValues, onboarding]
+  );
   const priority = useMemo(() => getMainPriority(onboarding, metrics), [onboarding, metrics]);
   const recommendedActions = useMemo(
-    () => getRecommendedActions(onboarding, metrics),
-    [onboarding, metrics]
+    () => getRecommendedActions(onboarding, metrics, exactValues),
+    [exactValues, onboarding, metrics]
   );
   const smallExpensesMessages = useMemo(
     () => getSmallExpensesMessages(onboarding, metrics),
@@ -625,12 +676,14 @@ export default function DiagnosisScreen() {
       : 0;
   const indicators = [
     {
-      label: "Margen mensual estimado",
+      label: "Margen mensual",
       value: metrics.estimatedMarginLabel,
       detail:
         metrics.estimatedMargin !== null
-          ? "Calculado con puntos medios de ingresos y gastos."
-          : "Requiere rangos cerrados de ingresos y gastos."
+          ? metrics.incomeDisplay.source === "exact" && metrics.expenseDisplay.source === "exact"
+            ? "Calculado con tus datos ingresados."
+            : "Calculado con datos ingresados y rangos disponibles."
+          : "Requiere datos de ingresos y gastos."
     },
     {
       label: "Gastos frente a ingresos",
@@ -638,11 +691,9 @@ export default function DiagnosisScreen() {
       detail: metrics.expenseRatioInterpretation
     },
     {
-      label: "Fondo de emergencia",
-      value: metrics.emergencyLabel,
-      detail: isLowEmergencyCoverage(onboarding.emergencyCoverage)
-        ? "Prioridad inicial."
-        : "Lectura basada en tu respuesta."
+      label: metrics.currentSavingsDisplay.label,
+      value: metrics.currentSavingsDisplay.value,
+      detail: metrics.currentSavingsDisplay.helper
     },
     {
       label: "Gastos hormiga",
@@ -709,7 +760,7 @@ export default function DiagnosisScreen() {
               ))}
             </View>
             <Text style={styles.helperText}>
-              Todos los cálculos son aproximados y se basan en los rangos que elegiste.
+              {getFinancialDataSourceLabel(financialProfile)}
             </Text>
           </InfoCard>
 
@@ -720,9 +771,9 @@ export default function DiagnosisScreen() {
             {metrics.canEstimateMonthlyFlow ? (
               <>
                 <View style={styles.valueRows}>
-                  <ValueRow label="Ingresos estimados" value={`${formatCOP(metrics.incomeEstimate.midpoint ?? 0)} aprox.`} />
-                  <ValueRow label="Gastos estimados" value={`${formatCOP(metrics.expenseEstimate.midpoint ?? 0)} aprox.`} />
-                  <ValueRow label="Margen estimado" value={metrics.estimatedMarginLabel} />
+                  <ValueRow label={metrics.incomeDisplay.label} value={metrics.incomeDisplay.value} />
+                  <ValueRow label={metrics.expenseDisplay.label} value={metrics.expenseDisplay.value} />
+                  <ValueRow label="Margen mensual" value={metrics.estimatedMarginLabel} />
                   <ValueRow label="Gastos frente a ingresos" value={metrics.expensePercentageLabel} />
                 </View>
 
