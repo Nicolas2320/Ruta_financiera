@@ -71,22 +71,22 @@ const monthlyPlanPriorityKeys: PriorityKey[] = [
 
 const monthlyFocusByPriority: Record<PriorityKey, MonthlyFocus> = {
   debt_pressure: {
-    title: "Reducir presiÃ³n de deudas",
-    text: "Antes de acelerar otras metas, conviene entender cuÃ¡nto pesan tus deudas en el mes."
+    title: "Reducir presión de deudas",
+    text: "Antes de acelerar otras metas, conviene entender cuánto pesan tus deudas en el mes."
   },
   organize_cashflow: {
     title: "Ordenar ingresos y gastos",
-    text: "Tu primera oportunidad estÃ¡ en recuperar margen mensual."
+    text: "Tu primera oportunidad está en recuperar margen mensual."
   },
   build_emergency_fund: {
     title: "Construir fondo de emergencia",
     text:
-      "Crear una base para imprevistos puede darte mÃ¡s estabilidad antes de avanzar a metas grandes."
+      "Crear una base para imprevistos puede darte más estabilidad antes de avanzar a metas grandes."
   },
   review_small_expenses: {
-    title: "Revisar gastos pequeÃ±os",
+    title: "Revisar gastos pequenos",
     text:
-      "Puedes redirigir una parte de tus pequeÃ±os consumos hacia tu meta sin eliminarlos todos."
+      "Puedes redirigir una parte de tus pequenos consumos hacia tu meta sin eliminarlos todos."
   },
   advance_goal: {
     title: "Avanzar hacia tu meta",
