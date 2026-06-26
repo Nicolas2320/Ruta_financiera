@@ -1,6 +1,9 @@
 import {
   exactFinancialValueKeys,
-  type ExactFinancialValues
+  getPrimaryFinancialGoal,
+  initialOnboarding,
+  type ExactFinancialValues,
+  type OnboardingData
 } from "../types/financial";
 
 export type FinancialRangeEstimate = {
@@ -213,12 +216,7 @@ const goalAmountRanges: Record<string, FinancialRangeEstimate> = {
 };
 
 type FinancialValueProfile = {
-  onboarding?: {
-    incomeRange?: string | null;
-    expensesRange?: string | null;
-    savingsRange?: string | null;
-    goalAmountRange?: string | null;
-  } | null;
+  onboarding?: Partial<OnboardingData> | null;
   exactValues?: ExactFinancialValues | null;
   exact_values?: ExactFinancialValues | null;
 };
@@ -386,7 +384,17 @@ export function getPreferredGoalTargetAmount(profile: FinancialValueProfile) {
     return exactValue;
   }
 
-  return getGoalAmountRangeEstimate(profile.onboarding?.goalAmountRange ?? null).midpoint;
+  const primaryGoal = profile.onboarding
+    ? getPrimaryFinancialGoal({ ...initialOnboarding, ...profile.onboarding })
+    : null;
+
+  if (hasExactFinancialValue(primaryGoal?.targetAmount)) {
+    return primaryGoal.targetAmount;
+  }
+
+  return getGoalAmountRangeEstimate(
+    primaryGoal?.amountRange ?? profile.onboarding?.goalAmountRange ?? null
+  ).midpoint;
 }
 
 function getExactDisplay(
@@ -461,12 +469,21 @@ export function getCurrentSavingsDisplay(profile: FinancialValueProfile): Financ
 export function getGoalTargetAmountDisplay(
   profile: FinancialValueProfile
 ): FinancialValueDisplay {
+  const primaryGoal = profile.onboarding
+    ? getPrimaryFinancialGoal({ ...initialOnboarding, ...profile.onboarding })
+    : null;
+
   return (
+    getExactDisplay(
+      "Monto objetivo de la meta",
+      primaryGoal?.targetAmount ?? undefined,
+      "Dato ingresado para estimar tu avance hacia la meta."
+    ) ??
     getExactDisplay(
       "Monto objetivo de la meta",
       getProfileExactValues(profile).goalTargetAmount,
       "Dato ingresado para estimar tu avance hacia la meta."
-    ) ?? getRangeDisplay("Cifra aproximada", profile.onboarding?.goalAmountRange)
+    ) ?? getRangeDisplay("Cifra aproximada", primaryGoal?.amountRange ?? profile.onboarding?.goalAmountRange)
   );
 }
 

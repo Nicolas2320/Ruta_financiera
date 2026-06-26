@@ -1,5 +1,6 @@
 import {
   exactFinancialValueKeys,
+  getPrimaryFinancialGoal,
   type CompletedActionsState,
   type ExactFinancialValues,
   type OnboardingData
@@ -581,6 +582,7 @@ function getPriority(
 
 export function calculateFinancialSnapshot(profile: FinancialProfileInput): FinancialSnapshot {
   const { onboarding } = profile;
+  const primaryGoal = getPrimaryFinancialGoal(onboarding);
   const exactValues = getExactValues(profile);
   const exactMonthlyIncome = exactValues.monthlyIncome;
   const exactMonthlyExpenses = exactValues.monthlyExpenses;
@@ -590,7 +592,9 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const estimatedMonthlyIncome = estimateIncomeFromRange(onboarding.incomeRange);
   const estimatedMonthlyExpenses = estimateExpensesFromRange(onboarding.expensesRange);
   const estimatedCurrentSavings = estimateSavingsFromRange(onboarding.savingsRange);
-  const estimatedGoalTargetAmount = estimateGoalTargetAmountFromRange(onboarding.goalAmountRange);
+  const estimatedGoalTargetAmount = estimateGoalTargetAmountFromRange(
+    primaryGoal?.amountRange ?? onboarding.goalAmountRange
+  );
   const estimatedSmallExpenses = estimateSmallExpensesFromRange(onboarding.smallExpensesRange);
 
   const monthlyIncome = isPositiveNumber(exactMonthlyIncome)
@@ -602,10 +606,15 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const currentSavings = isNonNegativeNumber(exactCurrentSavings)
     ? exactCurrentSavings
     : estimatedCurrentSavings;
-  const goalTargetAmount = isPositiveNumber(exactGoalTargetAmount)
-    ? exactGoalTargetAmount
-    : estimatedGoalTargetAmount;
+  const goalTargetAmount = isPositiveNumber(primaryGoal?.targetAmount)
+    ? primaryGoal.targetAmount
+    : isPositiveNumber(exactGoalTargetAmount)
+      ? exactGoalTargetAmount
+      : estimatedGoalTargetAmount;
   const smallExpenses = estimatedSmallExpenses;
+  const goalCurrentSavings = isNonNegativeNumber(primaryGoal?.currentAmount)
+    ? primaryGoal.currentAmount
+    : currentSavings;
 
   const monthlyMargin =
     monthlyIncome !== null && monthlyExpenses !== null ? monthlyIncome - monthlyExpenses : null;
@@ -623,12 +632,12 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const emergencyFundStatus = getEmergencyFundStatus(currentSavings, monthlyExpenses);
 
   const goalProgressPercentage =
-    currentSavings !== null && goalTargetAmount !== null && goalTargetAmount > 0
-      ? Math.min((currentSavings / goalTargetAmount) * 100, 100)
+    goalCurrentSavings !== null && goalTargetAmount !== null && goalTargetAmount > 0
+      ? Math.min((goalCurrentSavings / goalTargetAmount) * 100, 100)
       : null;
   const remainingAmount =
-    goalTargetAmount !== null && currentSavings !== null
-      ? Math.max(goalTargetAmount - currentSavings, 0)
+    goalTargetAmount !== null && goalCurrentSavings !== null
+      ? Math.max(goalTargetAmount - goalCurrentSavings, 0)
       : null;
   const estimatedMonthsToGoal =
     remainingAmount !== null && suggestedMonthlyContribution > 0
@@ -661,9 +670,10 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
       currentSavings: isNonNegativeNumber(exactCurrentSavings)
         ? "exact"
         : getSource(currentSavings),
-      goalTargetAmount: isPositiveNumber(exactGoalTargetAmount)
-        ? "exact"
-        : getSource(goalTargetAmount),
+      goalTargetAmount:
+        isPositiveNumber(primaryGoal?.targetAmount) || isPositiveNumber(exactGoalTargetAmount)
+          ? "exact"
+          : getSource(goalTargetAmount),
       smallExpenses:
         onboarding.smallExpensesRange === "No sé" || onboarding.smallExpensesRange === "No estoy seguro"
           ? "unknown"
@@ -690,9 +700,9 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
       label: emergencyFundLabels[emergencyFundStatus]
     },
     goal: {
-      name: onboarding.financialGoal,
+      name: primaryGoal?.title ?? onboarding.financialGoal,
       targetAmount: goalTargetAmount,
-      currentSavings,
+      currentSavings: goalCurrentSavings,
       progressPercentage: goalProgressPercentage,
       remainingAmount,
       estimatedMonthsToGoal,

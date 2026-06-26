@@ -30,7 +30,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
+import { getOnboardingGoals } from "../types/financial";
 import { formatCOP } from "../utils/financialRanges";
+import { getGoalPlanFromOnboarding } from "../utils/goalPlanning";
 import {
   getActiveMonthlyPlanProgressKey,
   getMonthlyActions,
@@ -711,6 +713,11 @@ export default function DashboardScreen() {
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const snapshot = metrics.snapshot;
+  const goals = useMemo(() => getOnboardingGoals(onboarding), [onboarding]);
+  const goalPlan = useMemo(
+    () => getGoalPlanFromOnboarding(onboarding, snapshot.cashflow.suggestedMonthlyContribution, exactValues),
+    [exactValues, onboarding, snapshot.cashflow.suggestedMonthlyContribution]
+  );
   const suggestedActions = useMemo(() => getMonthlyActions(data, metrics), [data, metrics]);
   const suggestedPlanProgressKey = useMemo(
     () => getMonthlyPlanProgressKey(metrics, suggestedActions),
@@ -787,6 +794,14 @@ export default function DashboardScreen() {
         ? `Objetivo: ${formatCOP(snapshot.goal.targetAmount)}. Base actual frente a tu objetivo: ${Math.round(snapshot.goal.progressPercentage)}% aprox.`
         : `Objetivo: ${formatCOP(snapshot.goal.targetAmount)}. Horizonte: ${getDefinedLabel(data.goalHorizon)}.`
       : `Horizonte: ${getDefinedLabel(data.goalHorizon)}. Cifra aproximada: ${getDefinedLabel(data.goalAmountRange, "No definida")}.`;
+  const goalsValue =
+    goals.length > 1
+      ? `${goals.length} metas activas`
+      : `Meta: ${getDefinedLabel(data.financialGoal, "No definida")}`;
+  const goalsDetailText =
+    goals.length > 1
+      ? `Bolsa sugerida: ${getAmountLabel(goalPlan.monthlyGoalBudget)}. Principal: ${getDefinedLabel(snapshot.goal.name, "No definida")}.`
+      : goalDetailText;
   const goalStatusTone = getGoalTone(snapshot.goal.status);
   const smallExpensesValue =
     snapshot.smallExpenses.amount !== null
@@ -939,15 +954,18 @@ export default function DashboardScreen() {
           </RowCard>
 
           <RowCard
-            actionLabel="Ver simulación"
+            actionLabel="Ver metas"
             icon={<Flag color={colors.primary} size={36} strokeWidth={2.4} />}
-            onPress={() => router.push("/simulation")}
-            text={goalDetailText}
-            title="Meta principal"
+            onPress={() => router.push("/goals-overview")}
+            text={goalsDetailText}
+            title={goals.length > 1 ? "Metas" : "Meta principal"}
             tone="primary"
-            value={`Meta: ${getDefinedLabel(data.financialGoal, "No definida")}`}
+            value={goalsValue}
           >
             <Chip label={goalStatus} tone={goalStatusTone} />
+            {goals.length > 1 ? (
+              <Chip label={`Bolsa ${getAmountLabel(goalPlan.monthlyGoalBudget)}`} tone="support" />
+            ) : null}
             {goalProgressPercentage !== null ? (
               <Chip label={`Avance estimado ${goalProgressPercentage}%`} tone="primary" />
             ) : null}

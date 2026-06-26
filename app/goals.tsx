@@ -1,17 +1,23 @@
 import type { ComponentType } from "react";
 import type { StyleProp, TextStyle, ViewStyle } from "react-native";
 import { useState } from "react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
+  Baby,
   Banknote,
+  BriefcaseBusiness,
   Calendar,
+  Car,
   ChartColumnIncreasing,
   CircleQuestionMark,
   Clock,
   CreditCard,
   Crown,
+  Dumbbell,
+  Gift,
   GraduationCap,
+  HeartPulse,
   Hourglass,
   House,
   Landmark,
@@ -19,14 +25,13 @@ import {
   PenLine,
   PiggyBank,
   Plane,
-  Star,
+  Sparkles,
   Store,
-  TextAlignJustify,
   Ticket,
   UserRound,
   Wallet
 } from "lucide-react-native";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
@@ -35,6 +40,14 @@ import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import {
+  createFinancialGoal,
+  getLegacyFieldsFromGoal,
+  getOnboardingGoals,
+  getPrimaryFinancialGoal,
+  type FinancialGoal
+} from "../types/financial";
+import { formatCOP, parseCOPInput } from "../utils/financialRanges";
 
 const goalTargetImage = require("../assets/illustrations/goal-target.png");
 
@@ -47,6 +60,7 @@ type IconProps = {
 
 type VisualOption = {
   title: string;
+  iconKey?: string;
   icon: ComponentType<IconProps>;
   color: string;
   backgroundColor: string;
@@ -55,64 +69,121 @@ type VisualOption = {
 const financialGoals: VisualOption[] = [
   {
     title: "Organizar mis gastos",
+    iconKey: "expenses",
     icon: Wallet,
     color: colors.primary,
     backgroundColor: colors.primarySoft
   },
   {
     title: "Crear un fondo de emergencia",
+    iconKey: "emergency",
     icon: PiggyBank,
     color: colors.primary,
     backgroundColor: colors.primarySoft
   },
   {
     title: "Pagar deudas",
+    iconKey: "debt",
     icon: CreditCard,
     color: "#7C3AED",
     backgroundColor: "#F1E8FF"
   },
   {
     title: "Ahorrar para vivienda",
+    iconKey: "home",
     icon: House,
     color: colors.support,
     backgroundColor: colors.supportSoft
   },
   {
     title: "Ahorrar para estudiar",
+    iconKey: "education",
     icon: GraduationCap,
     color: "#F97316",
     backgroundColor: "#FFF1E7"
   },
   {
     title: "Ahorrar para viajar",
+    iconKey: "travel",
     icon: Plane,
     color: "#0E7490",
     backgroundColor: "#E6F7FB"
   },
   {
     title: "Empezar a invertir",
+    iconKey: "investment",
     icon: ChartColumnIncreasing,
     color: "#F59E0B",
     backgroundColor: colors.warningSoft
   },
   {
     title: "Ahorrar para un negocio",
+    iconKey: "business",
     icon: Store,
     color: "#7C3AED",
     backgroundColor: "#F1E8FF"
   },
   {
     title: "Prepararme para el futuro",
+    iconKey: "future",
     icon: UserRound,
     color: "#DB2777",
     backgroundColor: "#FCE7F3"
   }
 ];
 
-const undecidedGoal = {
-  title: "No sé todavía, ayúdame a elegir",
-  subtitle: "Responde algunas preguntas y te ayudaremos a encontrar tu mejor opción."
+const customGoalOption: VisualOption = {
+  title: "Otro",
+  iconKey: "other",
+  icon: Sparkles,
+  color: "#7C3AED",
+  backgroundColor: "#F1E8FF"
 };
+
+const customGoalIconOptions: VisualOption[] = [
+  {
+    title: "Salud",
+    iconKey: "custom-health",
+    icon: HeartPulse,
+    color: colors.support,
+    backgroundColor: colors.supportSoft
+  },
+  {
+    title: "Vehiculo",
+    iconKey: "custom-vehicle",
+    icon: Car,
+    color: "#0E7490",
+    backgroundColor: "#E6F7FB"
+  },
+  {
+    title: "Celebracion",
+    iconKey: "custom-gift",
+    icon: Gift,
+    color: "#DB2777",
+    backgroundColor: "#FCE7F3"
+  },
+  {
+    title: "Carrera",
+    iconKey: "custom-career",
+    icon: BriefcaseBusiness,
+    color: "#7C3AED",
+    backgroundColor: "#F1E8FF"
+  },
+  {
+    title: "Bienestar",
+    iconKey: "custom-wellness",
+    icon: Dumbbell,
+    color: "#F97316",
+    backgroundColor: "#FFF1E7"
+  },
+  {
+    title: "Familia",
+    iconKey: "custom-family",
+    icon: Baby,
+    color: colors.primary,
+    backgroundColor: colors.primarySoft
+  }
+];
 
 const goalHorizons: VisualOption[] = [
   {
@@ -153,36 +224,10 @@ const goalHorizons: VisualOption[] = [
   }
 ];
 
-const goalPriorities = [
-  {
-    title: "Baja",
-    stars: 1,
-    color: "#FFC700"
-  },
-  {
-    title: "Media",
-    stars: 2,
-    color: "#FFC700"
-  },
-  {
-    title: "Alta",
-    stars: 3,
-    color: "#FFC700"
-  },
-  {
-    title: "Muy alta",
-    stars: 4,
-    color: "#FFC700"
-  }
-] as const;
+const goalPriorities = ["Baja", "Media", "Alta", "Muy alta"] as const;
+const manualAmountOptionTitle = "Ingresar cifra";
 
 const goalAmountRanges: VisualOption[] = [
-  {
-    title: "No tengo una cifra todavía",
-    icon: CircleQuestionMark,
-    color: "#94A3B8",
-    backgroundColor: "#EEF2F7"
-  },
   {
     title: "Menos de $1.000.000",
     icon: Banknote,
@@ -214,45 +259,160 @@ const goalAmountRanges: VisualOption[] = [
     backgroundColor: "#FCE7F3"
   },
   {
-    title: "Prefiero definirla después",
+    title: manualAmountOptionTitle,
     icon: PenLine,
     color: colors.primary,
     backgroundColor: colors.primarySoft
   }
 ];
 
+function getInitialGoalSelection(goal: FinancialGoal | null) {
+  if (!goal) {
+    return null;
+  }
+
+  return financialGoals.some((option) => option.title === goal.title)
+    ? goal.title
+    : customGoalOption.title;
+}
+
+function getCurrencyInputValue(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? formatCOP(value) : "";
+}
+
+function getInitialAmountSelection(goal: FinancialGoal | null) {
+  if (goal?.targetAmount && goal.targetAmount > 0) {
+    return manualAmountOptionTitle;
+  }
+
+  return goal?.amountRange ?? null;
+}
+
 export default function GoalsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { onboarding, updateOnboarding } = useOnboarding();
-  const [selectedGoal, setSelectedGoal] = useState<string | null>(onboarding.financialGoal);
-  const [selectedHorizon, setSelectedHorizon] = useState<string | null>(onboarding.goalHorizon);
+  const goals = getOnboardingGoals(onboarding);
+  const primaryGoal = getPrimaryFinancialGoal(onboarding);
+  const isAddMode = params.mode === "add";
+  const initialGoal = isAddMode ? null : primaryGoal;
+  const initialGoalSelection = getInitialGoalSelection(initialGoal);
+  const initialAmountSelection = getInitialAmountSelection(initialGoal);
+  const [selectedGoal, setSelectedGoal] = useState<string | null>(initialGoalSelection);
+  const [customGoalName, setCustomGoalName] = useState(
+    initialGoal && initialGoalSelection === customGoalOption.title ? initialGoal.title : ""
+  );
+  const [selectedIconKey, setSelectedIconKey] = useState<string | null>(
+    initialGoal?.iconKey ?? null
+  );
+  const [selectedHorizon, setSelectedHorizon] = useState<string | null>(initialGoal?.horizon ?? null);
   const [selectedPriority, setSelectedPriority] = useState<string | null>(
-    onboarding.goalPriority
+    initialGoal?.priority ?? null
   );
   const [selectedAmountRange, setSelectedAmountRange] = useState<string | null>(
-    onboarding.goalAmountRange
+    initialAmountSelection
+  );
+  const [targetAmountInput, setTargetAmountInput] = useState(
+    getCurrencyInputValue(initialGoal?.targetAmount)
   );
 
-  const canContinue = Boolean(selectedGoal && selectedHorizon && selectedPriority);
+  const isCustomGoal = selectedGoal === customGoalOption.title;
+  const finalGoalTitle = isCustomGoal ? customGoalName.trim() : selectedGoal;
+  const isManualAmount = selectedAmountRange === manualAmountOptionTitle;
+  const parsedTargetAmount = isManualAmount ? parseCOPInput(targetAmountInput) : null;
+  const finalIconKey =
+    selectedIconKey ??
+    financialGoals.find((goal) => goal.title === selectedGoal)?.iconKey ??
+    customGoalOption.iconKey ??
+    "other";
+  const canContinue = Boolean(
+    finalGoalTitle &&
+      selectedHorizon &&
+      selectedPriority &&
+      (!isManualAmount || (parsedTargetAmount !== null && parsedTargetAmount > 0))
+  );
 
-  const handleGoalSelect = (goal: string) => {
-    if (goal !== selectedGoal) {
+  const handleGoalSelect = (goal: VisualOption) => {
+    if (goal.title !== selectedGoal) {
       setSelectedAmountRange(null);
+      setTargetAmountInput("");
     }
 
-    setSelectedGoal(goal);
+    setSelectedGoal(goal.title);
+    setSelectedIconKey(
+      goal.iconKey === customGoalOption.iconKey
+        ? customGoalIconOptions[0]?.iconKey ?? "other"
+        : goal.iconKey ?? "other"
+    );
+  };
+
+  const handleAmountSelect = (range: VisualOption) => {
+    setSelectedAmountRange(range.title);
+
+    if (range.title !== manualAmountOptionTitle) {
+      setTargetAmountInput("");
+    }
+  };
+
+  const handleTargetAmountChange = (value: string) => {
+    const parsedValue = parseCOPInput(value);
+    setTargetAmountInput(parsedValue === null ? "" : formatCOP(parsedValue));
   };
 
   const handleContinue = () => {
-    if (!selectedGoal || !selectedHorizon || !selectedPriority) {
+    if (!canContinue || !finalGoalTitle || !selectedHorizon || !selectedPriority) {
       return;
     }
 
+    const nextGoal = createFinancialGoal({
+      amountRange: isManualAmount ? null : selectedAmountRange,
+      horizon: selectedHorizon,
+      iconKey: finalIconKey,
+      isPrimary: !isAddMode,
+      priority: selectedPriority,
+      targetAmount: parsedTargetAmount,
+      title: finalGoalTitle
+    });
+
+    if (isAddMode) {
+      const hasPrimaryGoal = goals.some((goal) => goal.isPrimary);
+      const nextGoals: FinancialGoal[] = [
+        ...goals.map((goal, index) => ({
+          ...goal,
+          isPrimary: hasPrimaryGoal ? goal.isPrimary : index === 0
+        })),
+        {
+          ...nextGoal,
+          isPrimary: !hasPrimaryGoal && goals.length === 0
+        }
+      ];
+      const nextPrimaryGoal = nextGoals.find((goal) => goal.isPrimary) ?? nextGoals[0] ?? null;
+
+      updateOnboarding({
+        goals: nextGoals,
+        ...getLegacyFieldsFromGoal(nextPrimaryGoal)
+      });
+      router.push("/goals-overview");
+      return;
+    }
+
+    const nextPrimaryGoal: FinancialGoal = {
+      ...nextGoal,
+      id: primaryGoal?.id ?? nextGoal.id,
+      isPrimary: true,
+      manualMonthlyContribution: primaryGoal?.manualMonthlyContribution ?? null,
+      createdAt: primaryGoal?.createdAt ?? nextGoal.createdAt
+    };
+    const nextGoals = [
+      nextPrimaryGoal,
+      ...goals
+        .filter((goal) => goal.id !== nextPrimaryGoal.id)
+        .map((goal) => ({ ...goal, isPrimary: false }))
+    ];
+
     updateOnboarding({
-      financialGoal: selectedGoal,
-      goalHorizon: selectedHorizon,
-      goalPriority: selectedPriority,
-      goalAmountRange: selectedAmountRange
+      goals: nextGoals,
+      ...getLegacyFieldsFromGoal(nextPrimaryGoal)
     });
     router.push("/summary");
   };
@@ -268,8 +428,8 @@ export default function GoalsScreen() {
         <View style={styles.container}>
           <StepHeader
             currentStep={8}
-            onBack={() => router.push("/savings-debts")}
-            title="Meta financiera"
+            onBack={() => router.push(isAddMode ? "/goals-overview" : "/savings-debts")}
+            title={isAddMode ? "Nueva meta" : "Meta financiera"}
             totalSteps={8}
           />
 
@@ -277,12 +437,18 @@ export default function GoalsScreen() {
             badge="No necesitas tener una cifra exacta para empezar."
             image={goalTargetImage}
             imageStyle={styles.heroImage}
-            text="Elige qué quieres lograr primero. Esta es tu prioridad inicial y podrás ajustarla cuando lo necesites."
-            title="Tu primera meta financiera"
+            text={
+              isAddMode
+                ? "Agrega otra meta para repartir tu bolsa mensual entre objetivos con distintos horizontes e importancia."
+                : "Elige qué quieres lograr primero. Esta es tu prioridad inicial y podrás ajustarla cuando lo necesites."
+            }
+            title={isAddMode ? "Agregar una meta" : "Tu primera meta financiera"}
           />
 
           <View style={styles.card}>
-            <Text style={styles.questionTitle}>¿Qué quieres lograr primero?</Text>
+            <Text style={styles.questionTitle}>
+              {isAddMode ? "¿Qué quieres lograr con esta meta?" : "¿Qué quieres lograr primero?"}
+            </Text>
             <View style={styles.goalGrid}>
               {financialGoals.map((goal) => (
                 <VisualSelectable
@@ -290,7 +456,7 @@ export default function GoalsScreen() {
                   icon={goal.icon}
                   iconBackground={goal.backgroundColor}
                   iconColor={goal.color}
-                  onPress={() => handleGoalSelect(goal.title)}
+                  onPress={() => handleGoalSelect(goal)}
                   selected={selectedGoal === goal.title}
                   style={styles.goalOption}
                   title={goal.title}
@@ -302,16 +468,46 @@ export default function GoalsScreen() {
             <SelectableCard
               leading={
                 <View style={[styles.rowIcon, styles.purpleIcon]}>
-                  <CircleQuestionMark color="#7C3AED" size={24} strokeWidth={2.4} />
+                  <Sparkles color="#7C3AED" size={24} strokeWidth={2.4} />
                 </View>
               }
-              onPress={() => handleGoalSelect(undecidedGoal.title)}
-              selected={selectedGoal === undecidedGoal.title}
+              onPress={() => handleGoalSelect(customGoalOption)}
+              selected={selectedGoal === customGoalOption.title}
               style={styles.undecidedCard}
-              subtitle={undecidedGoal.subtitle}
-              title={undecidedGoal.title}
+              subtitle="Escribe tu propia meta y elige un icono para reconocerla."
+              title={customGoalOption.title}
               titleStyle={styles.undecidedTitle}
             />
+
+            {isCustomGoal ? (
+              <View style={styles.customGoalBox}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Nombre de la meta</Text>
+                  <TextInput
+                    accessibilityLabel="Nombre de la meta personalizada"
+                    onChangeText={setCustomGoalName}
+                    placeholder="Ej. Comprar computador, salud, mudanza"
+                    placeholderTextColor={colors.textSubtle}
+                    returnKeyType="done"
+                    style={styles.input}
+                    value={customGoalName}
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Icono de la meta</Text>
+                  <View style={styles.customIconGrid}>
+                    {customGoalIconOptions.map((goal) => (
+                      <IconSelectable
+                        key={goal.iconKey ?? goal.title}
+                        onPress={() => setSelectedIconKey(goal.iconKey ?? "other")}
+                        option={goal}
+                        selected={selectedIconKey === goal.iconKey}
+                      />
+                    ))}
+                  </View>
+                </View>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.card}>
@@ -340,12 +536,11 @@ export default function GoalsScreen() {
             <View style={styles.priorityGrid}>
               {goalPriorities.map((priority) => (
                 <SelectableCard
-                key={priority.title}
-                leading={<PriorityStars color={priority.color} count={priority.stars} />}
-                  onPress={() => setSelectedPriority(priority.title)}
-                  selected={selectedPriority === priority.title}
+                  key={priority}
+                  onPress={() => setSelectedPriority(priority)}
+                  selected={selectedPriority === priority}
                   style={styles.priorityOption}
-                  title={priority.title}
+                  title={priority}
                 />
               ))}
             </View>
@@ -363,10 +558,10 @@ export default function GoalsScreen() {
                   icon={range.icon}
                   iconBackground={range.backgroundColor}
                   iconColor={range.color}
-                  onPress={() => setSelectedAmountRange(range.title)}
+                  onPress={() => handleAmountSelect(range)}
                   selected={selectedAmountRange === range.title}
                   style={
-                    range.title === "Prefiero definirla después"
+                    range.title === manualAmountOptionTitle
                       ? styles.amountOptionFeatured
                       : styles.amountOption
                   }
@@ -375,21 +570,40 @@ export default function GoalsScreen() {
                 />
               ))}
             </View>
+
+            {isManualAmount ? (
+              <View style={styles.manualAmountBox}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Monto objetivo</Text>
+                  <TextInput
+                    accessibilityLabel="Monto objetivo de la meta"
+                    inputMode="numeric"
+                    keyboardType="numeric"
+                    onChangeText={handleTargetAmountChange}
+                    placeholder="$0"
+                    placeholderTextColor={colors.textSubtle}
+                    returnKeyType="done"
+                    style={styles.input}
+                    value={targetAmountInput}
+                  />
+                </View>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel="Revisar mis respuestas antes del diagnóstico"
+              accessibilityLabel={isAddMode ? "Guardar nueva meta" : "Revisar mis respuestas antes del diagnóstico"}
               disabled={!canContinue}
               iconPosition="right"
               onPress={handleContinue}
               style={styles.primaryButton}
-              title="Revisar mis respuestas"
+              title={isAddMode ? "Guardar meta" : "Revisar mis respuestas"}
             />
             <PrimaryButton
-              accessibilityLabel="Volver a ahorros y deudas"
+              accessibilityLabel={isAddMode ? "Volver a mis metas" : "Volver a ahorros y deudas"}
               icon={null}
-              onPress={() => router.push("/savings-debts")}
+              onPress={() => router.push(isAddMode ? "/goals-overview" : "/savings-debts")}
               style={styles.secondaryButton}
               title="Volver"
               variant="secondary"
@@ -437,13 +651,33 @@ function VisualSelectable({
   );
 }
 
-function PriorityStars({ color, count }: { color: string; count: number }) {
+function IconSelectable({
+  option,
+  selected,
+  onPress
+}: {
+  option: VisualOption;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const Icon = option.icon;
+
   return (
-    <View style={styles.starGroup}>
-      {Array.from({ length: count }).map((_, index) => (
-        <Star key={index} color={color} fill={color} size={count > 1 ? 15 : 20} strokeWidth={2.2} />
-      ))}
-    </View>
+    <Pressable
+      accessibilityLabel={`Icono ${option.title}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.customIconOption,
+        selected && styles.customIconOptionSelected,
+        pressed && styles.pressed
+      ]}
+    >
+      <View style={[styles.customIconBubble, { backgroundColor: option.backgroundColor }]}>
+        <Icon color={option.color} size={24} strokeWidth={2.4} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -473,7 +707,7 @@ const styles = StyleSheet.create({
     ...shadows.card,
     backgroundColor: colors.surface,
     borderColor: "#E1EAF7",
-    borderRadius: 22,
+    borderRadius: radius.lg,
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.md
@@ -525,7 +759,65 @@ const styles = StyleSheet.create({
   undecidedTitle: {
     color: "#5B45D9",
     fontSize: typography.caption,
-    lineHeight: typography.lineHeight.caption,
+    lineHeight: typography.lineHeight.caption
+  },
+  customGoalBox: {
+    backgroundColor: "#F8FAFC",
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  inputGroup: {
+    gap: spacing.xs
+  },
+  inputLabel: {
+    color: colors.text,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  input: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.body,
+    minHeight: 50,
+    paddingHorizontal: spacing.md
+  },
+  customIconGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  customIconOption: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexBasis: "30%",
+    flexGrow: 1,
+    height: 64,
+    justifyContent: "center",
+    minWidth: 64
+  },
+  customIconOptionSelected: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
+    borderWidth: 2
+  },
+  customIconBubble: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    height: 42,
+    justifyContent: "center",
+    width: 42
   },
   horizonGrid: {
     flexDirection: "row",
@@ -552,13 +844,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     minHeight: 52
   },
-  starGroup: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 2,
-    justifyContent: "center",
-    minWidth: 28
-  },
   questionRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -569,8 +854,8 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
     fontSize: typography.small,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.small,
     letterSpacing: 0,
+    lineHeight: typography.lineHeight.small,
     textTransform: "uppercase"
   },
   amountGrid: {
@@ -592,6 +877,13 @@ const styles = StyleSheet.create({
     fontSize: typography.badge,
     lineHeight: typography.lineHeight.badge
   },
+  manualAmountBox: {
+    backgroundColor: "#F8FAFC",
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing.md
+  },
   actions: {
     gap: spacing.sm,
     paddingBottom: spacing.md
@@ -605,5 +897,9 @@ const styles = StyleSheet.create({
     borderColor: "#CFE0FF",
     borderRadius: 17,
     minHeight: 54
+  },
+  pressed: {
+    opacity: 0.84,
+    transform: [{ scale: 0.99 }]
   }
 });
