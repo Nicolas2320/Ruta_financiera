@@ -30,9 +30,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
-import { getOnboardingGoals } from "../types/financial";
 import { formatCOP } from "../utils/financialRanges";
-import { getGoalPlanFromOnboarding } from "../utils/goalPlanning";
+import { getGoalPlanFromOnboarding, type GoalAllocation } from "../utils/goalPlanning";
 import {
   getActiveMonthlyPlanProgressKey,
   getMonthlyActions,
@@ -45,7 +44,8 @@ import {
   goalNeedsAmount,
   hasLowEmergencyCoverage,
   isMonthlyActionCompleted,
-  type MonthlyAction
+  type MonthlyAction,
+  type MonthlyGoalContext
 } from "../utils/monthlyPlan";
 
 type IconProps = {
@@ -332,6 +332,24 @@ function getGoalTone(status: string): Tone {
   return "primary";
 }
 
+function isCompletedGoalAllocation(allocation: GoalAllocation) {
+  return allocation.viability === "completed" || allocation.goal.status === "completed";
+}
+
+function getGoalProgressPercentage(allocation: GoalAllocation | null) {
+  if (!allocation) {
+    return null;
+  }
+
+  if (isCompletedGoalAllocation(allocation)) {
+    return 100;
+  }
+
+  return allocation.progressPercentage !== null
+    ? Math.round(allocation.progressPercentage)
+    : null;
+}
+
 function Chip({ label, tone = "primary" }: { label: string; tone?: Tone }) {
   const toneColors = getToneColors(tone);
 
@@ -391,6 +409,7 @@ function CircleButton({ onPress }: { onPress: () => void }) {
 function HeroFocusCard({
   title,
   text,
+  primaryGoalTitle,
   completedCount,
   progressPercentage,
   completed,
@@ -398,6 +417,7 @@ function HeroFocusCard({
 }: {
   title: string;
   text: string;
+  primaryGoalTitle?: string | null;
   completedCount: number;
   progressPercentage: number;
   completed: boolean;
@@ -413,6 +433,12 @@ function HeroFocusCard({
         <Text style={styles.kickerPrimary}>Enfoque del mes</Text>
         <Text style={styles.heroTitle}>{title}</Text>
         <Text style={styles.heroText}>{text}</Text>
+        {primaryGoalTitle ? (
+          <View style={styles.heroGoalPill}>
+            <Flag color={colors.primary} size={16} strokeWidth={2.4} />
+            <Text style={styles.heroGoalPillText}>Meta principal: {primaryGoalTitle}</Text>
+          </View>
+        ) : null}
         <Text style={styles.heroProgressText}>
           {completed ? "Buen trabajo. Completaste tu primer plan mensual." : `${completedCount} de 3 acciones completadas`}
         </Text>
@@ -713,12 +739,32 @@ export default function DashboardScreen() {
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const snapshot = metrics.snapshot;
-  const goals = useMemo(() => getOnboardingGoals(onboarding), [onboarding]);
   const goalPlan = useMemo(
     () => getGoalPlanFromOnboarding(onboarding, snapshot.cashflow.suggestedMonthlyContribution, exactValues),
     [exactValues, onboarding, snapshot.cashflow.suggestedMonthlyContribution]
   );
-  const suggestedActions = useMemo(() => getMonthlyActions(data, metrics), [data, metrics]);
+  const primaryGoalAllocation =
+    goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
+    goalPlan.allocations[0] ??
+    null;
+  const primaryGoalTitle =
+    primaryGoalAllocation?.goal.title ?? snapshot.goal.name ?? data.financialGoal;
+  const monthlyGoalContext = useMemo<MonthlyGoalContext>(
+    () => ({
+      title: primaryGoalTitle,
+      monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
+      estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null
+    }),
+    [
+      primaryGoalAllocation?.estimatedMonthsToGoal,
+      primaryGoalAllocation?.monthlyContribution,
+      primaryGoalTitle
+    ]
+  );
+  const suggestedActions = useMemo(
+    () => getMonthlyActions(data, metrics, undefined, monthlyGoalContext),
+    [data, metrics, monthlyGoalContext]
+  );
   const suggestedPlanProgressKey = useMemo(
     () => getMonthlyPlanProgressKey(metrics, suggestedActions),
     [metrics, suggestedActions]
@@ -729,12 +775,12 @@ export default function DashboardScreen() {
   );
   const activePlanPriorityKey = getMonthlyPlanPriorityKey(activePlanProgressKey);
   const actions = useMemo(
-    () => getMonthlyActions(data, metrics, activePlanPriorityKey ?? undefined),
-    [activePlanPriorityKey, data, metrics]
+    () => getMonthlyActions(data, metrics, activePlanPriorityKey ?? undefined, monthlyGoalContext),
+    [activePlanPriorityKey, data, metrics, monthlyGoalContext]
   );
   const focus = useMemo(
-    () => getMonthlyFocus(data, metrics, activePlanPriorityKey ?? undefined),
-    [activePlanPriorityKey, data, metrics]
+    () => getMonthlyFocus(data, metrics, activePlanPriorityKey ?? undefined, monthlyGoalContext),
+    [activePlanPriorityKey, data, metrics, monthlyGoalContext]
   );
   const planProgressKey = useMemo(
     () => getMonthlyPlanProgressKey(metrics, actions, activePlanPriorityKey ?? undefined),
@@ -774,11 +820,23 @@ export default function DashboardScreen() {
         : snapshot.emergencyFund.label,
     tone: emergencyTone
   };
-  const goalStatus = snapshot.goal.label;
-  const goalProgressPercentage =
-    snapshot.goal.progressPercentage !== null
-      ? Math.round(snapshot.goal.progressPercentage)
+  const totalGoalsCount = goalPlan.allocations.length;
+  const completedGoalsCount = goalPlan.allocations.filter(isCompletedGoalAllocation).length;
+  const activeGoalsCount = Math.max(totalGoalsCount - completedGoalsCount, 0);
+  const goalProgressValues = goalPlan.allocations
+    .map(getGoalProgressPercentage)
+    .filter((value): value is number => value !== null);
+  const aggregateGoalProgressPercentage =
+    goalProgressValues.length > 0
+      ? Math.round(goalProgressValues.reduce((total, value) => total + value, 0) / goalProgressValues.length)
       : null;
+  const primaryGoalProgressPercentage = getGoalProgressPercentage(primaryGoalAllocation);
+  const goalProgressPercentage =
+    totalGoalsCount > 1 ? aggregateGoalProgressPercentage : primaryGoalProgressPercentage;
+  const goalStatus =
+    primaryGoalAllocation && isCompletedGoalAllocation(primaryGoalAllocation)
+      ? "Meta completada"
+      : snapshot.goal.label;
   const expenseBarWidth =
     metrics.expensePercentage !== null ? Math.min(metrics.expensePercentage, 100) : 0;
   const expensesMayExceedIncome =
@@ -788,21 +846,47 @@ export default function DashboardScreen() {
     precisionStatus.exactValuesCount > 0
       ? "Usa tus datos ingresados y completa con rangos cuando hace falta."
       : "Basado en los rangos que seleccionaste.";
+  const primaryGoalTargetAmount = primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount;
   const goalDetailText =
-    snapshot.goal.targetAmount !== null
-      ? snapshot.goal.progressPercentage !== null
-        ? `Objetivo: ${formatCOP(snapshot.goal.targetAmount)}. Base actual frente a tu objetivo: ${Math.round(snapshot.goal.progressPercentage)}% aprox.`
-        : `Objetivo: ${formatCOP(snapshot.goal.targetAmount)}. Horizonte: ${getDefinedLabel(data.goalHorizon)}.`
+    primaryGoalAllocation && isCompletedGoalAllocation(primaryGoalAllocation)
+      ? primaryGoalTargetAmount !== null
+        ? `Objetivo: ${formatCOP(primaryGoalTargetAmount)}. Meta completada.`
+        : "Meta completada."
+      : primaryGoalTargetAmount !== null
+      ? primaryGoalProgressPercentage !== null
+        ? `Objetivo: ${formatCOP(primaryGoalTargetAmount)}. Base actual frente a tu objetivo: ${primaryGoalProgressPercentage}% aprox.`
+        : `Objetivo: ${formatCOP(primaryGoalTargetAmount)}. Horizonte: ${getDefinedLabel(data.goalHorizon)}.`
       : `Horizonte: ${getDefinedLabel(data.goalHorizon)}. Cifra aproximada: ${getDefinedLabel(data.goalAmountRange, "No definida")}.`;
+  const activeGoalsLabel = `${activeGoalsCount} ${activeGoalsCount === 1 ? "activa" : "activas"}`;
+  const completedGoalsLabel = `${completedGoalsCount} ${completedGoalsCount === 1 ? "completada" : "completadas"}`;
   const goalsValue =
-    goals.length > 1
-      ? `${goals.length} metas activas`
-      : `Meta: ${getDefinedLabel(data.financialGoal, "No definida")}`;
+    totalGoalsCount > 1
+      ? completedGoalsCount > 0
+        ? activeGoalsCount > 0
+          ? `${activeGoalsLabel}, ${completedGoalsLabel}`
+          : `${completedGoalsCount} metas completadas`
+        : `${totalGoalsCount} metas activas`
+      : `Meta: ${getDefinedLabel(primaryGoalTitle ?? data.financialGoal, "No definida")}`;
+  const completedGoalsDetail =
+    completedGoalsCount > 0
+      ? ` ${completedGoalsCount} de ${totalGoalsCount} metas completadas.`
+      : "";
   const goalsDetailText =
-    goals.length > 1
-      ? `Bolsa sugerida: ${getAmountLabel(goalPlan.monthlyGoalBudget)}. Principal: ${getDefinedLabel(snapshot.goal.name, "No definida")}.`
+    totalGoalsCount > 1
+      ? `Bolsa sugerida: ${getAmountLabel(goalPlan.monthlyGoalBudget)}. Principal: ${getDefinedLabel(primaryGoalTitle, "No definida")}.${completedGoalsDetail}`
       : goalDetailText;
-  const goalStatusTone = getGoalTone(snapshot.goal.status);
+  const goalStatusTone =
+    primaryGoalAllocation && isCompletedGoalAllocation(primaryGoalAllocation)
+      ? "support"
+      : getGoalTone(snapshot.goal.status);
+  const goalProgressLabel =
+    goalProgressPercentage !== null
+      ? `${totalGoalsCount > 1 ? "Avance general" : "Avance"} ${goalProgressPercentage}%`
+      : null;
+  const completedGoalsChipLabel =
+    completedGoalsCount > 0 && totalGoalsCount > 1
+      ? `${completedGoalsCount} de ${totalGoalsCount} completadas`
+      : null;
   const smallExpensesValue =
     snapshot.smallExpenses.amount !== null
       ? `${formatCOP(snapshot.smallExpenses.amount)} aprox.`
@@ -834,6 +918,7 @@ export default function DashboardScreen() {
             completed={completedCount === 3}
             completedCount={completedCount}
             onPress={() => router.push("/action-plan")}
+            primaryGoalTitle={primaryGoalTitle}
             progressPercentage={progressPercentage}
             text={focus.text}
             title={focus.title}
@@ -958,16 +1043,19 @@ export default function DashboardScreen() {
             icon={<Flag color={colors.primary} size={36} strokeWidth={2.4} />}
             onPress={() => router.push("/goals-overview")}
             text={goalsDetailText}
-            title={goals.length > 1 ? "Metas" : "Meta principal"}
+            title={totalGoalsCount > 1 ? "Metas" : "Meta principal"}
             tone="primary"
             value={goalsValue}
           >
             <Chip label={goalStatus} tone={goalStatusTone} />
-            {goals.length > 1 ? (
+            {totalGoalsCount > 1 ? (
               <Chip label={`Bolsa ${getAmountLabel(goalPlan.monthlyGoalBudget)}`} tone="support" />
             ) : null}
-            {goalProgressPercentage !== null ? (
-              <Chip label={`Avance estimado ${goalProgressPercentage}%`} tone="primary" />
+            {completedGoalsChipLabel ? (
+              <Chip label={completedGoalsChipLabel} tone="support" />
+            ) : null}
+            {goalProgressLabel ? (
+              <Chip label={goalProgressLabel} tone="primary" />
             ) : null}
           </RowCard>
 
@@ -1107,6 +1195,27 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.body,
     lineHeight: typography.lineHeight.body
+  },
+  heroGoalPill: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.primarySoft,
+    borderColor: "#CFE0FF",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+    maxWidth: "100%",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  heroGoalPillText: {
+    color: colors.primary,
+    flexShrink: 1,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   heroProgressText: {
     color: colors.primary,

@@ -57,6 +57,12 @@ export type MonthlyAction = {
   category: string;
 };
 
+export type MonthlyGoalContext = {
+  title: string | null;
+  monthlyContribution: number | null;
+  estimatedMonthsToGoal: number | null;
+};
+
 const monthlyPlanProgressVersion = "monthly-plan-v0.1";
 const monthlyPlanProgressKeyPrefix = `${monthlyPlanProgressVersion}:`;
 const monthlyPlanPriorityKeys: PriorityKey[] = [
@@ -101,6 +107,89 @@ const monthlyFocusByPriority: Record<PriorityKey, MonthlyFocus> = {
     text: "Revisar tu plan cada mes te ayuda a tomar mejores decisiones."
   }
 };
+
+function getGoalTitle(goalContext?: MonthlyGoalContext) {
+  const title = goalContext?.title?.trim();
+  return title && title.length > 0 ? title : null;
+}
+
+function getGoalContributionImpact(goalContext?: MonthlyGoalContext) {
+  const contribution = goalContext?.monthlyContribution ?? null;
+
+  if (contribution !== null && contribution > 0) {
+    return `Aporte asignado a esta meta: ${formatCOP(contribution)} aprox.`;
+  }
+
+  return "Esta meta aun no tiene un aporte mensual asignado.";
+}
+
+function getGoalAwareFocus(
+  focus: MonthlyFocus,
+  priorityKey: PriorityKey,
+  goalContext?: MonthlyGoalContext
+): MonthlyFocus {
+  const goalTitle = getGoalTitle(goalContext);
+
+  if (priorityKey !== "advance_goal" || !goalTitle) {
+    return focus;
+  }
+
+  const contribution = goalContext?.monthlyContribution ?? null;
+
+  return {
+    title: `Meta del mes: ${goalTitle}`,
+    text:
+      contribution !== null && contribution > 0
+        ? `Tu plan puede enfocarse en separar ${formatCOP(contribution)} aprox. para esta meta.`
+        : `Tu plan puede enfocarse en definir un aporte mensual sostenible para ${goalTitle}.`
+  };
+}
+
+function getGoalAwareActions(
+  actions: MonthlyAction[],
+  priorityKey: PriorityKey,
+  goalContext?: MonthlyGoalContext
+) {
+  const goalTitle = getGoalTitle(goalContext);
+
+  if (priorityKey !== "advance_goal" || !goalTitle) {
+    return actions;
+  }
+
+  return actions.map((action) => {
+    if (action.id === "set-goal-contribution") {
+      return {
+        ...action,
+        title: `Separar aporte para ${goalTitle}`,
+        description: "Usa el aporte asignado como referencia educativa, no como obligacion.",
+        estimatedImpact: getGoalContributionImpact(goalContext)
+      };
+    }
+
+    if (action.id === "review-goal-target") {
+      return {
+        ...action,
+        title: `Revisar el objetivo de ${goalTitle}`,
+        description: "Compara el monto objetivo con el aporte mensual asignado.",
+        why: "Ajustar monto, plazo o aporte puede hacer la meta mas sostenible."
+      };
+    }
+
+    if (action.id === "compare-goal-contribution") {
+      return {
+        ...action,
+        title: `Comparar escenarios para ${goalTitle}`,
+        estimatedImpact:
+          goalContext?.estimatedMonthsToGoal !== null &&
+          goalContext?.estimatedMonthsToGoal !== undefined
+            ? `Con el aporte asignado, podria tomar cerca de ${goalContext.estimatedMonthsToGoal} meses.`
+            : getGoalContributionImpact(goalContext)
+      };
+    }
+
+    return action;
+  });
+}
 
 const noConcreteGoalAmountValues = [
   "",
@@ -244,9 +333,10 @@ function wantsInvestmentEducation(investmentSituation: string | null) {
 export function getMonthlyFocus(
   data: MonthlyPlanData,
   metrics: MonthlyPlanMetrics,
-  priorityKey = metrics.snapshot.priority.key
+  priorityKey = metrics.snapshot.priority.key,
+  goalContext?: MonthlyGoalContext
 ): MonthlyFocus {
-  return monthlyFocusByPriority[priorityKey];
+  return getGoalAwareFocus(monthlyFocusByPriority[priorityKey], priorityKey, goalContext);
 
   if (hasHighDebtPressure(data.debtSituation, data.debtPaymentShare)) {
     return {
@@ -392,9 +482,10 @@ function getActionCatalog(metrics: MonthlyPlanMetrics): MonthlyAction[] {
 export function getMonthlyActions(
   data: MonthlyPlanData,
   metrics: MonthlyPlanMetrics,
-  priorityKey = metrics.snapshot.priority.key
+  priorityKey = metrics.snapshot.priority.key,
+  goalContext?: MonthlyGoalContext
 ): MonthlyAction[] {
-  return generateMonthlyActions(metrics.snapshot, priorityKey);
+  return getGoalAwareActions(generateMonthlyActions(metrics.snapshot, priorityKey), priorityKey, goalContext);
 
   const catalog = getActionCatalog(metrics);
   const actions: MonthlyAction[] = [];

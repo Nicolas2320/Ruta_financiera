@@ -632,6 +632,7 @@ function GoalCard({
   const quickContribution =
     getParsedCurrencyInput(contributionInput) ??
     (allocation.monthlyContribution > 0 ? allocation.monthlyContribution : contributionStep);
+  const isCompletedGoal = allocation.goal.status === "completed";
 
   useEffect(() => {
     const nextGoalOptionKey = getGoalOptionKey(allocation.goal);
@@ -762,35 +763,37 @@ function GoalCard({
         </View>
       </View>
 
-      <View style={styles.registerBox}>
-        <View style={styles.contributionHeader}>
-          <View>
-            <Text style={styles.contributionLabel}>Registrar aporte</Text>
-            <Text style={styles.registerHint}>
-              {latestContribution
-                ? `Ultimo: ${formatCOP(latestContribution.amount)} el ${getFormattedDate(latestContribution.date)}`
-                : "Aun no registras aportes para esta meta."}
-            </Text>
+      {!isCompletedGoal ? (
+        <View style={styles.registerBox}>
+          <View style={styles.contributionHeader}>
+            <View>
+              <Text style={styles.contributionLabel}>Registrar aporte</Text>
+              <Text style={styles.registerHint}>
+                {latestContribution
+                  ? `Ultimo: ${formatCOP(latestContribution.amount)} el ${getFormattedDate(latestContribution.date)}`
+                  : "Aun no registras aportes para esta meta."}
+              </Text>
+            </View>
+            <Chip label={`${contributionCount} aportes`} tone={contributionCount > 0 ? "support" : "neutral"} />
           </View>
-          <Chip label={`${contributionCount} aportes`} tone={contributionCount > 0 ? "support" : "neutral"} />
+          <View style={styles.registerRow}>
+            <CurrencyInputField
+              label="Monto del aporte"
+              onChangeText={(value) => handleCurrencyInputChange(value, setContributionInput)}
+              placeholder={formatCOP(quickContribution)}
+              value={contributionInput}
+            />
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleRegisterContribution}
+              style={({ pressed }) => [styles.registerButton, pressed && styles.pressed]}
+            >
+              <CheckCircle2 color={colors.surface} size={18} strokeWidth={2.4} />
+              <Text style={styles.registerButtonText}>Registrar</Text>
+            </Pressable>
+          </View>
         </View>
-        <View style={styles.registerRow}>
-          <CurrencyInputField
-            label="Monto del aporte"
-            onChangeText={(value) => handleCurrencyInputChange(value, setContributionInput)}
-            placeholder={formatCOP(quickContribution)}
-            value={contributionInput}
-          />
-          <Pressable
-            accessibilityRole="button"
-            onPress={handleRegisterContribution}
-            style={({ pressed }) => [styles.registerButton, pressed && styles.pressed]}
-          >
-            <CheckCircle2 color={colors.surface} size={18} strokeWidth={2.4} />
-            <Text style={styles.registerButtonText}>Registrar</Text>
-          </Pressable>
-        </View>
-      </View>
+      ) : null}
 
       <View style={styles.contributionBox}>
         <View style={styles.contributionHeader}>
@@ -817,45 +820,47 @@ function GoalCard({
         </View>
         <Text style={styles.helperText}>{contributionPaceLabel}</Text>
 
-        <View style={styles.adjustRow}>
-          <IconButton
-            accessibilityLabel={`Reducir aporte para ${allocation.goal.title}`}
-            disabled={allocation.monthlyContribution <= 0}
-            icon={<Minus color={colors.primary} size={18} strokeWidth={2.6} />}
-            onPress={onDecrease}
-          />
-          <IconButton
-            accessibilityLabel={`Aumentar aporte para ${allocation.goal.title}`}
-            icon={<Plus color={colors.primary} size={18} strokeWidth={2.6} />}
-            onPress={onIncrease}
-          />
-          <Pressable
-            accessibilityRole="button"
-            onPress={onPause}
-            style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
-          >
-            <Text style={styles.smallActionText}>Pausar</Text>
-          </Pressable>
-          {allocation.contributionMode === "manual" ? (
+        {!isCompletedGoal ? (
+          <View style={styles.adjustRow}>
+            <IconButton
+              accessibilityLabel={`Reducir aporte para ${allocation.goal.title}`}
+              disabled={allocation.monthlyContribution <= 0}
+              icon={<Minus color={colors.primary} size={18} strokeWidth={2.6} />}
+              onPress={onDecrease}
+            />
+            <IconButton
+              accessibilityLabel={`Aumentar aporte para ${allocation.goal.title}`}
+              icon={<Plus color={colors.primary} size={18} strokeWidth={2.6} />}
+              onPress={onIncrease}
+            />
             <Pressable
               accessibilityRole="button"
-              onPress={onReset}
+              onPress={onPause}
               style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
             >
-              <RotateCcw color={colors.primary} size={15} strokeWidth={2.4} />
-              <Text style={styles.smallActionText}>Recomendada</Text>
+              <Text style={styles.smallActionText}>Pausar</Text>
             </Pressable>
-          ) : null}
-          {allocation.goal.status === "paused" ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={onActivate}
-              style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
-            >
-              <Text style={styles.smallActionText}>Activar</Text>
-            </Pressable>
-          ) : null}
-        </View>
+            {allocation.contributionMode === "manual" ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={onReset}
+                style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
+              >
+                <RotateCcw color={colors.primary} size={15} strokeWidth={2.4} />
+                <Text style={styles.smallActionText}>Recomendada</Text>
+              </Pressable>
+            ) : null}
+            {allocation.goal.status === "paused" ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={onActivate}
+                style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
+              >
+                <Text style={styles.smallActionText}>Activar</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.secondaryActions}>
@@ -1062,6 +1067,27 @@ export default function GoalsOverviewScreen() {
   const hasManualAdjustments = goalPlan.allocations.some(
     (allocation) => allocation.contributionMode === "manual"
   );
+  const primaryGoalAllocation =
+    goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
+    goalPlan.allocations[0] ??
+    null;
+  const isCompletedAllocation = (allocation: GoalAllocation) =>
+    allocation.viability === "completed" || allocation.goal.status === "completed";
+  const isPausedAllocation = (allocation: GoalAllocation) =>
+    allocation.goal.status === "paused";
+  const activeGoalsCount = goalPlan.allocations.filter(
+    (allocation) => !isCompletedAllocation(allocation) && !isPausedAllocation(allocation)
+  ).length;
+  const completedGoalsCount = goalPlan.allocations.filter(isCompletedAllocation).length;
+  const pausedGoalsCount = goalPlan.allocations.filter(isPausedAllocation).length;
+  const primaryGoalIsCompleted =
+    primaryGoalAllocation !== null && isCompletedAllocation(primaryGoalAllocation);
+  const nextActivePrimaryCandidate = goalPlan.allocations.find(
+    (allocation) =>
+      allocation.goal.id !== primaryGoalAllocation?.goal.id &&
+      !isCompletedAllocation(allocation) &&
+      !isPausedAllocation(allocation)
+  );
   const totalInvestedInGoals = goalPlan.allocations.reduce(
     (total, allocation) => total + allocation.currentAmount,
     0
@@ -1170,6 +1196,8 @@ export default function GoalsOverviewScreen() {
           ...goal,
           currentAmount,
           contributions,
+          manualMonthlyContribution:
+            status === "completed" ? 0 : goal.manualMonthlyContribution,
           status
         };
       })
@@ -1237,7 +1265,19 @@ export default function GoalsOverviewScreen() {
               icon={<Flag color={colors.support} size={20} strokeWidth={2.4} />}
               label="Metas activas"
               tone="support"
-              value={goals.length.toString()}
+              value={activeGoalsCount.toString()}
+            />
+            <StatCard
+              icon={<CheckCircle2 color={colors.support} size={20} strokeWidth={2.4} />}
+              label="Completadas"
+              tone="support"
+              value={completedGoalsCount.toString()}
+            />
+            <StatCard
+              icon={<Calendar color="#B45309" size={20} strokeWidth={2.4} />}
+              label="Pausadas"
+              tone="warning"
+              value={pausedGoalsCount.toString()}
             />
             <StatCard
               icon={<ChartColumnIncreasing color="#7C3AED" size={20} strokeWidth={2.4} />}
@@ -1246,6 +1286,31 @@ export default function GoalsOverviewScreen() {
               value={investedInGoalsLabel}
             />
           </View>
+
+          {primaryGoalIsCompleted ? (
+            <View style={styles.primaryCompletedCard}>
+              <AlertCircle color="#B45309" size={22} strokeWidth={2.4} />
+              <View style={styles.primaryCompletedCopy}>
+                <Text style={styles.primaryCompletedTitle}>Tu meta principal esta completada</Text>
+                <Text style={styles.primaryCompletedText}>
+                  Puedes mantenerla como referencia historica o elegir otra meta activa para que
+                  Dashboard, simulacion y plan mensual se enfoquen en el siguiente objetivo.
+                </Text>
+                {nextActivePrimaryCandidate ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setPrimaryGoal(nextActivePrimaryCandidate.goal.id)}
+                    style={({ pressed }) => [styles.primaryCompletedButton, pressed && styles.pressed]}
+                  >
+                    <Flag color={colors.primary} size={16} strokeWidth={2.4} />
+                    <Text style={styles.primaryCompletedButtonText}>
+                      Hacer principal: {nextActivePrimaryCandidate.goal.title}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
 
           <View style={[styles.budgetCard, goalPlan.isOverBudget && styles.budgetCardWarning]}>
             <View style={styles.budgetHeader}>
@@ -1347,11 +1412,17 @@ export default function GoalsOverviewScreen() {
                 <GoalCard
                   key={allocation.goal.id}
                   allocation={allocation}
-                  canMarkPrimary={allocation.goal.isPrimary !== true}
+                  canMarkPrimary={
+                    allocation.goal.isPrimary !== true &&
+                    allocation.goal.status !== "completed" &&
+                    allocation.goal.status !== "paused" &&
+                    allocation.viability !== "completed"
+                  }
                   canDelete={goals.length > 1 && allocation.goal.isPrimary !== true}
                   onActivate={() => updateGoal(allocation.goal.id, { status: "active" })}
                   onComplete={() =>
                     updateGoal(allocation.goal.id, {
+                      manualMonthlyContribution: 0,
                       status: "completed",
                       currentAmount: allocation.targetAmount ?? allocation.currentAmount
                     })
@@ -1494,6 +1565,53 @@ const styles = StyleSheet.create({
     fontSize: typography.option,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.option
+  },
+  primaryCompletedCard: {
+    ...shadows.card,
+    alignItems: "flex-start",
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA",
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  primaryCompletedCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  primaryCompletedTitle: {
+    color: "#B45309",
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  primaryCompletedText: {
+    color: "#92400E",
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
+  },
+  primaryCompletedButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.surface,
+    borderColor: "#FED7AA",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+    minHeight: 38,
+    paddingHorizontal: spacing.md
+  },
+  primaryCompletedButtonText: {
+    color: colors.primary,
+    flexShrink: 1,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   goalOptionSlider: {
     gap: spacing.sm,

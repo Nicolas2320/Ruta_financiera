@@ -127,9 +127,9 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
   const saveExactValues = useCallback(
     async (values: ExactFinancialValues) => {
       const nextValues = normalizeExactValues(values);
-      setExactValues(nextValues);
 
       if (!isSupabaseConfigured) {
+        setExactValues(nextValues);
         setOnboardingSyncStatus("not-configured");
         return true;
       }
@@ -144,6 +144,7 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
 
       try {
         await persistExactValues(user.id, nextValues);
+        setExactValues(nextValues);
         setFinancialProfileExists(true);
         setOnboardingSyncStatus("saved");
         return true;

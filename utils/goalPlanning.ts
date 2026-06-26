@@ -419,16 +419,20 @@ export function getGoalAllocationPlan({
     safeBudget
   );
   const allocations = goalMetrics.map((goalMetric) => {
+    const goalIsInactive =
+      goalMetric.goal.status === "completed" || goalMetric.goal.status === "paused";
     const recommendedMonthlyContribution =
       recommendedContributions.get(goalMetric.goal.id) ?? 0;
     const manualContribution = safeNonNegative(goalMetric.goal.manualMonthlyContribution);
-    const monthlyContribution = manualContribution ?? recommendedMonthlyContribution;
+    const monthlyContribution = goalIsInactive
+      ? 0
+      : manualContribution ?? recommendedMonthlyContribution;
     const estimatedMonthsToGoal =
       goalMetric.remainingAmount !== null && monthlyContribution > 0
         ? Math.ceil(goalMetric.remainingAmount / monthlyContribution)
         : null;
     const contributionMode: GoalAllocation["contributionMode"] =
-      manualContribution !== null ? "manual" : "recommended";
+      !goalIsInactive && manualContribution !== null ? "manual" : "recommended";
     const viability = getViability({
       estimatedMonthsToGoal,
       horizonMonths: goalMetric.horizonMonths,
