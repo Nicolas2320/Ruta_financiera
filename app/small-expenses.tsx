@@ -1,8 +1,13 @@
 import type { ComponentType } from "react";
 import { useState } from "react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
+  Bot,
+  Flag,
+  Home,
+  LineChart,
+  PieChart,
   Store,
   CarTaxiFront,
   CircleEllipsis,
@@ -11,7 +16,6 @@ import {
   CreditCard,
   ArrowDown,
   Gamepad2,
-  IceCreamBowl,
   Leaf,
   Search,
   ShoppingBag,
@@ -19,12 +23,12 @@ import {
   HandCoins,
   Target,
   Timer,
-  Wine,
   PiggyBank
 } from "lucide-react-native";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BottomNavigation } from "../components/BottomNavigation";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { CategoryChip } from "../components/ui/CategoryChip";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
@@ -37,9 +41,12 @@ const smallExpensesImage = require("../assets/illustrations/small-expenses.png")
 
 type IconProps = {
   color?: string;
+  fill?: string;
   size?: number;
   strokeWidth?: number;
 };
+
+type Route = Parameters<ReturnType<typeof useRouter>["push"]>[0];
 
 const smallExpensePresence = [
   {
@@ -72,13 +79,13 @@ const smallExpenseCategories: Array<{
   backgroundColor: string;
 }> = [
   {
-    label: "Cafés o snacks",
+    label: "Cafés, snacks y salidas",
     icon: Hamburger,
     color: "#9A5B20",
     backgroundColor: "#FFF3E4"
   },
   {
-    label: "Domicilios",
+    label: "Domicilios o comida rápida",
     icon: Store,
     color: "#F97316",
     backgroundColor: "#FFF1E7"
@@ -90,40 +97,28 @@ const smallExpenseCategories: Array<{
     backgroundColor: colors.primarySoft
   },
   {
-    label: "Suscripciones",
-    icon: CreditCard,
+    label: "Suscripciones y apps",
+    icon: Smartphone,
     color: "#6D28D9",
     backgroundColor: "#F1E8FF"
   },
   {
-    label: "Compras pequeñas",
+    label: "Pequeñas compras",
     icon: ShoppingBag,
     color: colors.support,
     backgroundColor: colors.supportSoft
   },
   {
-    label: "Salidas",
-    icon: Wine,
-    color: "#DB2777",
-    backgroundColor: "#FCE7F3"
-  },
-  {
-    label: "Juegos o entretenimiento digital",
+    label: "Entretenimiento digital",
     icon: Gamepad2,
     color: "#4F46E5",
     backgroundColor: "#EEF2FF"
   },
   {
-    label: "Apps o servicios digitales",
-    icon: Smartphone,
+    label: "Comisiones o recargos",
+    icon: CreditCard,
     color: "#0E7490",
     backgroundColor: "#E6F7FB"
-  },
-  {
-    label: "Antojos",
-    icon: IceCreamBowl,
-    color: "#DB2777",
-    backgroundColor: "#FCE7F3"
   },
   {
     label: "Otros",
@@ -133,13 +128,46 @@ const smallExpenseCategories: Array<{
   }
 ];
 
+const smallExpenseCategoryAliases: Record<string, string> = {
+  "Cafés o snacks": "Cafés, snacks y salidas",
+  "Salidas": "Cafés, snacks y salidas",
+  "Antojos": "Cafés, snacks y salidas",
+  "Domicilios": "Domicilios o comida rápida",
+  "Suscripciones": "Suscripciones y apps",
+  "Apps o servicios digitales": "Suscripciones y apps",
+  "Compras pequeñas": "Pequeñas compras",
+  "Juegos o entretenimiento digital": "Entretenimiento digital"
+};
+
+function normalizeSmallExpenseCategories(categories: string[]) {
+  const availableCategories = smallExpenseCategories.map((category) => category.label);
+
+  return categories.reduce<string[]>((normalizedCategories, category) => {
+    const normalizedCategory = smallExpenseCategoryAliases[category] ?? category;
+
+    if (
+      availableCategories.includes(normalizedCategory) &&
+      !normalizedCategories.includes(normalizedCategory)
+    ) {
+      normalizedCategories.push(normalizedCategory);
+    }
+
+    return normalizedCategories;
+  }, []);
+}
+
 const smallExpenseRanges = [
   "Menos de $100.000",
   "$100.000 – $250.000",
   "$250.000 – $500.000",
-  "Más de $500.000",
-  "No sé"
+  "Más de $500.000"
 ] as const;
+
+function normalizeSmallExpenseRange(range: string | null) {
+  return smallExpenseRanges.includes(range as (typeof smallExpenseRanges)[number])
+    ? range
+    : null;
+}
 
 const smallExpenseIntentions = [
   {
@@ -174,17 +202,50 @@ const smallExpenseIntentions = [
   }
 ] as const;
 
+function BottomNavItem({
+  title,
+  route,
+  icon: Icon,
+  active,
+  onNavigate
+}: {
+  title: string;
+  route: Route;
+  icon: ComponentType<IconProps>;
+  active?: boolean;
+  onNavigate: (route: Route) => void;
+}) {
+  const color = active ? colors.primary : colors.textSubtle;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={() => onNavigate(route)}
+      style={({ pressed }) => [styles.navItem, pressed && styles.pressed]}
+    >
+      {active ? <View style={styles.navActiveLine} /> : null}
+      <Icon color={color} size={23} strokeWidth={2.4} />
+      <Text style={[styles.navText, active && styles.navTextActive]}>{title}</Text>
+    </Pressable>
+  );
+}
+
 export default function SmallExpensesScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ source?: string }>();
   const { onboarding, updateOnboarding } = useOnboarding();
+  const source = Array.isArray(params.source) ? params.source[0] : params.source;
+  const isSpendingEditMode = source === "spending";
+  const navigate = (route: Route) => router.push(route);
   const [selectedPresence, setSelectedPresence] = useState<string | null>(
     onboarding.hasSmallExpenses
   );
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
-    onboarding.smallExpenseCategories
+    normalizeSmallExpenseCategories(onboarding.smallExpenseCategories)
   );
   const [selectedRange, setSelectedRange] = useState<string | null>(
-    onboarding.smallExpensesRange
+    normalizeSmallExpenseRange(onboarding.smallExpensesRange)
   );
   const [selectedIntention, setSelectedIntention] = useState<string | null>(
     onboarding.smallExpensesIntention
@@ -220,7 +281,8 @@ export default function SmallExpensesScreen() {
       return;
     }
 
-    const categoriesToSave = selectedPresence === "No" ? [] : selectedCategories;
+    const categoriesToSave =
+      selectedPresence === "No" ? [] : normalizeSmallExpenseCategories(selectedCategories);
 
     if (needsCategory && categoriesToSave.length === 0) {
       return;
@@ -232,7 +294,7 @@ export default function SmallExpensesScreen() {
       smallExpensesRange: selectedRange,
       smallExpensesIntention: selectedIntention
     });
-    router.push("/savings-debts");
+    router.push(isSpendingEditMode ? "/spending" : "/savings-debts");
   };
 
   return (
@@ -244,12 +306,14 @@ export default function SmallExpensesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
+          {!isSpendingEditMode ? (
           <StepHeader
             currentStep={6}
             onBack={() => router.push("/expenses")}
             title="Gastos hormiga"
             totalSteps={8}
           />
+          ) : null}
 
           <HeroInfoCard
             badge="Tú decides qué gastos conservar y cuáles ajustar."
@@ -366,24 +430,48 @@ export default function SmallExpensesScreen() {
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel="Continuar hacia ahorros y deudas"
+              accessibilityLabel={
+                isSpendingEditMode
+                  ? "Guardar cambios de gastos pequeÃ±os"
+                  : "Continuar hacia ahorros y deudas"
+              }
               disabled={!canContinue}
               iconPosition="right"
               onPress={handleContinue}
               style={styles.primaryButton}
-              title="Continuar"
+              title={isSpendingEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
-              accessibilityLabel="Volver a gastos mensuales"
+              accessibilityLabel={
+                isSpendingEditMode ? "Volver a Gastos" : "Volver a gastos mensuales"
+              }
               icon={null}
-              onPress={() => router.push("/expenses")}
+              onPress={() =>
+                router.push(
+                  isSpendingEditMode
+                    ? "/spending"
+                    : "/expenses"
+                )
+              }
               style={styles.secondaryButton}
-              title="Volver"
+              title={isSpendingEditMode ? "Volver a Gastos" : "Volver"}
               variant="secondary"
             />
           </View>
         </View>
       </ScrollView>
+      {isSpendingEditMode ? (
+        <>
+        <BottomNavigation activeRoute="/spending" />
+        <View style={styles.hidden}>
+          <BottomNavItem icon={Home} onNavigate={navigate} route="/dashboard" title="Inicio" />
+          <BottomNavItem active icon={PieChart} onNavigate={navigate} route="/spending" title="Gastos" />
+          <BottomNavItem icon={Flag} onNavigate={navigate} route="/goals-overview" title="Metas" />
+          <BottomNavItem icon={LineChart} onNavigate={navigate} route="/simulation" title="Simulación" />
+          <BottomNavItem icon={Bot} onNavigate={navigate} route="/assistant" title="Asistente" />
+        </View>
+        </>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -506,6 +594,52 @@ const styles = StyleSheet.create({
   actions: {
     gap: spacing.sm,
     paddingBottom: spacing.md
+  },
+  bottomNav: {
+    alignSelf: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderTopWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    maxWidth: 760,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+    width: "100%"
+  },
+  navItem: {
+    alignItems: "center",
+    flex: 1,
+    gap: spacing.xs,
+    minHeight: 68,
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.xs,
+    position: "relative"
+  },
+  navActiveLine: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    height: 4,
+    position: "absolute",
+    top: -spacing.xs,
+    width: "100%"
+  },
+  navText: {
+    color: colors.textSubtle,
+    fontSize: typography.small,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.small,
+    textAlign: "center"
+  },
+  navTextActive: {
+    color: colors.primary
+  },
+  pressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.99 }]
+  },
+  hidden: {
+    display: "none"
   },
   primaryButton: {
     borderRadius: 17,

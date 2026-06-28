@@ -7,6 +7,7 @@ export type OnboardingData = {
   incomeFrequency: string | null;
   expensesRange: string | null;
   expenseCategories: string[];
+  expenseCategoryAmounts: ExpenseCategoryAmounts;
   expensesFeeling: string | null;
   hasSmallExpenses: string | null;
   smallExpenseCategories: string[];
@@ -24,6 +25,8 @@ export type OnboardingData = {
   goalMonthlyBudget: number | null;
   goals: FinancialGoal[];
 };
+
+export type ExpenseCategoryAmounts = Record<string, number>;
 
 export type FinancialGoalStatus = "active" | "paused" | "completed";
 
@@ -73,6 +76,7 @@ export const initialOnboarding: OnboardingData = {
   incomeFrequency: null,
   expensesRange: null,
   expenseCategories: [],
+  expenseCategoryAmounts: {},
   expensesFeeling: null,
   hasSmallExpenses: null,
   smallExpenseCategories: [],
@@ -110,6 +114,31 @@ function normalizeGoalAmount(value: unknown) {
 
 export function normalizeGoalMonthlyBudget(value: unknown) {
   return normalizeGoalAmount(value);
+}
+
+export function normalizeExpenseCategoryAmounts(
+  value: unknown,
+  selectedCategories?: string[]
+): ExpenseCategoryAmounts {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const allowedCategories = selectedCategories ? new Set(selectedCategories) : null;
+
+  return Object.entries(value).reduce<ExpenseCategoryAmounts>((amounts, [category, amount]) => {
+    if (allowedCategories && !allowedCategories.has(category)) {
+      return amounts;
+    }
+
+    const normalizedAmount = normalizeGoalAmount(amount);
+
+    if (normalizedAmount !== null) {
+      amounts[category] = normalizedAmount;
+    }
+
+    return amounts;
+  }, {});
 }
 
 function normalizeGoalStatus(value: unknown): FinancialGoalStatus {

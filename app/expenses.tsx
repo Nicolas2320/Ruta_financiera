@@ -1,20 +1,25 @@
 import type { ComponentType } from "react";
 import { useState } from "react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   Apple,
+  Bot,
   BusFront,
   Cable,
   CalendarCheck,
   CircleEllipsis,
   CreditCard,
+  Flag,
   Frown,
   Gamepad2,
   GraduationCap,
   HandHeart,
+  Home,
   House,
+  LineChart,
   Meh,
+  PieChart,
   ShoppingBag,
   Smile,
   Users
@@ -29,30 +34,40 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BottomNavigation } from "../components/BottomNavigation";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { CategoryChip } from "../components/ui/CategoryChip";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
-import { colors, shadows, spacing, typography } from "../constants/theme";
+import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { normalizeExpenseCategoryAmounts } from "../types/financial";
 
 const expensesCupReceipt = require("../assets/illustrations/expenses-cup-receipt.png");
 
 type IconProps = {
   color?: string;
+  fill?: string;
   size?: number;
   strokeWidth?: number;
 };
+
+type Route = Parameters<ReturnType<typeof useRouter>["push"]>[0];
 
 const expenseRanges = [
   "Menos de $1.000.000",
   "$1.000.000 – $2.000.000",
   "$2.000.000 – $4.000.000",
   "$4.000.000 – $6.000.000",
-  "Más de $6.000.000",
-  "No estoy seguro"
+  "Más de $6.000.000"
 ] as const;
+
+function normalizeExpenseRange(expensesRange: string | null) {
+  return expenseRanges.includes(expensesRange as (typeof expenseRanges)[number])
+    ? expensesRange
+    : null;
+}
 
 const expenseCategories: Array<{
   label: string;
@@ -161,12 +176,45 @@ const expenseFeelings = [
   }
 ] as const;
 
+function BottomNavItem({
+  title,
+  route,
+  icon: Icon,
+  active,
+  onNavigate
+}: {
+  title: string;
+  route: Route;
+  icon: ComponentType<IconProps>;
+  active?: boolean;
+  onNavigate: (route: Route) => void;
+}) {
+  const color = active ? colors.primary : colors.textSubtle;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={() => onNavigate(route)}
+      style={({ pressed }) => [styles.navItem, pressed && styles.pressed]}
+    >
+      {active ? <View style={styles.navActiveLine} /> : null}
+      <Icon color={color} size={23} strokeWidth={2.4} />
+      <Text style={[styles.navText, active && styles.navTextActive]}>{title}</Text>
+    </Pressable>
+  );
+}
+
 export default function ExpensesScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ source?: string }>();
   const { width } = useWindowDimensions();
   const { onboarding, updateOnboarding } = useOnboarding();
+  const source = Array.isArray(params.source) ? params.source[0] : params.source;
+  const isSpendingEditMode = source === "spending";
+  const navigate = (route: Route) => router.push(route);
   const [selectedExpenseRange, setSelectedExpenseRange] = useState<string | null>(
-    onboarding.expensesRange
+    normalizeExpenseRange(onboarding.expensesRange)
   );
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
     onboarding.expenseCategories
@@ -196,9 +244,13 @@ export default function ExpensesScreen() {
     updateOnboarding({
       expensesRange: selectedExpenseRange,
       expenseCategories: selectedCategories,
+      expenseCategoryAmounts: normalizeExpenseCategoryAmounts(
+        onboarding.expenseCategoryAmounts,
+        selectedCategories
+      ),
       expensesFeeling: selectedExpenseFeeling
     });
-    router.push("/small-expenses");
+    router.push(isSpendingEditMode ? "/spending" : "/small-expenses");
   };
 
   return (
@@ -210,12 +262,14 @@ export default function ExpensesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
+          {!isSpendingEditMode ? (
           <StepHeader
             currentStep={5}
             onBack={() => router.push("/income")}
             title="Gastos"
             totalSteps={8}
           />
+          ) : null}
 
           <HeroInfoCard
             badge="Podrás ajustar tus gastos más adelante."
@@ -276,24 +330,38 @@ export default function ExpensesScreen() {
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel="Continuar hacia gastos hormiga"
+              accessibilityLabel={
+                isSpendingEditMode ? "Guardar cambios de gastos" : "Continuar hacia gastos hormiga"
+              }
               disabled={!canContinue}
               iconPosition="right"
               onPress={handleContinue}
               style={styles.primaryButton}
-              title="Continuar"
+              title={isSpendingEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
-              accessibilityLabel="Volver a ingresos"
+              accessibilityLabel={isSpendingEditMode ? "Volver a Gastos" : "Volver a ingresos"}
               icon={null}
-              onPress={() => router.push("/income")}
+              onPress={() => router.push(isSpendingEditMode ? "/spending" : "/income")}
               style={styles.secondaryButton}
-              title="Volver"
+              title={isSpendingEditMode ? "Volver a Gastos" : "Volver"}
               variant="secondary"
             />
           </View>
         </View>
       </ScrollView>
+      {isSpendingEditMode ? (
+        <>
+        <BottomNavigation activeRoute="/spending" />
+        <View style={styles.hidden}>
+          <BottomNavItem icon={Home} onNavigate={navigate} route="/dashboard" title="Inicio" />
+          <BottomNavItem active icon={PieChart} onNavigate={navigate} route="/spending" title="Gastos" />
+          <BottomNavItem icon={Flag} onNavigate={navigate} route="/goals-overview" title="Metas" />
+          <BottomNavItem icon={LineChart} onNavigate={navigate} route="/simulation" title="Simulación" />
+          <BottomNavItem icon={Bot} onNavigate={navigate} route="/assistant" title="Asistente" />
+        </View>
+        </>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -436,6 +504,52 @@ const styles = StyleSheet.create({
   actions: {
     gap: spacing.sm,
     paddingBottom: spacing.md
+  },
+  bottomNav: {
+    alignSelf: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderTopWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    maxWidth: 760,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+    width: "100%"
+  },
+  navItem: {
+    alignItems: "center",
+    flex: 1,
+    gap: spacing.xs,
+    minHeight: 68,
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.xs,
+    position: "relative"
+  },
+  navActiveLine: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    height: 4,
+    position: "absolute",
+    top: -spacing.xs,
+    width: "100%"
+  },
+  navText: {
+    color: colors.textSubtle,
+    fontSize: typography.small,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.small,
+    textAlign: "center"
+  },
+  navTextActive: {
+    color: colors.primary
+  },
+  pressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.99 }]
+  },
+  hidden: {
+    display: "none"
   },
   primaryButton: {
     borderRadius: 17,

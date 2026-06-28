@@ -27,6 +27,7 @@ import {
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BottomNavigation } from "../components/BottomNavigation";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
@@ -1095,7 +1096,8 @@ export default function DashboardScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.bottomNav}>
+      <BottomNavigation activeRoute="/dashboard" />
+      <View style={styles.hidden}>
         <BottomNavItem active icon={Home} onNavigate={navigate} route="/dashboard" title="Inicio" />
         <BottomNavItem icon={PieChart} onNavigate={navigate} route="/spending" title="Gastos" />
         <BottomNavItem icon={Flag} onNavigate={navigate} route="/goals-overview" title="Metas" />
@@ -1606,6 +1608,9 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.78,
     transform: [{ scale: 0.99 }]
+  },
+  hidden: {
+    display: "none"
   },
   bottomNav: {
     alignSelf: "center",

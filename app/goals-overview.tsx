@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import {
   AlertCircle,
   Baby,
+  Bot,
   Calendar,
   Car,
   ChartColumnIncreasing,
@@ -15,10 +16,13 @@ import {
   Gift,
   GraduationCap,
   HeartPulse,
+  Home,
   House,
+  LineChart,
   Minus,
   PenLine,
   PiggyBank,
+  PieChart,
   Plane,
   Plus,
   RotateCcw,
@@ -33,6 +37,7 @@ import {
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BottomNavigation } from "../components/BottomNavigation";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
@@ -61,6 +66,8 @@ type IconProps = {
   size?: number;
   strokeWidth?: number;
 };
+
+type Route = Parameters<ReturnType<typeof useRouter>["push"]>[0];
 
 type GoalVisualOption = {
   title: string;
@@ -463,6 +470,35 @@ function ChoicePill({
       <Text style={[styles.choicePillText, selected && styles.choicePillTextSelected]}>
         {label}
       </Text>
+    </Pressable>
+  );
+}
+
+function BottomNavItem({
+  title,
+  route,
+  icon: Icon,
+  active,
+  onNavigate
+}: {
+  title: string;
+  route: Route;
+  icon: ComponentType<IconProps>;
+  active?: boolean;
+  onNavigate: (route: Route) => void;
+}) {
+  const color = active ? colors.primary : colors.textSubtle;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={() => onNavigate(route)}
+      style={({ pressed }) => [styles.navItem, pressed && styles.pressed]}
+    >
+      {active ? <View style={styles.navActiveLine} /> : null}
+      <Icon color={color} size={23} strokeWidth={2.4} />
+      <Text style={[styles.navText, active && styles.navTextActive]}>{title}</Text>
     </Pressable>
   );
 }
@@ -1053,6 +1089,7 @@ function GoalCard({
 
 export default function GoalsOverviewScreen() {
   const router = useRouter();
+  const navigate = (route: Route) => router.push(route);
   const { exactValues, onboarding, updateOnboarding } = useOnboarding();
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
@@ -1460,16 +1497,18 @@ export default function GoalsOverviewScreen() {
               onPress={() => router.push("/goals?mode=add")}
               title="Crear nueva meta"
             />
-            <PrimaryButton
-              accessibilityLabel="Volver al inicio"
-              icon={null}
-              onPress={() => router.push("/dashboard")}
-              title="Volver al inicio"
-              variant="secondary"
-            />
           </View>
         </View>
       </ScrollView>
+
+      <BottomNavigation activeRoute="/goals-overview" />
+      <View style={styles.hidden}>
+        <BottomNavItem icon={Home} onNavigate={navigate} route="/dashboard" title="Inicio" />
+        <BottomNavItem icon={PieChart} onNavigate={navigate} route="/spending" title="Gastos" />
+        <BottomNavItem active icon={Flag} onNavigate={navigate} route="/goals-overview" title="Metas" />
+        <BottomNavItem icon={LineChart} onNavigate={navigate} route="/simulation" title="Simulación" />
+        <BottomNavItem icon={Bot} onNavigate={navigate} route="/assistant" title="Asistente" />
+      </View>
     </SafeAreaView>
   );
 }
@@ -2164,9 +2203,51 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingBottom: spacing.md
   },
+  bottomNav: {
+    alignSelf: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderTopWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    maxWidth: 760,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+    width: "100%"
+  },
+  navItem: {
+    alignItems: "center",
+    flex: 1,
+    gap: spacing.xs,
+    minHeight: 68,
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.xs,
+    position: "relative"
+  },
+  navActiveLine: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    height: 4,
+    position: "absolute",
+    top: -spacing.xs,
+    width: "100%"
+  },
+  navText: {
+    color: colors.textSubtle,
+    fontSize: typography.small,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.small,
+    textAlign: "center"
+  },
+  navTextActive: {
+    color: colors.primary
+  },
   pressed: {
     opacity: 0.84,
     transform: [{ scale: 0.99 }]
+  },
+  hidden: {
+    display: "none"
   },
   disabledButton: {
     opacity: 0.45

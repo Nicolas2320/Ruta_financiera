@@ -944,7 +944,7 @@ export default function DiagnosisScreen() {
             <PrimaryButton
               accessibilityLabel="Ver simulación educativa"
               icon={null}
-              onPress={() => router.push("/simulation")}
+              onPress={() => router.push({ pathname: "/simulation", params: { source: "flow" } })}
               title="Ver simulación"
             />
             <PrimaryButton
