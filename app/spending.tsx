@@ -32,9 +32,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNavigation } from "../components/BottomNavigation";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { usePlan } from "../context/PlanContext";
 import { normalizeExpenseCategoryAmounts } from "../types/financial";
+import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
-import { getMonthlyPlanData, getMonthlyPlanMetrics, type MonthlyPlanData, type MonthlyPlanMetrics } from "../utils/monthlyPlan";
+import {
+  getMonthlyPlanData,
+  getMonthlyPlanMetrics,
+  getMonthlyPlanPeriodKey,
+  type MonthlyPlanData,
+  type MonthlyPlanMetrics
+} from "../utils/monthlyPlan";
 
 const expensesCupReceipt = require("../assets/illustrations/expenses-cup-receipt.png");
 const expensesCupReceiptUri = Asset.fromModule(expensesCupReceipt).uri;
@@ -741,9 +749,25 @@ function BottomNavItem({
 export default function SpendingScreen() {
   const router = useRouter();
   const { exactValues, onboarding, updateOnboarding } = useOnboarding();
+  const { completedActions } = usePlan();
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const snapshot = metrics.snapshot;
+  const impactSummary = useMemo(
+    () =>
+      getMonthlyActionImpactSummary(completedActions, {
+        periodKey: getMonthlyPlanPeriodKey()
+      }),
+    [completedActions]
+  );
+  const spendingSignals = [
+    ...impactSummary.limitCommitments.filter(
+      (item) => item.target === "cashflow" || item.target === "small_expenses"
+    ),
+    ...impactSummary.insightSignals.filter(
+      (item) => item.target === "cashflow" || item.target === "small_expenses"
+    )
+  ];
   const expenseCategories = onboarding.expenseCategories;
   const savedCategoryAmounts = useMemo(
     () => normalizeExpenseCategoryAmounts(onboarding.expenseCategoryAmounts, expenseCategories),
@@ -911,6 +935,36 @@ export default function SpendingScreen() {
               <Text style={styles.impactText}>{opportunityInsight.impact}</Text>
             </View>
           </View>
+
+          {spendingSignals.length > 0 ? (
+            <SectionCard
+              icon={<CalendarCheck color={colors.primary} size={20} strokeWidth={2.4} />}
+              title="Señales del plan mensual"
+              subtitle="No reducen tus gastos automáticamente; sirven para revisar el mes."
+            >
+              <View style={styles.planSignalsList}>
+                {spendingSignals.slice(0, 3).map((signal) => (
+                  <View key={signal.progressId} style={styles.planSignalRow}>
+                    <Chip
+                      label={signal.kind === "limit_commitment" ? "Compromiso" : "Observación"}
+                      tone={signal.kind === "limit_commitment" ? "warning" : "primary"}
+                    />
+                    <View style={styles.planSignalCopy}>
+                      <Text style={styles.planSignalTitle}>{signal.label}</Text>
+                      <Text style={styles.planSignalText}>
+                        {signal.amount !== null
+                          ? `${formatCOP(signal.amount)} registrados como referencia.`
+                          : signal.detail ?? "Registro cualitativo para orientar el próximo ajuste."}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.helperText}>
+                Cuando confirmes si un límite funcionó, podremos convertirlo en ahorro observado.
+              </Text>
+            </SectionCard>
+          ) : null}
 
           <SectionCard
             actionLabel="Ver todas"
@@ -1230,6 +1284,36 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.body
+  },
+  planSignalsList: {
+    gap: spacing.sm
+  },
+  planSignalRow: {
+    alignItems: "flex-start",
+    backgroundColor: "#F8FBFF",
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  planSignalCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 190
+  },
+  planSignalTitle: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  planSignalText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
   },
   sectionCard: {
     ...shadows.card,

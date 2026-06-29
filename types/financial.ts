@@ -54,7 +54,130 @@ export type FinancialGoal = {
   updatedAt?: string;
 };
 
-export type CompletedActionsState = Record<string, boolean>;
+export type ActionProgressStatus = "pending" | "in_progress" | "completed" | "skipped";
+
+export type ActionProgressEvidence = {
+  type?: "amount" | "category" | "decision" | "note";
+  amount?: number | null;
+  detail?: string | null;
+  label?: string | null;
+};
+
+export type ActionProgressRecord = {
+  status: ActionProgressStatus;
+  evidence?: ActionProgressEvidence;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  updatedAt: string;
+};
+
+export type ActionProgressValue = boolean | ActionProgressRecord;
+
+export type CompletedActionsState = Record<string, ActionProgressValue>;
+
+export type ActionProgressPatch = {
+  status?: ActionProgressStatus;
+  evidence?: ActionProgressEvidence;
+  clearEvidence?: boolean;
+};
+
+export function isActionProgressRecord(value: ActionProgressValue | null | undefined): value is ActionProgressRecord {
+  return value !== null && value !== undefined && typeof value === "object" && !Array.isArray(value) && "status" in value;
+}
+
+export function getActionProgressStatus(value: ActionProgressValue | null | undefined): ActionProgressStatus {
+  if (value === true) {
+    return "completed";
+  }
+
+  if (isActionProgressRecord(value)) {
+    return value.status;
+  }
+
+  return "pending";
+}
+
+export function isActionProgressCompleted(value: ActionProgressValue | null | undefined) {
+  return getActionProgressStatus(value) === "completed";
+}
+
+export function normalizeActionProgressRecord(
+  value: ActionProgressValue | null | undefined
+): ActionProgressRecord | null {
+  if (value === true) {
+    return {
+      status: "completed",
+      completedAt: null,
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  if (!isActionProgressRecord(value)) {
+    return null;
+  }
+
+  const status: ActionProgressStatus =
+    value.status === "completed" ||
+    value.status === "in_progress" ||
+    value.status === "skipped" ||
+    value.status === "pending"
+      ? value.status
+      : "pending";
+
+  return {
+    status,
+    evidence:
+      value.evidence && typeof value.evidence === "object" && !Array.isArray(value.evidence)
+        ? value.evidence
+        : undefined,
+    startedAt: typeof value.startedAt === "string" ? value.startedAt : null,
+    completedAt: typeof value.completedAt === "string" ? value.completedAt : null,
+    updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : new Date().toISOString()
+  };
+}
+
+export function createActionProgressRecord(
+  currentValue: ActionProgressValue | null | undefined,
+  patch: ActionProgressPatch
+): ActionProgressRecord {
+  const now = new Date().toISOString();
+  const currentRecord = normalizeActionProgressRecord(currentValue);
+  const status = patch.status ?? currentRecord?.status ?? "in_progress";
+  const evidence = patch.clearEvidence ? undefined : patch.evidence ?? currentRecord?.evidence;
+  const hasStarted = status === "in_progress" || status === "completed";
+
+  return {
+    status,
+    ...(evidence ? { evidence } : {}),
+    startedAt: currentRecord?.startedAt ?? (hasStarted ? now : null),
+    completedAt:
+      status === "completed" ? currentRecord?.completedAt ?? now : null,
+    updatedAt: now
+  };
+}
+
+export function normalizeCompletedActionsState(
+  completedActions: CompletedActionsState | null | undefined
+): CompletedActionsState {
+  if (!completedActions || typeof completedActions !== "object" || Array.isArray(completedActions)) {
+    return {};
+  }
+
+  return Object.entries(completedActions).reduce<CompletedActionsState>((actions, [key, value]) => {
+    if (value === true || value === false) {
+      actions[key] = value;
+      return actions;
+    }
+
+    const normalizedRecord = normalizeActionProgressRecord(value);
+
+    if (normalizedRecord) {
+      actions[key] = normalizedRecord;
+    }
+
+    return actions;
+  }, {});
+}
 
 export const exactFinancialValueKeys = [
   "monthlyIncome",

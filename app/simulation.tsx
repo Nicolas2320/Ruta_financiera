@@ -24,6 +24,8 @@ import { BottomNavigation } from "../components/BottomNavigation";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { usePlan } from "../context/PlanContext";
+import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
 import {
   calculateFinancialSnapshot,
   type FinancialSnapshot
@@ -31,6 +33,7 @@ import {
 import { formatCOP } from "../utils/financialRanges";
 import { formatGoalContribution, getGoalPlanFromOnboarding } from "../utils/goalPlanning";
 import type { ExactFinancialValues } from "../types/financial";
+import { getMonthlyPlanPeriodKey } from "../utils/monthlyPlan";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
 type Tone = "primary" | "support" | "warning" | "purple" | "neutral";
@@ -233,7 +236,7 @@ function sumAvailableParts(parts: Array<number | null>) {
   return availableParts.reduce((total, part) => total + part, 0);
 }
 
-function getScenarios(metrics: SimulationBase): Scenario[] {
+function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scenario[] {
   const marginWasUsed = metrics.estimatedMargin !== null && metrics.estimatedMargin > 0;
   const suggestedContribution =
     metrics.snapshot.cashflow.suggestedMonthlyContribution > 0
@@ -253,6 +256,19 @@ function getScenarios(metrics: SimulationBase): Scenario[] {
       : undefined;
 
   return [
+    ...(registeredContribution > 0
+      ? [
+          {
+            key: "registered",
+            name: "Aporte registrado",
+            monthlyContribution: registeredContribution,
+            assumption: "Monto que registraste en el plan mensual.",
+            tags: ["Real del mes", "No reemplaza"],
+            comment: "Sirve para comparar tu avance real con los ritmos sugeridos.",
+            tone: "purple" as Tone
+          }
+        ]
+      : []),
     {
       key: "current",
       name: "Ritmo actual",
@@ -585,9 +601,17 @@ export default function SimulationScreen() {
   const isFlowMode = source === "flow";
   const navigate = (route: Route) => router.push(route);
   const { exactValues, onboarding } = useOnboarding();
+  const { completedActions } = usePlan();
   const metrics = useMemo(
     () => getSimulationBase(onboarding, exactValues),
     [exactValues, onboarding]
+  );
+  const impactSummary = useMemo(
+    () =>
+      getMonthlyActionImpactSummary(completedActions, {
+        periodKey: getMonthlyPlanPeriodKey()
+      }),
+    [completedActions]
   );
   const snapshot = metrics.snapshot;
   const goalPlan = useMemo(
@@ -603,7 +627,10 @@ export default function SimulationScreen() {
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
     null;
-  const scenarios = useMemo(() => getScenarios(metrics), [metrics]);
+  const scenarios = useMemo(
+    () => getScenarios(metrics, impactSummary.realContributionTotal),
+    [impactSummary.realContributionTotal, metrics]
+  );
   const maxMonthlyContribution = Math.max(
     ...scenarios.map((scenario) => scenario.monthlyContribution ?? 0),
     0

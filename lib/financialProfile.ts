@@ -4,6 +4,7 @@ import {
   getLegacyGoalFromOnboarding,
   getPrimaryFinancialGoal,
   initialOnboarding,
+  normalizeCompletedActionsState,
   normalizeExpenseCategoryAmounts,
   normalizeFinancialGoals,
   normalizeGoalMonthlyBudget,
@@ -72,7 +73,7 @@ function normalizeOnboarding(onboarding: Partial<OnboardingData> | null | undefi
 function normalizeCompletedActions(
   completedActions: CompletedActionsState | null | undefined
 ) {
-  return completedActions ?? {};
+  return normalizeCompletedActionsState(completedActions);
 }
 
 export async function fetchFinancialProfile(userId: string): Promise<FinancialProfile> {

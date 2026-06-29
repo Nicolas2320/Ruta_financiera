@@ -10,7 +10,12 @@ import {
 
 import { useAuth } from "./AuthContext";
 import { fetchFinancialProfile, saveCompletedActions } from "../lib/financialProfile";
-import type { CompletedActionsState } from "../types/financial";
+import {
+  createActionProgressRecord,
+  isActionProgressCompleted,
+  type ActionProgressPatch,
+  type CompletedActionsState
+} from "../types/financial";
 
 type PlanContextValue = {
   completedActions: CompletedActionsState;
@@ -18,6 +23,7 @@ type PlanContextValue = {
   planSyncStatus: "idle" | "loading" | "saving" | "saved" | "error" | "not-configured";
   toggleActionCompleted: (actionId: string) => void;
   setActionCompleted: (actionId: string, completed: boolean) => void;
+  updateActionProgress: (actionId: string, patch: ActionProgressPatch) => void;
   resetPlanProgress: () => void;
 };
 
@@ -99,9 +105,12 @@ export function PlanProvider({ children }: PropsWithChildren) {
   const toggleActionCompleted = useCallback(
     (actionId: string) => {
       setCompletedActions((currentActions) => {
+        const completed = isActionProgressCompleted(currentActions[actionId]);
         const nextActions = {
           ...currentActions,
-          [actionId]: !currentActions[actionId]
+          [actionId]: createActionProgressRecord(currentActions[actionId], {
+            status: completed ? "pending" : "completed"
+          })
         };
 
         savePlanProgress(nextActions);
@@ -116,7 +125,24 @@ export function PlanProvider({ children }: PropsWithChildren) {
       setCompletedActions((currentActions) => {
         const nextActions = {
           ...currentActions,
-          [actionId]: completed
+          [actionId]: createActionProgressRecord(currentActions[actionId], {
+            status: completed ? "completed" : "pending"
+          })
+        };
+
+        savePlanProgress(nextActions);
+        return nextActions;
+      });
+    },
+    [savePlanProgress]
+  );
+
+  const updateActionProgress = useCallback(
+    (actionId: string, patch: ActionProgressPatch) => {
+      setCompletedActions((currentActions) => {
+        const nextActions = {
+          ...currentActions,
+          [actionId]: createActionProgressRecord(currentActions[actionId], patch)
         };
 
         savePlanProgress(nextActions);
@@ -138,6 +164,7 @@ export function PlanProvider({ children }: PropsWithChildren) {
       planSyncStatus,
       toggleActionCompleted,
       setActionCompleted,
+      updateActionProgress,
       resetPlanProgress
     }),
     [
@@ -146,6 +173,7 @@ export function PlanProvider({ children }: PropsWithChildren) {
       planSyncStatus,
       toggleActionCompleted,
       setActionCompleted,
+      updateActionProgress,
       resetPlanProgress
     ]
   );

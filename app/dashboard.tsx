@@ -12,6 +12,7 @@ import {
   ClipboardCheck,
   Coffee,
   Flag,
+  HandCoins,
   Home,
   LineChart,
   PencilLine,
@@ -31,15 +32,19 @@ import { BottomNavigation } from "../components/BottomNavigation";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
+import {
+  getMonthlyActionImpactSummary,
+  getNextPlanAdjustmentHint
+} from "../utils/actionProgressImpact";
 import { formatCOP } from "../utils/financialRanges";
 import { getGoalPlanFromOnboarding, type GoalAllocation } from "../utils/goalPlanning";
 import {
   getActiveMonthlyPlanProgressKey,
   getMonthlyActions,
-  getMonthlyActionProgressId,
   getMonthlyFocus,
   getMonthlyPlanData,
   getMonthlyPlanMetrics,
+  getMonthlyPlanPeriodKey,
   getMonthlyPlanPriorityKey,
   getMonthlyPlanProgressKey,
   goalNeedsAmount,
@@ -407,31 +412,33 @@ function CircleButton({ onPress }: { onPress: () => void }) {
   );
 }
 
-function HeroFocusCard({
-  title,
-  text,
-  primaryGoalTitle,
-  completedCount,
-  progressPercentage,
+function MonthlyPlanCard({
+  actionCount,
   completed,
-  onPress
+  completedCount,
+  insight,
+  onRegisterProgress,
+  primaryGoalTitle,
+  progressPercentage,
+  realContribution,
+  text,
+  title
 }: {
-  title: string;
-  text: string;
-  primaryGoalTitle?: string | null;
-  completedCount: number;
-  progressPercentage: number;
+  actionCount: number;
   completed: boolean;
-  onPress: () => void;
+  completedCount: number;
+  insight: string;
+  onRegisterProgress: () => void;
+  primaryGoalTitle?: string | null;
+  progressPercentage: number;
+  realContribution: string;
+  text: string;
+  title: string;
 }) {
   return (
-    <View style={styles.heroCard}>
-      <IconBubble
-        icon={<Target color={colors.primary} size={56} strokeWidth={2.5} />}
-        size="large"
-      />
-      <View style={styles.heroBody}>
-        <Text style={styles.kickerPrimary}>Enfoque del mes</Text>
+    <View style={styles.monthlyPlanCard}>
+      <View style={styles.monthlyPlanBody}>
+        <Text style={styles.kickerPrimary}>Plan del mes</Text>
         <Text style={styles.heroTitle}>{title}</Text>
         <Text style={styles.heroText}>{text}</Text>
         {primaryGoalTitle ? (
@@ -440,39 +447,63 @@ function HeroFocusCard({
             <Text style={styles.heroGoalPillText}>Meta principal: {primaryGoalTitle}</Text>
           </View>
         ) : null}
-        <Text style={styles.heroProgressText}>
-          {completed ? "Buen trabajo. Completaste tu primer plan mensual." : `${completedCount} de 3 acciones completadas`}
-        </Text>
-        <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressFill,
-              completed && styles.progressFillComplete,
-              { width: toPercentWidth(progressPercentage) }
-            ]}
-          />
+
+        <View style={styles.monthlyPlanMetrics}>
+          <View style={styles.monthlyPlanProgressBlock}>
+            <View style={styles.monthlyPlanMetricHeader}>
+              <Text style={styles.monthlyPlanMetricLabel}>
+                {completed
+                  ? "Plan completado"
+                  : `${completedCount} de ${actionCount} acciones completadas`}
+              </Text>
+              <Text style={styles.monthlyPlanMetricValue}>{progressPercentage}%</Text>
+            </View>
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  completed && styles.progressFillComplete,
+                  { width: toPercentWidth(progressPercentage) }
+                ]}
+              />
+            </View>
+          </View>
+
+          <View style={styles.monthlyPlanRealBlock}>
+            <HandCoins color={colors.support} size={21} strokeWidth={2.4} />
+            <View style={styles.monthlyPlanRealText}>
+              <Text style={styles.monthlyPlanMetricLabel}>Avance real</Text>
+              <Text style={styles.monthlyPlanRealValue}>{realContribution}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.monthlyPlanInsight}>
+          <Text style={styles.monthlyPlanInsightLabel}>Insight</Text>
+          <Text style={styles.monthlyPlanInsightText}>{insight}</Text>
+        </View>
+
+        <View style={styles.monthlyPlanActions}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onRegisterProgress}
+            style={({ pressed }) => [styles.improveButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.improveButtonText}>Registrar avance</Text>
+            <ChevronRight color={colors.surface} size={20} strokeWidth={2.5} />
+          </Pressable>
         </View>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        onPress={onPress}
-        style={({ pressed }) => [styles.heroLink, pressed && styles.pressed]}
-      >
-        <Text style={styles.heroLinkText}>Ver</Text>
-        <ChevronRight color={colors.primary} size={22} strokeWidth={2.5} />
-      </Pressable>
     </View>
   );
 }
 
 function NextActionCard({
   action,
-  onComplete,
-  onOpenPlan
+  onRegisterProgress
 }: {
   action: MonthlyAction | undefined;
-  onComplete: () => void;
-  onOpenPlan: () => void;
+  onRegisterProgress: () => void;
 }) {
   return (
     <View style={styles.nextActionCard}>
@@ -508,21 +539,13 @@ function NextActionCard({
         {action ? (
           <Pressable
             accessibilityRole="button"
-            onPress={onComplete}
+            onPress={onRegisterProgress}
             style={({ pressed }) => [styles.primaryPillButton, pressed && styles.pressed]}
           >
             <CheckCircle2 color={colors.surface} size={20} strokeWidth={2.4} />
-            <Text style={styles.primaryPillButtonText}>Marcar como hecha</Text>
+            <Text style={styles.primaryPillButtonText}>Registrar avance</Text>
           </Pressable>
         ) : null}
-        <Pressable
-          accessibilityRole="button"
-          onPress={onOpenPlan}
-          style={({ pressed }) => [styles.inlineLink, pressed && styles.pressed]}
-        >
-          <Text style={styles.inlineLinkText}>Ver plan mensual</Text>
-          <ChevronRight color={colors.primary} size={20} strokeWidth={2.5} />
-        </Pressable>
       </View>
     </View>
   );
@@ -736,7 +759,7 @@ function BottomNavItem({
 export default function DashboardScreen() {
   const router = useRouter();
   const { exactValues, onboarding } = useOnboarding();
-  const { completedActions, toggleActionCompleted } = usePlan();
+  const { completedActions } = usePlan();
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const snapshot = metrics.snapshot;
@@ -794,15 +817,18 @@ export default function DashboardScreen() {
       planProgressKey
     })
   ).length;
-  const progressPercentage = Math.round((completedCount / actions.length) * 100);
-  const nextAction = actions.find(
-    (action) =>
-      !isMonthlyActionCompleted({
-        actionId: action.id,
-        completedActions,
-        planProgressKey
-      })
+  const actionCount = actions.length;
+  const progressPercentage = actionCount > 0 ? Math.round((completedCount / actionCount) * 100) : 0;
+  const impactSummary = useMemo(
+    () =>
+      getMonthlyActionImpactSummary(completedActions, {
+        periodKey: getMonthlyPlanPeriodKey()
+      }),
+    [completedActions]
   );
+  const impactDetail = getNextPlanAdjustmentHint(impactSummary);
+  const realContributionLabel =
+    impactSummary.realContributionTotal > 0 ? formatCOP(impactSummary.realContributionTotal) : "$0";
   const precisionStatus = snapshot.precision;
   const exactMonthlyIncome =
     snapshot.sourceMap.monthlyIncome === "exact" ? snapshot.cashflow.monthlyIncome : null;
@@ -915,24 +941,17 @@ export default function DashboardScreen() {
             <CircleButton onPress={() => router.push("/settings")} />
           </View>
 
-          <HeroFocusCard
-            completed={completedCount === 3}
+          <MonthlyPlanCard
+            actionCount={actionCount}
+            completed={completedCount === actionCount}
             completedCount={completedCount}
-            onPress={() => router.push("/action-plan")}
+            insight={impactDetail}
+            onRegisterProgress={() => router.push("/action-plan")}
             primaryGoalTitle={primaryGoalTitle}
             progressPercentage={progressPercentage}
+            realContribution={realContributionLabel}
             text={focus.text}
             title={focus.title}
-          />
-
-          <NextActionCard
-            action={nextAction}
-            onComplete={() => {
-              if (nextAction) {
-                toggleActionCompleted(getMonthlyActionProgressId(planProgressKey, nextAction.id));
-              }
-            }}
-            onOpenPlan={() => router.push("/action-plan")}
           />
 
           <View style={styles.twoColumnGrid}>
@@ -1226,19 +1245,100 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.body,
     marginTop: spacing.xs
   },
-  heroLink: {
-    alignItems: "center",
-    alignSelf: "center",
-    flexDirection: "row",
-    gap: spacing.xs,
-    minHeight: 44,
-    paddingHorizontal: spacing.sm
+  monthlyPlanCard: {
+    ...shadows.card,
+    alignItems: "stretch",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
   },
-  heroLinkText: {
-    color: colors.primary,
-    fontSize: typography.button,
+  monthlyPlanBody: {
+    flex: 1,
+    gap: spacing.sm,
+    minWidth: 0
+  },
+  monthlyPlanMetrics: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginTop: spacing.xs
+  },
+  monthlyPlanProgressBlock: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: "#D7E7FF",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexBasis: 260,
+    flexGrow: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  monthlyPlanMetricHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "space-between"
+  },
+  monthlyPlanMetricLabel: {
+    color: colors.textMuted,
+    flex: 1,
+    fontSize: typography.caption,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.button
+    lineHeight: typography.lineHeight.caption
+  },
+  monthlyPlanMetricValue: {
+    color: colors.primary,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  monthlyPlanRealBlock: {
+    alignItems: "center",
+    backgroundColor: colors.supportSoft,
+    borderColor: "#B9E9CD",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexBasis: 170,
+    flexDirection: "row",
+    flexGrow: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  monthlyPlanRealText: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  monthlyPlanRealValue: {
+    color: colors.support,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  monthlyPlanInsight: {
+    backgroundColor: "#F8FBFF",
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.md
+  },
+  monthlyPlanInsightLabel: {
+    color: colors.support,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  monthlyPlanInsightText: {
+    color: colors.textMuted,
+    fontSize: typography.body,
+    lineHeight: typography.lineHeight.body
+  },
+  monthlyPlanActions: {
+    alignItems: "flex-start"
   },
   nextActionCard: {
     ...shadows.card,
@@ -1266,10 +1366,9 @@ const styles = StyleSheet.create({
   },
   nextActionControls: {
     alignItems: "flex-end",
-    flexBasis: 170,
-    flexGrow: 1,
-    gap: spacing.sm,
-    minWidth: 170
+    flexBasis: 150,
+    flexGrow: 0,
+    minWidth: 150
   },
   primaryPillButton: {
     alignItems: "center",
@@ -1278,7 +1377,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm,
     justifyContent: "center",
-    minHeight: 52,
+    minHeight: 48,
     paddingHorizontal: spacing.md
   },
   primaryPillButtonText: {
@@ -1286,19 +1385,6 @@ const styles = StyleSheet.create({
     fontSize: typography.button,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.button
-  },
-  inlineLink: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: spacing.xs,
-    minHeight: 42,
-    paddingHorizontal: spacing.sm
-  },
-  inlineLinkText: {
-    color: colors.primary,
-    fontSize: typography.body,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
   },
   impactInline: {
     flexDirection: "row",
