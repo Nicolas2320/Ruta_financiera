@@ -235,6 +235,95 @@ function getParsedCurrencyInput(value: string) {
   return parseCOPInput(value);
 }
 
+function getMarginPercentage(amount: number | null | undefined, monthlyMargin: number | null) {
+  if (
+    typeof amount !== "number" ||
+    !Number.isFinite(amount) ||
+    amount < 0 ||
+    monthlyMargin === null ||
+    !Number.isFinite(monthlyMargin) ||
+    monthlyMargin <= 0
+  ) {
+    return null;
+  }
+
+  return Math.round((amount / monthlyMargin) * 100);
+}
+
+function getBudgetMarginShortLabel(amount: number, monthlyMargin: number | null) {
+  const percentage = getMarginPercentage(amount, monthlyMargin);
+
+  return percentage === null ? null : `${percentage}% de tu margen`;
+}
+
+function getBudgetMarginTone(percentage: number | null): Tone {
+  if (percentage === null) {
+    return "neutral";
+  }
+
+  if (percentage > 100) {
+    return "danger";
+  }
+
+  if (percentage >= 70) {
+    return "warning";
+  }
+
+  if (percentage >= 20) {
+    return "support";
+  }
+
+  return "neutral";
+}
+
+function getBudgetMarginFeedback({
+  amount,
+  isInputPreview,
+  monthlyMargin
+}: {
+  amount: number | null;
+  isInputPreview: boolean;
+  monthlyMargin: number | null;
+}) {
+  if (monthlyMargin === null || !Number.isFinite(monthlyMargin) || monthlyMargin <= 0) {
+    return {
+      label: "Necesitamos ingresos y gastos para calcular que porcentaje representa.",
+      percentage: null
+    };
+  }
+
+  const percentage = getMarginPercentage(amount, monthlyMargin);
+
+  if (percentage === null) {
+    return {
+      label: "Escribe una bolsa para ver que porcentaje representa sobre tu margen mensual.",
+      percentage: null
+    };
+  }
+
+  const prefix = isInputPreview ? "Esta bolsa" : "La bolsa actual";
+  const baseLabel = `${prefix} equivale al ${percentage}% de tu margen mensual estimado de ${formatCOP(monthlyMargin)}.`;
+
+  if (percentage > 100) {
+    return {
+      label: `${baseLabel} Supera tu margen disponible.`,
+      percentage
+    };
+  }
+
+  if (percentage >= 70) {
+    return {
+      label: `${baseLabel} Revisa que no presione tus gastos esenciales.`,
+      percentage
+    };
+  }
+
+  return {
+    label: baseLabel,
+    percentage
+  };
+}
+
 function getFormattedDate(value: string | null | undefined) {
   if (!value) {
     return "Sin fecha";
@@ -439,11 +528,13 @@ function IconButton({
 }
 
 function StatCard({
+  helper,
   icon,
   label,
   value,
   tone = "primary"
 }: {
+  helper?: string | null;
   icon: ReactNode;
   label: string;
   value: string;
@@ -457,6 +548,7 @@ function StatCard({
       <View style={styles.statCopy}>
         <Text style={styles.statLabel}>{label}</Text>
         <Text style={[styles.statValue, { color: toneColors.text }]}>{value}</Text>
+        {helper ? <Text style={styles.statHelper}>{helper}</Text> : null}
       </View>
     </View>
   );
@@ -1184,14 +1276,32 @@ export default function GoalsOverviewScreen() {
   );
   const investedInGoalsLabel =
     totalInvestedInGoals > 0 ? formatCOP(totalInvestedInGoals) : "$0";
+  const monthlyMargin = metrics.snapshot.cashflow.monthlyMargin;
   const budgetLabel =
     goalPlan.monthlyGoalBudget > 0
       ? `${formatCOP(goalPlan.monthlyGoalBudget)} aprox.`
       : "Por definir";
+  const budgetMarginLabel = getBudgetMarginShortLabel(goalPlan.monthlyGoalBudget, monthlyMargin);
   const recommendedBudgetLabel =
     metrics.snapshot.cashflow.suggestedMonthlyContribution > 0
       ? `${formatCOP(metrics.snapshot.cashflow.suggestedMonthlyContribution)} aprox.`
       : "Por definir";
+  const recommendedBudgetMarginLabel = getBudgetMarginShortLabel(
+    metrics.snapshot.cashflow.suggestedMonthlyContribution,
+    monthlyMargin
+  );
+  const recommendedBudgetDetailLabel = recommendedBudgetMarginLabel
+    ? `${recommendedBudgetLabel} (${recommendedBudgetMarginLabel})`
+    : recommendedBudgetLabel;
+  const parsedBudgetInput = getParsedCurrencyInput(budgetInput);
+  const hasBudgetInput = budgetInput.trim().length > 0;
+  const budgetMarginFeedback = getBudgetMarginFeedback({
+    amount: hasBudgetInput ? parsedBudgetInput : goalPlan.monthlyGoalBudget,
+    isInputPreview: hasBudgetInput,
+    monthlyMargin
+  });
+  const budgetMarginFeedbackTone = getBudgetMarginTone(budgetMarginFeedback.percentage);
+  const budgetMarginFeedbackColors = getToneColors(budgetMarginFeedbackTone);
   const remainingLabel = goalPlan.isOverBudget
     ? `${formatCOP(Math.abs(goalPlan.remainingBudget))} por encima`
     : goalPlan.remainingBudget > 0
@@ -1347,6 +1457,7 @@ export default function GoalsOverviewScreen() {
           <View style={styles.statsGrid}>
             <StatCard
               icon={<Wallet color={colors.primary} size={20} strokeWidth={2.4} />}
+              helper={budgetMarginLabel}
               label="Bolsa mensual"
               value={budgetLabel}
               tone={goalPlan.monthlyGoalBudgetMode === "manual" ? "warning" : "primary"}
@@ -1457,7 +1568,7 @@ export default function GoalsOverviewScreen() {
                 <View style={styles.budgetSettingCopy}>
                   <Text style={styles.inputLabel}>Bolsa mensual manual</Text>
                   <Text style={styles.helperText}>
-                    Recomendada actual: {recommendedBudgetLabel}. Puedes fijar otra bolsa si prefieres decidir el monto.
+                    Recomendada actual: {recommendedBudgetDetailLabel}. Puedes fijar otra bolsa si prefieres decidir el monto.
                   </Text>
                 </View>
                 <View style={styles.budgetInputRow}>
@@ -1477,6 +1588,20 @@ export default function GoalsOverviewScreen() {
                   >
                     <Text style={styles.saveBudgetButtonText}>Aplicar</Text>
                   </Pressable>
+                </View>
+                <View
+                  style={[
+                    styles.budgetFeedback,
+                    {
+                      backgroundColor: budgetMarginFeedbackColors.background,
+                      borderColor: budgetMarginFeedbackColors.border
+                    }
+                  ]}
+                >
+                  <AlertCircle color={budgetMarginFeedbackColors.text} size={16} strokeWidth={2.4} />
+                  <Text style={[styles.budgetFeedbackText, { color: budgetMarginFeedbackColors.text }]}>
+                    {budgetMarginFeedback.label}
+                  </Text>
                 </View>
                 {goalPlan.monthlyGoalBudgetMode === "manual" ? (
                   <Pressable
@@ -1667,6 +1792,12 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.option
   },
+  statHelper: {
+    color: colors.textSubtle,
+    fontSize: typography.small,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.small
+  },
   primaryCompletedCard: {
     ...shadows.card,
     alignItems: "flex-start",
@@ -1836,6 +1967,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
+  },
+  budgetFeedback: {
+    alignItems: "flex-start",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  budgetFeedbackText: {
+    flex: 1,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
   },
   saveBudgetButton: {
     alignItems: "center",
