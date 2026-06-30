@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { colors, radius, shadows, spacing } from "../constants/theme";
+import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 
 type IconProps = {
   color?: string;
@@ -72,13 +72,13 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontSize: 15,
-    fontWeight: "800",
-    lineHeight: 20
+    fontSize: typography.option,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.option
   },
   text: {
     color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 19
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
   }
 });

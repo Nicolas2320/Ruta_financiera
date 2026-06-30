@@ -3,7 +3,7 @@ import type { StyleProp, TextStyle, ViewStyle } from "react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ArrowRight } from "lucide-react-native";
 
-import { colors, radius, spacing } from "../constants/theme";
+import { colors, radius, spacing, typography } from "../constants/theme";
 
 type ButtonVariant = "primary" | "secondary";
 
@@ -19,6 +19,7 @@ type PrimaryButtonProps = {
   accessibilityLabel: string;
   variant?: ButtonVariant;
   icon?: ComponentType<IconProps> | null;
+  iconPosition?: "inline" | "right";
   style?: StyleProp<ViewStyle>;
   disabled?: boolean;
 };
@@ -29,10 +30,12 @@ export function PrimaryButton({
   accessibilityLabel,
   variant = "primary",
   icon: Icon = ArrowRight,
+  iconPosition = "inline",
   style,
   disabled = false
 }: PrimaryButtonProps) {
   const isPrimary = variant === "primary";
+  const hasTrailingIcon = Boolean(Icon && iconPosition === "right");
   const contentColor = disabled ? colors.textSubtle : isPrimary ? colors.surface : colors.primary;
 
   return (
@@ -50,17 +53,22 @@ export function PrimaryButton({
         style
       ]}
     >
-      <View style={styles.content}>
+      <View style={[styles.content, hasTrailingIcon && styles.contentWithTrailingIcon]}>
         <Text
           style={[
             styles.text,
             isPrimary ? styles.primaryText : styles.secondaryText,
+            hasTrailingIcon && styles.trailingText,
             disabled && styles.disabledText
           ]}
         >
           {title}
         </Text>
-        {Icon ? <Icon color={contentColor} size={18} strokeWidth={2.4} /> : null}
+        {Icon ? (
+          <View style={hasTrailingIcon && styles.trailingIcon}>
+            <Icon color={contentColor} size={20} strokeWidth={2.4} />
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -97,10 +105,21 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     justifyContent: "center"
   },
+  contentWithTrailingIcon: {
+    alignSelf: "stretch",
+    position: "relative"
+  },
+  trailingIcon: {
+    position: "absolute",
+    right: 0
+  },
   text: {
-    fontSize: 16,
-    fontWeight: "700"
+    fontSize: typography.button,
+    fontWeight: typography.weight.semibold
   } satisfies TextStyle,
+  trailingText: {
+    paddingHorizontal: spacing.xl
+  },
   primaryText: {
     color: colors.surface
   },

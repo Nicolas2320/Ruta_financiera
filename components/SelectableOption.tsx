@@ -58,8 +58,9 @@ const styles = StyleSheet.create({
   optionText: {
     color: colors.text,
     flex: 1,
-    fontSize: typography.body,
-    fontWeight: "800"
+    fontSize: typography.option,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.option
   },
   optionTextSelected: {
     color: colors.primary

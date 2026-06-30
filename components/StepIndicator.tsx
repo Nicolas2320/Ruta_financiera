@@ -10,7 +10,7 @@ type StepIndicatorProps = {
 };
 
 export function StepIndicator({ currentStep, totalSteps, label }: StepIndicatorProps) {
-  const progress = `${Math.round((currentStep / totalSteps) * 100)}%` as DimensionValue;
+  const progress = `${((currentStep - 1) / (totalSteps - 1)) * 100}%` as DimensionValue;
 
   return (
     <View
@@ -22,8 +22,28 @@ export function StepIndicator({ currentStep, totalSteps, label }: StepIndicatorP
         <Text style={styles.stepText}>Paso {currentStep} de {totalSteps}</Text>
         <Text style={styles.label}>{label}</Text>
       </View>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: progress }]} />
+      <View style={styles.progressWrap}>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: progress }]} />
+        </View>
+        <View style={styles.progressDots}>
+          {Array.from({ length: totalSteps }).map((_, index) => {
+            const step = index + 1;
+            const isComplete = step <= currentStep;
+            const isActive = step === currentStep;
+
+            return (
+              <View
+                key={step}
+                style={[
+                  styles.progressDot,
+                  isComplete && styles.progressDotComplete,
+                  isActive && styles.progressDotActive
+                ]}
+              />
+            );
+          })}
+        </View>
       </View>
     </View>
   );
@@ -45,7 +65,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     color: colors.primary,
     fontSize: typography.caption,
-    fontWeight: "800",
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption,
     overflow: "hidden",
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs
@@ -54,19 +75,48 @@ const styles = StyleSheet.create({
     color: colors.textSubtle,
     flexShrink: 1,
     fontSize: typography.caption,
-    fontWeight: "800",
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption,
     textAlign: "right",
     textTransform: "uppercase"
+  },
+  progressWrap: {
+    height: 20,
+    justifyContent: "center"
   },
   progressTrack: {
     backgroundColor: "#DCE8F8",
     borderRadius: radius.pill,
-    height: 6,
-    overflow: "hidden"
+    height: 4,
+    left: 10,
+    overflow: "hidden",
+    position: "absolute",
+    right: 10
   },
   progressFill: {
     backgroundColor: colors.primary,
     borderRadius: radius.pill,
-    height: "100%"
+    height: 4,
+    left: 0,
+    position: "absolute"
+  },
+  progressDots: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 10
+  },
+  progressDot: {
+    backgroundColor: "#DCE8F8",
+    borderRadius: radius.pill,
+    height: 10,
+    width: 10
+  },
+  progressDotComplete: {
+    backgroundColor: colors.primary
+  },
+  progressDotActive: {
+    height: 14,
+    width: 14
   }
 });

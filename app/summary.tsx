@@ -7,6 +7,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import {
+  getCurrentSavingsDisplay,
+  getGoalTargetAmountDisplay,
+  getMonthlyExpensesDisplay,
+  getMonthlyIncomeDisplay
+} from "../utils/financialRanges";
 
 type SummaryField = {
   label: string;
@@ -108,7 +114,12 @@ function SummarySection({
 
 export default function SummaryScreen() {
   const router = useRouter();
-  const { onboarding } = useOnboarding();
+  const { exactValues, onboarding } = useOnboarding();
+  const financialProfile = { onboarding, exactValues };
+  const incomeDisplay = getMonthlyIncomeDisplay(financialProfile);
+  const expensesDisplay = getMonthlyExpensesDisplay(financialProfile);
+  const savingsDisplay = getCurrentSavingsDisplay(financialProfile);
+  const goalAmountDisplay = getGoalTargetAmountDisplay(financialProfile);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -159,7 +170,7 @@ export default function SummaryScreen() {
           <SummarySection
             editAccessibilityLabel="Editar ingresos"
             fields={[
-              { label: "Rango de ingresos", value: onboarding.incomeRange },
+              { label: incomeDisplay.label, value: incomeDisplay.value },
               { label: "Tipo de ingreso", value: onboarding.incomeType },
               { label: "Frecuencia de ingreso", value: onboarding.incomeFrequency }
             ]}
@@ -170,7 +181,7 @@ export default function SummaryScreen() {
           <SummarySection
             editAccessibilityLabel="Editar gastos"
             fields={[
-              { label: "Rango de gastos", value: onboarding.expensesRange },
+              { label: expensesDisplay.label, value: expensesDisplay.value },
               { label: "Categorías principales", value: onboarding.expenseCategories },
               { label: "Cómo siente sus gastos", value: onboarding.expensesFeeling }
             ]}
@@ -202,7 +213,7 @@ export default function SummaryScreen() {
           <SummarySection
             editAccessibilityLabel="Editar ahorros, deudas e inversiones"
             fields={[
-              { label: "Rango de ahorros", value: onboarding.savingsRange },
+              { label: savingsDisplay.label, value: savingsDisplay.value },
               { label: "Cobertura de gastos esenciales", value: onboarding.emergencyCoverage },
               { label: "Situación de deudas", value: onboarding.debtSituation },
               { label: "PESO MENSUAL DE DEUDAS", value: onboarding.debtPaymentShare },
@@ -219,8 +230,11 @@ export default function SummaryScreen() {
               { label: "Horizonte", value: onboarding.goalHorizon },
               { label: "Importancia", value: onboarding.goalPriority },
               {
-                label: getGoalDetailLabel(onboarding.financialGoal),
-                value: onboarding.goalAmountRange,
+                label:
+                  goalAmountDisplay.source === "exact"
+                    ? goalAmountDisplay.label
+                    : getGoalDetailLabel(onboarding.financialGoal),
+                value: goalAmountDisplay.source === "empty" ? null : goalAmountDisplay.value,
                 optional: true
               }
             ]}
@@ -286,13 +300,13 @@ const styles = StyleSheet.create({
   title: {
     color: colors.text,
     fontSize: typography.title,
-    fontWeight: "900",
-    lineHeight: 36
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.title
   },
   subtitle: {
     color: colors.textMuted,
     fontSize: typography.subtitle,
-    lineHeight: 24
+    lineHeight: typography.lineHeight.subtitle
   },
   trustMessage: {
     alignItems: "flex-start",
@@ -306,8 +320,8 @@ const styles = StyleSheet.create({
     color: colors.support,
     flex: 1,
     fontSize: typography.caption,
-    fontWeight: "700",
-    lineHeight: 20
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
   },
   noticeCard: {
     backgroundColor: colors.surfaceMuted,
@@ -319,8 +333,8 @@ const styles = StyleSheet.create({
   noticeText: {
     color: colors.primaryDark,
     fontSize: typography.body,
-    fontWeight: "800",
-    lineHeight: 22
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.body
   },
   sectionCard: {
     ...shadows.card,
@@ -340,9 +354,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.text,
     flex: 1,
-    fontSize: 18,
-    fontWeight: "900",
-    lineHeight: 24
+    fontSize: typography.sectionTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.sectionTitle
   },
   editButton: {
     backgroundColor: colors.primarySoft,
@@ -359,7 +373,8 @@ const styles = StyleSheet.create({
   editButtonText: {
     color: colors.primary,
     fontSize: typography.caption,
-    fontWeight: "900"
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   fieldsList: {
     gap: spacing.md
@@ -370,14 +385,15 @@ const styles = StyleSheet.create({
   fieldLabel: {
     color: colors.textSubtle,
     fontSize: typography.caption,
-    fontWeight: "800",
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption,
     textTransform: "uppercase"
   },
   fieldValue: {
     color: colors.text,
     fontSize: typography.body,
-    fontWeight: "800",
-    lineHeight: 22
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.body
   },
   emptyValue: {
     color: colors.textSubtle
@@ -398,7 +414,8 @@ const styles = StyleSheet.create({
   valueChipText: {
     color: colors.primary,
     fontSize: typography.caption,
-    fontWeight: "800"
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption
   },
   actions: {
     gap: spacing.sm,
