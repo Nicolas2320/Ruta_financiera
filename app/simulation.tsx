@@ -1,29 +1,50 @@
-import { useMemo, type ReactNode } from "react";
-import { useRouter } from "expo-router";
+import { useMemo, type ComponentType, type ReactNode } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   AlertCircle,
+  Bot,
+  CalendarCheck,
+  ChartColumnIncreasing,
   ClipboardCheck,
+  Flag,
+  Home,
   LineChart,
   PiggyBank,
+  PieChart,
   ShieldCheck,
-  Target
+  Target,
+  TrendingUp,
+  WalletCards
 } from "lucide-react-native";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BottomNavigation } from "../components/BottomNavigation";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { usePlan } from "../context/PlanContext";
+import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
 import {
   calculateFinancialSnapshot,
   type FinancialSnapshot
 } from "../utils/financialCalculations";
-import { formatCOP, type FinancialRangeEstimate } from "../utils/financialRanges";
+import { formatCOP } from "../utils/financialRanges";
 import { formatGoalContribution, getGoalPlanFromOnboarding } from "../utils/goalPlanning";
 import type { ExactFinancialValues } from "../types/financial";
+import { getMonthlyPlanPeriodKey } from "../utils/monthlyPlan";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
+type Tone = "primary" | "support" | "warning" | "purple" | "neutral";
+type Route = Parameters<ReturnType<typeof useRouter>["push"]>[0];
+
+type IconProps = {
+  color?: string;
+  fill?: string;
+  size?: number;
+  strokeWidth?: number;
+};
 
 type FinancialDisplay = {
   label: string;
@@ -38,7 +59,7 @@ type SimulationBase = {
   expenseDisplay: FinancialDisplay;
   incomeValue: number | null;
   expenseValue: number | null;
-  smallExpenseEstimate: FinancialRangeEstimate;
+  smallExpenseValue: number | null;
   estimatedMargin: number | null;
   expensePercentage: number | null;
 };
@@ -46,38 +67,17 @@ type SimulationBase = {
 type Scenario = {
   key: string;
   name: string;
-  description: string;
   monthlyContribution: number | null;
   assumption: string;
-  marginWasUsed: boolean;
   tags: string[];
   comment: string;
+  tone: Tone;
   unavailableContributionLabel?: string;
   unavailableAdvanceLabel?: string;
   unavailableExplanation?: string;
   calculationNote?: string;
   recommended?: boolean;
 };
-
-type ImpactfulVariable = {
-  title: string;
-  text: string;
-};
-
-const noConcreteAmountValues = [
-  "No tengo una cifra todavía",
-  "Prefiero definirla después"
-];
-
-const validGoalAmountRanges = [
-  "No tengo una cifra todavía",
-  "Menos de $1.000.000",
-  "$1.000.000 – $5.000.000",
-  "$5.000.000 – $20.000.000",
-  "$20.000.000 – $50.000.000",
-  "Más de $50.000.000",
-  "Prefiero definirla después"
-];
 
 function hasLowEmergencyCoverage(emergencyCoverage: string | null) {
   return emergencyCoverage === "No podría cubrirlos" || emergencyCoverage === "Menos de 1 mes";
@@ -98,36 +98,48 @@ function wantsInvestmentEducation(investmentSituation: string | null) {
   );
 }
 
-function hasSmallExpensesPlan(onboarding: OnboardingSnapshot) {
-  return (
-    onboarding.hasSmallExpenses === "Sí" &&
-    (onboarding.smallExpensesIntention === "Reducir algunos" ||
-      onboarding.smallExpensesIntention === "Establecer un límite mensual")
-  );
+function toPercentWidth(value: number): `${number}%` {
+  return `${Math.max(0, Math.min(value, 100))}%`;
 }
 
-function goalAmountNeedsDefinition(goalAmountRange: string | null) {
-  return (
-    !goalAmountRange ||
-    !validGoalAmountRanges.includes(goalAmountRange) ||
-    noConcreteAmountValues.includes(goalAmountRange)
-  );
-}
-
-function hasGoalTargetAmount(exactValues: ExactFinancialValues) {
-  return exactValues.goalTargetAmount !== undefined;
-}
-
-function getGoalAmountRangeLabel(goalAmountRange: string | null) {
-  if (!goalAmountRange || !validGoalAmountRanges.includes(goalAmountRange)) {
-    return "No definida";
+function getToneColors(tone: Tone) {
+  if (tone === "support") {
+    return {
+      background: colors.supportSoft,
+      border: "#B9E9CD",
+      text: colors.support
+    };
   }
 
-  return goalAmountRange;
-}
+  if (tone === "warning") {
+    return {
+      background: colors.warningSoft,
+      border: "#FED7AA",
+      text: "#B45309"
+    };
+  }
 
-function toPercentWidth(value: number): `${number}%` {
-  return `${value}%`;
+  if (tone === "purple") {
+    return {
+      background: "#F1E8FF",
+      border: "#D8C7FF",
+      text: "#6D28D9"
+    };
+  }
+
+  if (tone === "neutral") {
+    return {
+      background: "#EEF2F7",
+      border: colors.border,
+      text: colors.textSubtle
+    };
+  }
+
+  return {
+    background: colors.primarySoft,
+    border: "#CFE0FF",
+    text: colors.primary
+  };
 }
 
 function toFinancialDisplaySource(source: "exact" | "estimated" | "missing"): FinancialDisplay["source"] {
@@ -158,7 +170,7 @@ function getSnapshotDisplay({
       label: estimatedLabel,
       value: "No disponible",
       source: "empty",
-      helper: "Aun no tenemos suficiente informacion para estimar este dato."
+      helper: "Falta información para calcularlo."
     };
   }
 
@@ -168,9 +180,7 @@ function getSnapshotDisplay({
     label: isExact ? exactLabel : estimatedLabel,
     value: isExact ? formatCOP(value) : `${formatCOP(value)} aprox.`,
     source: toFinancialDisplaySource(source),
-    helper: isExact
-      ? "Basado en tus datos ingresados."
-      : "Estimado a partir del rango seleccionado."
+    helper: isExact ? "Dato ingresado." : "Estimado por rango."
   };
 }
 
@@ -191,18 +201,6 @@ function getSimulationBase(
     source: snapshot.sourceMap.monthlyExpenses,
     value: snapshot.cashflow.monthlyExpenses
   });
-  const smallExpenseEstimate: FinancialRangeEstimate = {
-    min: null,
-    max: null,
-    midpoint: snapshot.values.smallExpenses,
-    label:
-      snapshot.values.smallExpenses !== null
-        ? `${formatCOP(snapshot.values.smallExpenses)} aprox.`
-        : "No disponible"
-  };
-  const incomeMidpoint = snapshot.cashflow.monthlyIncome;
-  const expenseMidpoint = snapshot.cashflow.monthlyExpenses;
-  const estimatedMargin = snapshot.cashflow.monthlyMargin;
   const expensePercentage =
     snapshot.cashflow.expensesToIncomeRatio !== null
       ? Math.round(snapshot.cashflow.expensesToIncomeRatio * 100)
@@ -212,32 +210,12 @@ function getSimulationBase(
     snapshot,
     incomeDisplay,
     expenseDisplay,
-    incomeValue: incomeMidpoint,
-    expenseValue: expenseMidpoint,
-    smallExpenseEstimate,
-    estimatedMargin,
+    incomeValue: snapshot.cashflow.monthlyIncome,
+    expenseValue: snapshot.cashflow.monthlyExpenses,
+    smallExpenseValue: snapshot.values.smallExpenses,
+    estimatedMargin: snapshot.cashflow.monthlyMargin,
     expensePercentage
   };
-}
-
-function getSmallExpenseLabel(onboarding: OnboardingSnapshot, estimate: FinancialRangeEstimate) {
-  if (onboarding.hasSmallExpenses === "No") {
-    return "No identificados";
-  }
-
-  return estimate.label;
-}
-
-function getMarginLabel(estimatedMargin: number | null, isMorePrecise = false) {
-  if (estimatedMargin === null) {
-    return "No disponible";
-  }
-
-  if (estimatedMargin <= 0) {
-    return "Margen ajustado";
-  }
-
-  return isMorePrecise ? formatCOP(estimatedMargin) : `${formatCOP(estimatedMargin)} aprox.`;
 }
 
 function contributionFromPositiveValue(value: number | null, share: number) {
@@ -258,71 +236,76 @@ function sumAvailableParts(parts: Array<number | null>) {
   return availableParts.reduce((total, part) => total + part, 0);
 }
 
-function getScenarios(metrics: SimulationBase): Scenario[] {
+function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scenario[] {
   const marginWasUsed = metrics.estimatedMargin !== null && metrics.estimatedMargin > 0;
   const suggestedContribution =
     metrics.snapshot.cashflow.suggestedMonthlyContribution > 0
       ? metrics.snapshot.cashflow.suggestedMonthlyContribution
       : null;
-  const currentPaceContribution = suggestedContribution;
   const balancedBase =
     suggestedContribution !== null
       ? suggestedContribution
       : contributionFromPositiveValue(metrics.estimatedMargin, 0.2);
-  const balancedSmallExpenseAdjustment = metrics.snapshot.smallExpenses.opportunityAmount;
   const intensiveBase =
     suggestedContribution !== null
       ? suggestedContribution * 1.25
       : contributionFromPositiveValue(metrics.estimatedMargin, 0.35);
-  const intensiveSmallExpenseAdjustment = contributionFromPositiveValue(
-    metrics.smallExpenseEstimate.midpoint,
-    0.3
-  );
-  const usesOnlySmallExpenses =
-    !marginWasUsed && metrics.smallExpenseEstimate.midpoint !== null;
-  const smallExpensesOnlyNote = usesOnlySmallExpenses
-    ? "Este cálculo usa una reducción aproximada de tus gastos pequeños frecuentes. No usamos margen mensual porque actualmente aparece ajustado."
-    : undefined;
+  const smallExpensesOnlyNote =
+    !marginWasUsed && metrics.smallExpenseValue !== null
+      ? "Usa solo gastos pequeños porque el margen mensual aparece ajustado."
+      : undefined;
 
   return [
+    ...(registeredContribution > 0
+      ? [
+          {
+            key: "registered",
+            name: "Aporte registrado",
+            monthlyContribution: registeredContribution,
+            assumption: "Monto que registraste en el plan mensual.",
+            tags: ["Real del mes", "No reemplaza"],
+            comment: "Sirve para comparar tu avance real con los ritmos sugeridos.",
+            tone: "purple" as Tone
+          }
+        ]
+      : []),
     {
       key: "current",
-      name: "Mantener ritmo actual",
-      description:
-        "Separar una parte pequeña de tu margen mensual puede ayudarte a avanzar de forma gradual.",
-      monthlyContribution: currentPaceContribution,
-      assumption: "Aporte mensual sugerido con las reglas v0.1.",
-      marginWasUsed,
-      tags: ["Esfuerzo bajo", "Avance gradual", "Riesgo bajo"],
-      comment: "Avance lento, pero más fácil de sostener.",
-      unavailableContributionLabel: "No disponible con tu margen actual.",
-      unavailableAdvanceLabel: "No calculado con los rangos actuales.",
-      unavailableExplanation:
-        "Tus gastos estimados podrían estar cerca o por encima de tus ingresos estimados, por eso este escenario no calcula un aporte mensual."
+      name: "Ritmo actual",
+      monthlyContribution: suggestedContribution,
+      assumption: "Aporte mensual sugerido por el plan.",
+      tags: ["Bajo esfuerzo", "Gradual"],
+      comment: "Avance lento, más fácil de sostener.",
+      tone: "primary",
+      unavailableContributionLabel: "No disponible",
+      unavailableAdvanceLabel: "No calculado",
+      unavailableExplanation: "Necesitamos margen positivo para estimar un aporte mensual."
     },
     {
       key: "balanced",
       name: "Ajuste equilibrado",
-      description:
-        "Combinar una parte de tu margen mensual con una reducción moderada de gastos pequeños puede liberar dinero para tu meta sin cambios extremos.",
-      monthlyContribution: sumAvailableParts([balancedBase, balancedSmallExpenseAdjustment]),
-      assumption: "Aporte sugerido + 20% de gastos pequeños frecuentes.",
-      marginWasUsed,
-      tags: ["Recomendado", "Ajustes pequeños", "Más sostenible"],
-      comment: "Pequeños cambios pueden acumularse con el tiempo.",
+      monthlyContribution: sumAvailableParts([
+        balancedBase,
+        metrics.snapshot.smallExpenses.opportunityAmount
+      ]),
+      assumption: "Aporte sugerido + parte de gastos pequeños.",
+      tags: ["Recomendado", "Sostenible"],
+      comment: "Pequeños cambios pueden liberar espacio sin extremos.",
+      tone: "support",
       calculationNote: smallExpensesOnlyNote,
       recommended: true
     },
     {
       key: "intensive",
       name: "Ajuste intensivo",
-      description:
-        "Un esfuerzo mayor puede acelerar tu avance, pero debe ser sostenible para tu vida diaria.",
-      monthlyContribution: sumAvailableParts([intensiveBase, intensiveSmallExpenseAdjustment]),
-      assumption: "Aporte sugerido ampliado + 30% de gastos pequeños frecuentes.",
-      marginWasUsed,
-      tags: ["Esfuerzo alto", "Más exigente", "Revisar sostenibilidad"],
-      comment: "Úsalo solo como referencia. Un plan exigente debe adaptarse a tu realidad.",
+      monthlyContribution: sumAvailableParts([
+        intensiveBase,
+        contributionFromPositiveValue(metrics.smallExpenseValue, 0.3)
+      ]),
+      assumption: "Aporte ampliado + ajuste mayor en gastos pequeños.",
+      tags: ["Más exigente", "Revisar"],
+      comment: "Úsalo como referencia, no como obligación.",
+      tone: "warning",
       calculationNote: smallExpensesOnlyNote
     }
   ];
@@ -332,116 +315,208 @@ function getAdvanceLabel(scenario: Scenario, months: number) {
   const { monthlyContribution } = scenario;
 
   if (monthlyContribution === null) {
-    return scenario.unavailableAdvanceLabel ?? "No disponible con los rangos actuales.";
+    return scenario.unavailableAdvanceLabel ?? "No disponible";
   }
 
   return `${formatCOP(monthlyContribution * months)} aprox.`;
 }
 
+function getAmountLabel(value: number | null, isMorePrecise = false) {
+  if (value === null) {
+    return "No disponible";
+  }
+
+  return isMorePrecise ? formatCOP(value) : `${formatCOP(value)} aprox.`;
+}
+
+function getMarginLabel(metrics: SimulationBase) {
+  if (metrics.estimatedMargin === null) {
+    return "No disponible";
+  }
+
+  if (metrics.estimatedMargin <= 0) {
+    return "Margen ajustado";
+  }
+
+  return getAmountLabel(
+    metrics.estimatedMargin,
+    metrics.incomeDisplay.source === "exact" && metrics.expenseDisplay.source === "exact"
+  );
+}
+
+function getExpensePercentageLabel(metrics: SimulationBase) {
+  if (metrics.expensePercentage === null) {
+    return "No disponible";
+  }
+
+  const isMorePrecise =
+    metrics.incomeDisplay.source === "exact" && metrics.expenseDisplay.source === "exact";
+
+  return isMorePrecise ? `${metrics.expensePercentage}%` : `${metrics.expensePercentage}% aprox.`;
+}
+
+function getSmallExpenseLabel(onboarding: OnboardingSnapshot, metrics: SimulationBase) {
+  if (onboarding.hasSmallExpenses === "No") {
+    return "No identificados";
+  }
+
+  if (metrics.smallExpenseValue === null) {
+    return "No disponible";
+  }
+
+  return `${formatCOP(metrics.smallExpenseValue)} aprox.`;
+}
+
 function getInvestmentEducationMessage(onboarding: OnboardingSnapshot) {
   if (hasLowEmergencyCoverage(onboarding.emergencyCoverage)) {
-    return "Antes de explorar inversión, podría ser mejor fortalecer tu fondo de emergencia. Tener una base para imprevistos puede ayudarte a evitar decisiones apresuradas.";
+    return "Primero conviene fortalecer una base para imprevistos.";
   }
 
   if (hasDebtPressure(onboarding.debtSituation, onboarding.debtPaymentShare)) {
-    return "Antes de explorar inversión, podría ser mejor revisar tus deudas y entender cuánto pesan en tu presupuesto mensual.";
+    return "Antes de invertir, puede ser útil revisar el peso mensual de tus deudas.";
   }
 
   if (wantsInvestmentEducation(onboarding.investmentSituation)) {
-    return "Puedes empezar aprendiendo conceptos como riesgo, plazo, liquidez y diversificación antes de tomar decisiones de inversión.";
+    return "Puedes empezar por riesgo, plazo, liquidez y diversificación.";
   }
 
-  return "Si tu base financiera está estable, el siguiente paso puede ser aprender sobre opciones de inversión de manera educativa, sin tomar decisiones apresuradas.";
+  return "Si tu base está estable, puedes explorar inversión con calma y educación.";
 }
 
-function getMostImpactfulVariable(
-  onboarding: OnboardingSnapshot,
-  metrics: SimulationBase,
-  exactValues: ExactFinancialValues
-): ImpactfulVariable {
-  return {
-    title: metrics.snapshot.priority.title,
-    text: metrics.snapshot.priority.description
-  };
-
-  if (
-    onboarding.debtSituation === "Son una preocupación importante" ||
-    onboarding.debtPaymentShare === "Más del 40%"
-  ) {
-    return {
-      title: "Revisar el peso de tus deudas",
-      text: "Entender cuánto de tus ingresos se va en deudas puede ayudarte a recuperar margen mensual."
-    };
+function getGoalMonthsLabel(months: number | null, fallback: string) {
+  if (months === null) {
+    return fallback;
   }
 
-  if (hasLowEmergencyCoverage(onboarding.emergencyCoverage)) {
-    return {
-      title: "Construir una base para imprevistos",
-      text: "Un fondo de emergencia puede darte más tranquilidad antes de asumir metas más grandes."
-    };
-  }
-
-  if ((metrics.expensePercentage ?? 0) >= 85) {
-    return {
-      title: "Revisar gastos variables",
-      text: "Tus gastos parecen ocupar una parte alta de tus ingresos. Revisar categorías variables puede darte más margen."
-    };
-  }
-
-  if (hasSmallExpensesPlan(onboarding)) {
-    return {
-      title: "Definir un límite para gastos pequeños",
-      text: "Pequeños ajustes frecuentes pueden liberar dinero sin eliminar todos tus gustos."
-    };
-  }
-
-  if (!hasGoalTargetAmount(exactValues) && goalAmountNeedsDefinition(onboarding.goalAmountRange)) {
-    return {
-      title: "Definir una cifra más concreta",
-      text: "Una cifra aproximada puede ayudarte a convertir tu meta en un plan más claro."
-    };
-  }
-
-  return {
-    title: "Mantener constancia mensual",
-    text: "Separar una cantidad de forma frecuente puede ser más útil que hacer grandes esfuerzos ocasionales."
-  };
+  return `${months} meses aprox.`;
 }
 
-function InfoCard({
+function IconBubble({ icon, tone = "primary" }: { icon: ReactNode; tone?: Tone }) {
+  return (
+    <View style={[styles.iconBubble, { backgroundColor: getToneColors(tone).background }]}>
+      {icon}
+    </View>
+  );
+}
+
+function Chip({ label, tone = "primary" }: { label: string; tone?: Tone }) {
+  const toneColors = getToneColors(tone);
+
+  return (
+    <View
+      style={[
+        styles.chip,
+        {
+          backgroundColor: toneColors.background,
+          borderColor: toneColors.border
+        }
+      ]}
+    >
+      <Text style={[styles.chipText, { color: toneColors.text }]}>{label}</Text>
+    </View>
+  );
+}
+
+function SectionCard({
   title,
-  children,
-  icon
+  icon,
+  children
 }: {
   title: string;
+  icon: ReactNode;
   children: ReactNode;
-  icon?: ReactNode;
 }) {
   return (
     <View style={styles.sectionCard}>
       <View style={styles.sectionHeader}>
-        {icon ? <View style={styles.sectionIcon}>{icon}</View> : null}
+        <IconBubble icon={icon} />
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
-      <View style={styles.sectionContent}>{children}</View>
+      {children}
     </View>
   );
 }
 
-function ValueRow({ label, value }: { label: string; value: string }) {
+function SummaryMetric({
+  label,
+  value,
+  helper,
+  icon,
+  tone = "primary"
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  icon: ReactNode;
+  tone?: Tone;
+}) {
+  const toneColors = getToneColors(tone);
+
   return (
-    <View style={styles.valueRow}>
-      <Text style={styles.valueLabel}>{label}</Text>
-      <Text style={styles.valueText}>{value}</Text>
+    <View
+      style={[
+        styles.summaryMetric,
+        {
+          backgroundColor: toneColors.background,
+          borderColor: toneColors.border
+        }
+      ]}
+    >
+      <IconBubble icon={icon} tone={tone} />
+      <View style={styles.summaryMetricText}>
+        <Text style={styles.metricLabel}>{label}</Text>
+        <Text style={[styles.metricValue, { color: toneColors.text }]}>{value}</Text>
+        <Text style={styles.metricHelper}>{helper}</Text>
+      </View>
     </View>
   );
 }
 
-function Tag({ label, recommended }: { label: string; recommended?: boolean }) {
+function ValuePill({
+  label,
+  value,
+  tone = "neutral"
+}: {
+  label: string;
+  value: string;
+  tone?: Tone;
+}) {
+  const toneColors = getToneColors(tone);
+
   return (
-    <View style={[styles.tag, recommended && styles.tagRecommended]}>
-      <Text style={[styles.tagText, recommended && styles.tagTextRecommended]}>{label}</Text>
+    <View style={[styles.valuePill, { borderColor: toneColors.border }]}>
+      <Text style={styles.valuePillLabel}>{label}</Text>
+      <Text style={[styles.valuePillText, { color: toneColors.text }]}>{value}</Text>
     </View>
+  );
+}
+
+function BottomNavItem({
+  title,
+  route,
+  icon: Icon,
+  active,
+  onNavigate
+}: {
+  title: string;
+  route: Route;
+  icon: ComponentType<IconProps>;
+  active?: boolean;
+  onNavigate: (route: Route) => void;
+}) {
+  const color = active ? colors.primary : colors.textSubtle;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={() => onNavigate(route)}
+      style={({ pressed }) => [styles.navItem, pressed && styles.pressed]}
+    >
+      {active ? <View style={styles.navActiveLine} /> : null}
+      <Icon color={color} size={23} strokeWidth={2.4} />
+      <Text style={[styles.navText, active && styles.navTextActive]}>{title}</Text>
+    </Pressable>
   );
 }
 
@@ -452,137 +527,141 @@ function ScenarioCard({
   scenario: Scenario;
   maxMonthlyContribution: number;
 }) {
+  const toneColors = getToneColors(scenario.tone);
   const relativeWidth =
     scenario.monthlyContribution !== null && maxMonthlyContribution > 0
-      ? Math.max(12, Math.round((scenario.monthlyContribution / maxMonthlyContribution) * 100))
+      ? Math.max(10, Math.round((scenario.monthlyContribution / maxMonthlyContribution) * 100))
       : 0;
 
   return (
-    <View style={[styles.scenarioCard, scenario.recommended && styles.scenarioCardRecommended]}>
-      <View style={styles.scenarioHeader}>
-        <Text style={styles.scenarioTitle}>{scenario.name}</Text>
-        {scenario.recommended ? <Tag label="Recomendado" recommended /> : null}
-      </View>
-
-      <Text style={styles.text}>{scenario.description}</Text>
-
-      <View style={styles.contributionBox}>
-        <Text style={styles.contributionLabel}>Aporte mensual estimado</Text>
-        <Text style={styles.contributionValue}>
-          {scenario.monthlyContribution !== null
-            ? `${formatCOP(scenario.monthlyContribution)} aprox.`
-            : scenario.unavailableContributionLabel ?? "No disponible"}
-        </Text>
-        {scenario.monthlyContribution === null && scenario.unavailableExplanation ? (
-          <Text style={styles.contributionDetail}>{scenario.unavailableExplanation}</Text>
-        ) : null}
-      </View>
-
-      <View style={styles.assumptionBox}>
-        <Text style={styles.assumptionLabel}>Supuesto usado</Text>
-        <Text style={styles.assumptionText}>{scenario.assumption}</Text>
-        {!scenario.marginWasUsed ? (
-          <Text style={styles.assumptionMuted}>
-            Margen mensual no usado por estar ajustado o no disponible.
-          </Text>
-        ) : null}
-      </View>
-
-      {scenario.calculationNote ? (
-        <View style={styles.warningBox}>
-          <Text style={styles.warningText}>{scenario.calculationNote}</Text>
+    <View
+      style={[
+        styles.scenarioCard,
+        scenario.recommended && styles.scenarioCardRecommended
+      ]}
+    >
+      <View style={styles.scenarioTopRow}>
+        <View style={styles.scenarioTitleGroup}>
+          <Text style={styles.scenarioTitle}>{scenario.name}</Text>
+          <Text style={styles.scenarioAssumption}>{scenario.assumption}</Text>
         </View>
-      ) : null}
+        {scenario.recommended ? <Chip label="Recomendado" tone="support" /> : null}
+      </View>
+
+      <View style={styles.scenarioMainRow}>
+        <View style={styles.scenarioAmountBlock}>
+          <Text style={styles.amountLabel}>Aporte mensual</Text>
+          <Text style={[styles.amountValue, { color: toneColors.text }]}>
+            {scenario.monthlyContribution !== null
+              ? `${formatCOP(scenario.monthlyContribution)} aprox.`
+              : scenario.unavailableContributionLabel ?? "No disponible"}
+          </Text>
+        </View>
+        <View style={styles.scenarioChips}>
+          {scenario.tags.map((tag) => (
+            <Chip
+              key={tag}
+              label={tag}
+              tone={tag === "Recomendado" || scenario.recommended ? "support" : scenario.tone}
+            />
+          ))}
+        </View>
+      </View>
 
       <View style={styles.progressTrack}>
         <View
           style={[
             styles.progressFill,
-            scenario.recommended && styles.progressFillRecommended,
-            { width: toPercentWidth(relativeWidth) }
+            { backgroundColor: toneColors.text, width: toPercentWidth(relativeWidth) }
           ]}
         />
       </View>
 
-      <View style={styles.advanceRows}>
-        <ValueRow label="3 meses" value={getAdvanceLabel(scenario, 3)} />
-        <ValueRow label="6 meses" value={getAdvanceLabel(scenario, 6)} />
-        <ValueRow label="12 meses" value={getAdvanceLabel(scenario, 12)} />
+      <View style={styles.advanceGrid}>
+        <ValuePill label="3 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 3)} />
+        <ValuePill label="6 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 6)} />
+        <ValuePill label="12 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 12)} />
       </View>
 
-      <View style={styles.tagsList}>
-        {scenario.tags
-          .filter((tag) => !(scenario.recommended && tag === "Recomendado"))
-          .map((tag) => (
-            <Tag key={tag} label={tag} />
-          ))}
-      </View>
-
-      <Text style={styles.helperText}>{scenario.comment}</Text>
+      {scenario.unavailableExplanation ? (
+        <Text style={styles.helperText}>{scenario.unavailableExplanation}</Text>
+      ) : null}
+      {scenario.calculationNote ? (
+        <Text style={styles.helperText}>{scenario.calculationNote}</Text>
+      ) : null}
+      <Text style={styles.scenarioComment}>{scenario.comment}</Text>
     </View>
   );
 }
 
 export default function SimulationScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ source?: string }>();
+  const source = Array.isArray(params.source) ? params.source[0] : params.source;
+  const isFlowMode = source === "flow";
+  const navigate = (route: Route) => router.push(route);
   const { exactValues, onboarding } = useOnboarding();
+  const { completedActions } = usePlan();
   const metrics = useMemo(
     () => getSimulationBase(onboarding, exactValues),
     [exactValues, onboarding]
   );
+  const impactSummary = useMemo(
+    () =>
+      getMonthlyActionImpactSummary(completedActions, {
+        periodKey: getMonthlyPlanPeriodKey()
+      }),
+    [completedActions]
+  );
   const snapshot = metrics.snapshot;
   const goalPlan = useMemo(
-    () => getGoalPlanFromOnboarding(onboarding, snapshot.cashflow.suggestedMonthlyContribution, exactValues),
+    () =>
+      getGoalPlanFromOnboarding(
+        onboarding,
+        snapshot.cashflow.suggestedMonthlyContribution,
+        exactValues
+      ),
     [exactValues, onboarding, snapshot.cashflow.suggestedMonthlyContribution]
   );
   const primaryGoalAllocation =
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
     null;
-  const scenarios = useMemo(() => getScenarios(metrics), [metrics]);
-  const impactfulVariable = useMemo(
-    () => getMostImpactfulVariable(onboarding, metrics, exactValues),
-    [exactValues, onboarding, metrics]
+  const scenarios = useMemo(
+    () => getScenarios(metrics, impactSummary.realContributionTotal),
+    [impactSummary.realContributionTotal, metrics]
   );
   const maxMonthlyContribution = Math.max(
     ...scenarios.map((scenario) => scenario.monthlyContribution ?? 0),
     0
   );
-  const canCalculateMargin = metrics.estimatedMargin !== null;
-  const simulatedGoalTargetAmount = primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount;
-  const simulatedGoalRemainingAmount = primaryGoalAllocation?.remainingAmount ?? snapshot.goal.remainingAmount;
+  const simulatedGoalTargetAmount =
+    primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount;
+  const simulatedGoalRemainingAmount =
+    primaryGoalAllocation?.remainingAmount ?? snapshot.goal.remainingAmount;
   const simulatedGoalEstimatedMonths =
     primaryGoalAllocation?.estimatedMonthsToGoal ?? snapshot.goal.estimatedMonthsToGoal;
-  const hasExplicitGoalTarget =
-    primaryGoalAllocation?.goal.targetAmount !== null &&
-    primaryGoalAllocation?.goal.targetAmount !== undefined;
-  const simulatedGoalTargetIsExact =
-    hasExplicitGoalTarget || snapshot.sourceMap.goalTargetAmount === "exact";
-  const needsGoalAmountDefinition = simulatedGoalTargetAmount === null;
   const simulatedGoalTitle =
     primaryGoalAllocation?.goal.title ?? onboarding.financialGoal ?? snapshot.goal.name ?? "No definida";
   const simulatedGoalHorizon =
     primaryGoalAllocation?.goal.horizon ?? onboarding.goalHorizon ?? "No definido";
-  const goalAmountLabel =
-    simulatedGoalTargetIsExact
-      ? "Monto objetivo ingresado"
-      : "Monto objetivo estimado";
-  const goalAmountRangeLabel =
-    simulatedGoalTargetAmount !== null
-      ? `${formatCOP(simulatedGoalTargetAmount)}${simulatedGoalTargetIsExact ? "" : " aprox."}`
-      : getGoalAmountRangeLabel(primaryGoalAllocation?.goal.amountRange ?? onboarding.goalAmountRange);
-  const suggestedContributionLabel =
-    snapshot.cashflow.suggestedMonthlyContribution > 0
-      ? `${formatCOP(snapshot.cashflow.suggestedMonthlyContribution)} aprox.`
-      : "Por definir con margen mensual";
   const simulatedGoalContributionLabel = primaryGoalAllocation
     ? formatGoalContribution(primaryGoalAllocation.monthlyContribution)
-    : suggestedContributionLabel;
-  const estimatedMonthsToGoalLabel =
-    simulatedGoalEstimatedMonths !== null
-      ? `Podria tomar cerca de ${simulatedGoalEstimatedMonths} meses con el aporte asignado a esta meta.`
-      : primaryGoalAllocation?.viabilityLabel ?? snapshot.goal.label;
-  const isInvestmentGoal = simulatedGoalTitle === "Empezar a invertir";
+    : snapshot.cashflow.suggestedMonthlyContribution > 0
+      ? `${formatCOP(snapshot.cashflow.suggestedMonthlyContribution)} aprox.`
+      : "Por definir";
+  const goalMonthsLabel = getGoalMonthsLabel(
+    simulatedGoalEstimatedMonths,
+    primaryGoalAllocation?.viabilityLabel ?? snapshot.goal.label
+  );
+  const goalTone: Tone =
+    simulatedGoalTargetAmount !== null && simulatedGoalEstimatedMonths !== null
+      ? "support"
+      : "warning";
+  const expensesTone: Tone =
+    metrics.expensePercentage !== null && metrics.expensePercentage >= 85 ? "warning" : "primary";
+  const marginTone: Tone =
+    metrics.estimatedMargin !== null && metrics.estimatedMargin > 0 ? "support" : "warning";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -593,118 +672,87 @@ export default function SimulationScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <View style={styles.card}>
-            <View style={styles.iconWrap}>
-              <LineChart color={colors.primary} size={28} strokeWidth={2.4} />
+          <View style={styles.heroCard}>
+            <View style={styles.heroIcon}>
+              <LineChart color={colors.primary} size={31} strokeWidth={2.4} />
             </View>
-
-            <Text style={styles.title}>Simulación de escenarios</Text>
-
-            <Text style={styles.subtitle}>
-              Compara caminos posibles según tus respuestas. Estas proyecciones son educativas y
-              aproximadas.
-            </Text>
-
-            <View style={styles.trustMessage}>
-              <ShieldCheck color={colors.support} size={18} strokeWidth={2.4} />
-              <Text style={styles.supportText}>
-                Estas simulaciones usan rangos aproximados. Sirven para entender escenarios, no
-                para predecir resultados exactos.
+            <View style={styles.heroTextGroup}>
+              <Text style={styles.title}>Simulación</Text>
+              <Text style={styles.subtitle}>
+                Compara tres ritmos posibles para avanzar este mes.
               </Text>
+            </View>
+            <View style={styles.heroChips}>
+              <Chip label={snapshot.precision.label} tone={snapshot.precision.status === "clearer" ? "support" : "primary"} />
+              <Chip label="Educativo" tone="support" />
             </View>
           </View>
 
-          <InfoCard
-            icon={<Target color={colors.primary} size={18} strokeWidth={2.4} />}
+          <View style={styles.summaryGrid}>
+            <SummaryMetric
+              helper={simulatedGoalHorizon}
+              icon={<Target color={getToneColors(goalTone).text} size={22} strokeWidth={2.4} />}
+              label="Meta"
+              tone={goalTone}
+              value={simulatedGoalTitle}
+            />
+            <SummaryMetric
+              helper="Aporte asignado"
+              icon={<PiggyBank color={colors.support} size={22} strokeWidth={2.4} />}
+              label="Mes a mes"
+              tone="support"
+              value={simulatedGoalContributionLabel}
+            />
+            <SummaryMetric
+              helper="Después de gastos"
+              icon={<TrendingUp color={getToneColors(marginTone).text} size={22} strokeWidth={2.4} />}
+              label="Margen"
+              tone={marginTone}
+              value={getMarginLabel(metrics)}
+            />
+            <SummaryMetric
+              helper="Gastos frente a ingresos"
+              icon={<ChartColumnIncreasing color={getToneColors(expensesTone).text} size={22} strokeWidth={2.4} />}
+              label="Relación"
+              tone={expensesTone}
+              value={getExpensePercentageLabel(metrics)}
+            />
+          </View>
+
+          <SectionCard
+            icon={<Target color={colors.primary} size={22} strokeWidth={2.4} />}
             title="Meta simulada"
           >
-            <View style={styles.valueRows}>
-              <ValueRow label="Meta principal" value={simulatedGoalTitle} />
-              <ValueRow label="Horizonte" value={simulatedGoalHorizon} />
-              <ValueRow
-                label={goalAmountLabel}
-                value={goalAmountRangeLabel}
+            <View style={styles.valueGrid}>
+              <ValuePill
+                label="Objetivo"
+                tone={goalTone}
+                value={
+                  simulatedGoalTargetAmount !== null
+                    ? `${formatCOP(simulatedGoalTargetAmount)} aprox.`
+                    : "Por definir"
+                }
               />
-              <ValueRow
-                label="Monto restante estimado"
+              <ValuePill
+                label="Restante"
+                tone="primary"
                 value={
                   simulatedGoalRemainingAmount !== null
                     ? `${formatCOP(simulatedGoalRemainingAmount)} aprox.`
                     : "Por calcular"
                 }
               />
-              <ValueRow label="Aporte asignado a meta" value={simulatedGoalContributionLabel} />
-              <ValueRow label="Tiempo estimado" value={estimatedMonthsToGoalLabel} />
+              <ValuePill label="Tiempo" tone={goalTone} value={goalMonthsLabel} />
             </View>
+          </SectionCard>
 
-            {needsGoalAmountDefinition ? (
-              <View style={styles.warningBox}>
-                <Text style={styles.warningText}>
-                  No definiste una cifra exacta. Por ahora simularemos avances mensuales
-                  aproximados, no una fecha exacta de llegada.
-                </Text>
-              </View>
-            ) : null}
-
-            {isInvestmentGoal ? (
-              <View style={styles.noticeBox}>
-                <Text style={styles.noticeText}>
-                  Como tu meta es empezar a invertir, estos escenarios muestran cuánto podrías
-                  liberar o separar antes de tomar decisiones de inversión. No estamos simulando
-                  rentabilidad ni productos financieros.
-                </Text>
-              </View>
-            ) : null}
-          </InfoCard>
-
-          <InfoCard
-            icon={<PiggyBank color={colors.primary} size={18} strokeWidth={2.4} />}
-            title="Punto de partida"
+          <SectionCard
+            icon={<ClipboardCheck color={colors.primary} size={22} strokeWidth={2.4} />}
+            title="Escenarios"
           >
-            <View style={styles.valueRows}>
-              <ValueRow label={metrics.incomeDisplay.label} value={metrics.incomeDisplay.value} />
-              <ValueRow label={metrics.expenseDisplay.label} value={metrics.expenseDisplay.value} />
-              <ValueRow
-                label="Margen mensual"
-                value={getMarginLabel(
-                  metrics.estimatedMargin,
-                  metrics.incomeDisplay.source === "exact" &&
-                    metrics.expenseDisplay.source === "exact"
-                )}
-              />
-              <ValueRow
-                label="Gastos pequeños estimados"
-                value={getSmallExpenseLabel(onboarding, metrics.smallExpenseEstimate)}
-              />
-              <ValueRow label="Aporte mensual sugerido" value={suggestedContributionLabel} />
-              <ValueRow label="Precisión del plan" value={snapshot.precision.label} />
-            </View>
-
-            {canCalculateMargin ? (
-              <Text style={styles.helperText}>
-                {snapshot.precision.message}
-              </Text>
-            ) : (
-              <Text style={styles.text}>
-                No tenemos suficiente información para calcular un margen mensual estimado. Aun
-                así, puedes revisar escenarios cualitativos.
-              </Text>
-            )}
-          </InfoCard>
-
-          <View style={styles.scenariosSection}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionIcon}>
-                <ClipboardCheck color={colors.primary} size={18} strokeWidth={2.4} />
-              </View>
-              <Text style={styles.sectionTitle}>Escenarios educativos</Text>
-            </View>
-
             <Text style={styles.helperText}>
-              Los avances a 3, 6 y 12 meses solo multiplican el aporte mensual estimado. No
-              prometen resultados ni fechas exactas.
+              Los avances son una referencia: aporte mensual estimado multiplicado por 3, 6 y 12 meses.
             </Text>
-
             <View style={styles.scenariosList}>
               {scenarios.map((scenario) => (
                 <ScenarioCard
@@ -714,40 +762,73 @@ export default function SimulationScreen() {
                 />
               ))}
             </View>
+          </SectionCard>
+
+          <View style={styles.insightsGrid}>
+            <View style={styles.insightCard}>
+              <IconBubble
+                icon={<AlertCircle color={colors.primary} size={22} strokeWidth={2.4} />}
+              />
+              <Text style={styles.insightTitle}>{snapshot.priority.title}</Text>
+              <Text style={styles.text}>{snapshot.priority.description}</Text>
+            </View>
+            <View style={styles.insightCard}>
+              <IconBubble
+                icon={<ShieldCheck color={colors.support} size={22} strokeWidth={2.4} />}
+                tone="support"
+              />
+              <Text style={styles.insightTitle}>Antes de invertir</Text>
+              <Text style={styles.text}>{getInvestmentEducationMessage(onboarding)}</Text>
+            </View>
           </View>
 
-          <InfoCard
-            icon={<ShieldCheck color={colors.primary} size={18} strokeWidth={2.4} />}
-            title="Antes de pensar en invertir"
+          <SectionCard
+            icon={<WalletCards color={colors.primary} size={22} strokeWidth={2.4} />}
+            title="Datos usados"
           >
-            <Text style={styles.text}>{getInvestmentEducationMessage(onboarding)}</Text>
-          </InfoCard>
-
-          <InfoCard
-            icon={<AlertCircle color={colors.primary} size={18} strokeWidth={2.4} />}
-            title="Variable con más impacto"
-          >
-            <Text style={styles.highlightTitle}>{impactfulVariable.title}</Text>
-            <Text style={styles.text}>{impactfulVariable.text}</Text>
-          </InfoCard>
+            <View style={styles.valueGrid}>
+              <ValuePill label={metrics.incomeDisplay.label} value={metrics.incomeDisplay.value} />
+              <ValuePill label={metrics.expenseDisplay.label} value={metrics.expenseDisplay.value} />
+              <ValuePill
+                label="Gastos pequeños"
+                tone="warning"
+                value={getSmallExpenseLabel(onboarding, metrics)}
+              />
+            </View>
+            <Text style={styles.helperText}>{snapshot.precision.message}</Text>
+          </SectionCard>
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel="Crear plan mensual"
-              icon={null}
+              accessibilityLabel="Ir al plan mensual"
+              icon={CalendarCheck}
+              iconPosition="right"
               onPress={() => router.push("/action-plan")}
-              title="Crear plan mensual"
+              title="Plan mensual"
             />
             <PrimaryButton
               accessibilityLabel="Volver al diagnóstico financiero"
               icon={null}
               onPress={() => router.push("/diagnosis")}
               title="Volver al diagnóstico"
+              style={!isFlowMode && styles.hidden}
               variant="secondary"
             />
           </View>
         </View>
       </ScrollView>
+      {!isFlowMode ? (
+        <>
+        <BottomNavigation activeRoute="/simulation" />
+        <View style={styles.hidden}>
+          <BottomNavItem icon={Home} onNavigate={navigate} route="/dashboard" title="Inicio" />
+          <BottomNavItem icon={PieChart} onNavigate={navigate} route="/spending" title="Gastos" />
+          <BottomNavItem icon={Flag} onNavigate={navigate} route="/goals-overview" title="Metas" />
+          <BottomNavItem active icon={LineChart} onNavigate={navigate} route="/simulation" title="Simulación" />
+          <BottomNavItem icon={Bot} onNavigate={navigate} route="/assistant" title="Asistente" />
+        </View>
+        </>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -759,32 +840,47 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: spacing.lg,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md
+    paddingTop: spacing.md
   },
   container: {
     alignSelf: "center",
     flex: 1,
     gap: spacing.md,
-    maxWidth: 520,
+    maxWidth: 760,
     width: "100%"
   },
-  card: {
+  heroCard: {
     ...shadows.card,
+    alignItems: "center",
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radius.lg,
     borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.md,
     padding: spacing.lg
   },
-  iconWrap: {
+  heroIcon: {
     alignItems: "center",
     backgroundColor: colors.primarySoft,
     borderRadius: radius.pill,
-    height: 54,
+    height: 64,
     justifyContent: "center",
-    width: 54
+    width: 64
+  },
+  heroTextGroup: {
+    flexBasis: 260,
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  heroChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
   },
   title: {
     color: colors.text,
@@ -797,17 +893,39 @@ const styles = StyleSheet.create({
     fontSize: typography.subtitle,
     lineHeight: typography.lineHeight.subtitle
   },
-  trustMessage: {
-    alignItems: "flex-start",
-    backgroundColor: colors.supportSoft,
-    borderRadius: radius.md,
+  summaryGrid: {
     flexDirection: "row",
-    gap: spacing.sm,
+    flexWrap: "wrap",
+    gap: spacing.md
+  },
+  summaryMetric: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexBasis: 260,
+    flexDirection: "row",
+    flexGrow: 1,
+    gap: spacing.md,
+    minHeight: 118,
     padding: spacing.md
   },
-  supportText: {
-    color: colors.support,
+  summaryMetricText: {
     flex: 1,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  metricLabel: {
+    color: colors.text,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  metricValue: {
+    fontSize: typography.sectionTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.sectionTitle
+  },
+  metricHelper: {
+    color: colors.textMuted,
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
@@ -826,14 +944,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm
   },
-  sectionIcon: {
-    alignItems: "center",
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    height: 34,
-    justifyContent: "center",
-    width: 34
-  },
   sectionTitle: {
     color: colors.text,
     flex: 1,
@@ -841,14 +951,164 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.sectionTitle
   },
-  sectionContent: {
+  iconBubble: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    height: 42,
+    justifyContent: "center",
+    width: 42
+  },
+  chip: {
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  chipText: {
+    fontSize: typography.badge,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.badge
+  },
+  valueGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  valuePill: {
+    backgroundColor: "#F8FBFF",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexBasis: 180,
+    flexGrow: 1,
+    gap: spacing.xs,
+    minHeight: 76,
+    padding: spacing.md
+  },
+  valuePillLabel: {
+    color: colors.textSubtle,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  valuePillText: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  scenariosList: {
     gap: spacing.md
   },
-  highlightTitle: {
-    color: colors.primaryDark,
-    fontSize: typography.sectionTitle,
+  scenarioCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  scenarioCardRecommended: {
+    backgroundColor: "#FBFFFC",
+    borderColor: "#B9E9CD",
+    borderWidth: 2
+  },
+  scenarioTopRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    justifyContent: "space-between"
+  },
+  scenarioTitleGroup: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 210
+  },
+  scenarioTitle: {
+    color: colors.text,
+    fontSize: typography.question,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.sectionTitle
+    lineHeight: typography.lineHeight.question
+  },
+  scenarioAssumption: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  scenarioMainRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md
+  },
+  scenarioAmountBlock: {
+    flexBasis: 220,
+    flexGrow: 1,
+    gap: spacing.xs
+  },
+  amountLabel: {
+    color: colors.textSubtle,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  amountValue: {
+    color: colors.primary,
+    fontSize: typography.cardTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.cardTitle
+  },
+  scenarioChips: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    flexBasis: 180,
+    flexGrow: 1,
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  progressTrack: {
+    backgroundColor: "#E4EAF2",
+    borderRadius: radius.pill,
+    height: 12,
+    overflow: "hidden"
+  },
+  progressFill: {
+    borderRadius: radius.pill,
+    height: "100%"
+  },
+  advanceGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  scenarioComment: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  insightsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md
+  },
+  insightCard: {
+    ...shadows.card,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexBasis: 300,
+    flexGrow: 1,
+    gap: spacing.sm,
+    padding: spacing.lg
+  },
+  insightTitle: {
+    color: colors.text,
+    fontSize: typography.question,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.question
   },
   text: {
     color: colors.textMuted,
@@ -861,195 +1121,54 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
   },
-  warningBox: {
-    backgroundColor: colors.warningSoft,
-    borderColor: "#FED7AA",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: spacing.md
-  },
-  warningText: {
-    color: "#9A3412",
-    fontSize: typography.caption,
-    fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.caption
-  },
-  valueRows: {
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    overflow: "hidden"
-  },
-  valueRow: {
-    alignItems: "flex-start",
-    borderBottomColor: colors.border,
-    borderBottomWidth: 1,
-    gap: spacing.xs,
-    padding: spacing.md
-  },
-  valueLabel: {
-    color: colors.textSubtle,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption,
-    textTransform: "uppercase"
-  },
-  valueText: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
-  },
-  scenariosList: {
-    gap: spacing.md
-  },
-  scenariosSection: {
-    gap: spacing.md,
-    paddingVertical: spacing.xs
-  },
-  scenarioCard: {
-    ...shadows.card,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    gap: spacing.md,
-    padding: spacing.lg
-  },
-  scenarioCardRecommended: {
-    borderColor: colors.primary,
-    borderWidth: 2
-  },
-  scenarioHeader: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    justifyContent: "space-between"
-  },
-  scenarioTitle: {
-    color: colors.text,
-    flex: 1,
-    fontSize: typography.question,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.question,
-    minWidth: 170
-  },
-  contributionBox: {
-    backgroundColor: colors.surfaceMuted,
-    borderColor: "#D7E7FF",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: spacing.xs,
-    padding: spacing.md
-  },
-  contributionLabel: {
-    color: colors.textSubtle,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption,
-    textTransform: "uppercase"
-  },
-  contributionValue: {
-    color: colors.text,
-    fontSize: typography.sectionTitle,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.sectionTitle
-  },
-  contributionDetail: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.caption
-  },
-  assumptionBox: {
-    backgroundColor: colors.supportSoft,
-    borderColor: "#B9E9CD",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: spacing.xs,
-    padding: spacing.md
-  },
-  assumptionLabel: {
-    color: colors.support,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption,
-    textTransform: "uppercase"
-  },
-  assumptionText: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.body
-  },
-  assumptionMuted: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.caption
-  },
-  noticeBox: {
-    backgroundColor: colors.surfaceMuted,
-    borderColor: "#D7E7FF",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: spacing.md
-  },
-  noticeText: {
-    color: colors.primaryDark,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.caption
-  },
-  progressTrack: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.pill,
-    height: 14,
-    overflow: "hidden"
-  },
-  progressFill: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    height: "100%"
-  },
-  progressFillRecommended: {
-    backgroundColor: colors.support
-  },
-  advanceRows: {
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    overflow: "hidden"
-  },
-  tagsList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  tag: {
-    backgroundColor: colors.primarySoft,
-    borderColor: "#D7E7FF",
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs
-  },
-  tagRecommended: {
-    backgroundColor: colors.supportSoft,
-    borderColor: "#B9E9CD"
-  },
-  tagText: {
-    color: colors.primary,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  tagTextRecommended: {
-    color: colors.support
-  },
   actions: {
     gap: spacing.sm,
     paddingBottom: spacing.md
+  },
+  hidden: {
+    display: "none"
+  },
+  bottomNav: {
+    alignSelf: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderTopWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    maxWidth: 760,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+    width: "100%"
+  },
+  navItem: {
+    alignItems: "center",
+    flex: 1,
+    gap: spacing.xs,
+    minHeight: 68,
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.xs,
+    position: "relative"
+  },
+  navActiveLine: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    height: 4,
+    position: "absolute",
+    top: -spacing.xs,
+    width: "100%"
+  },
+  navText: {
+    color: colors.textSubtle,
+    fontSize: typography.small,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.small,
+    textAlign: "center"
+  },
+  navTextActive: {
+    color: colors.primary
+  },
+  pressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.99 }]
   }
 });

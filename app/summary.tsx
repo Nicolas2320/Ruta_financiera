@@ -1,6 +1,18 @@
+import type { ComponentType } from "react";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { ClipboardList, ShieldCheck } from "lucide-react-native";
+import {
+  ChevronRight,
+  ClipboardList,
+  Coffee,
+  PencilLine,
+  PiggyBank,
+  ReceiptText,
+  ShieldCheck,
+  Target,
+  UserRound,
+  Wallet
+} from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -21,23 +33,57 @@ type SummaryField = {
   optional?: boolean;
 };
 
+type IconProps = {
+  color?: string;
+  size?: number;
+  strokeWidth?: number;
+};
+
+type Tone = "primary" | "support" | "neutral";
+
 type SummarySectionProps = {
   title: string;
+  description: string;
   fields: SummaryField[];
+  icon: ComponentType<IconProps>;
+  tone?: Tone;
   onEdit: () => void;
   editAccessibilityLabel: string;
 };
 
+const emptyValueLabel = "No respondido";
+
 function formatValue(value: string | string[] | null, optional = false) {
   if (Array.isArray(value)) {
-    return value.length > 0 ? value : optional ? null : "No respondido";
+    return value.length > 0 ? value : optional ? null : emptyValueLabel;
   }
 
   if (value && value.trim().length > 0) {
     return value;
   }
 
-  return optional ? null : "No respondido";
+  return optional ? null : emptyValueLabel;
+}
+
+function getToneColors(tone: Tone) {
+  if (tone === "support") {
+    return {
+      background: colors.supportSoft,
+      foreground: colors.support
+    };
+  }
+
+  if (tone === "neutral") {
+    return {
+      background: colors.surfaceMuted,
+      foreground: colors.textSubtle
+    };
+  }
+
+  return {
+    background: colors.primarySoft,
+    foreground: colors.primary
+  };
 }
 
 function getGoalDetailLabel(goal: string | null) {
@@ -57,39 +103,62 @@ function getGoalDetailLabel(goal: string | null) {
 }
 
 function SummarySection({
+  description,
   title,
   fields,
+  icon: Icon,
+  tone = "primary",
   onEdit,
   editAccessibilityLabel
 }: SummarySectionProps) {
+  const toneColors = getToneColors(tone);
+  const visibleFields = fields
+    .map((field) => ({
+      ...field,
+      formattedValue: formatValue(field.value, field.optional)
+    }))
+    .filter((field) => field.formattedValue !== null);
+  const completedFields = visibleFields.filter((field) => field.formattedValue !== emptyValueLabel).length;
+
   return (
     <View style={styles.sectionCard}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{title}</Text>
+        <View style={[styles.sectionIcon, { backgroundColor: toneColors.background }]}>
+          <Icon color={toneColors.foreground} size={22} strokeWidth={2.4} />
+        </View>
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          <Text style={styles.sectionDescription}>{description}</Text>
+        </View>
         <Pressable
           accessibilityLabel={editAccessibilityLabel}
           accessibilityRole="button"
           onPress={onEdit}
-          style={({ pressed }) => [styles.editButton, pressed && styles.editButtonPressed]}
+          style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}
         >
+          <PencilLine color={colors.primary} size={15} strokeWidth={2.5} />
           <Text style={styles.editButtonText}>Editar</Text>
         </Pressable>
       </View>
 
+      <View style={styles.sectionStatus}>
+        <ShieldCheck color={colors.support} size={16} strokeWidth={2.4} />
+        <Text style={styles.sectionStatusText}>
+          {completedFields} de {visibleFields.length} datos revisados
+        </Text>
+      </View>
+
       <View style={styles.fieldsList}>
-        {fields.map((field) => {
-          const formattedValue = formatValue(field.value, field.optional);
-
-          if (formattedValue === null) {
-            return null;
-          }
-
+        {visibleFields.map((field, index) => {
           return (
-            <View key={field.label} style={styles.fieldRow}>
+            <View
+              key={field.label}
+              style={[styles.fieldRow, index === 0 && styles.fieldRowFirst]}
+            >
               <Text style={styles.fieldLabel}>{field.label}</Text>
-              {Array.isArray(formattedValue) ? (
+              {Array.isArray(field.formattedValue) ? (
                 <View style={styles.chipsList}>
-                  {formattedValue.map((item) => (
+                  {field.formattedValue.map((item) => (
                     <View key={item} style={styles.valueChip}>
                       <Text style={styles.valueChipText}>{item}</Text>
                     </View>
@@ -99,10 +168,10 @@ function SummarySection({
                 <Text
                   style={[
                     styles.fieldValue,
-                    formattedValue === "No respondido" && styles.emptyValue
+                    field.formattedValue === emptyValueLabel && styles.emptyValue
                   ]}
                 >
-                  {formattedValue}
+                  {field.formattedValue}
                 </Text>
               )}
             </View>
@@ -132,26 +201,31 @@ export default function SummaryScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <View style={styles.card}>
-            <View style={styles.iconWrap}>
-              <ClipboardList color={colors.primary} size={28} strokeWidth={2.4} />
+          <View style={styles.heroCard}>
+            <View style={styles.heroHeader}>
+              <View style={styles.heroIcon}>
+                <ClipboardList color={colors.primary} size={28} strokeWidth={2.4} />
+              </View>
+
+              <View style={styles.heroCopy}>
+                <Text style={styles.kicker}>Revisión final</Text>
+                <Text style={styles.title}>Resumen antes del diagnóstico</Text>
+                <Text style={styles.subtitle}>
+                  Confirma la información que usaremos para crear tu primera orientación financiera.
+                </Text>
+              </View>
             </View>
-
-            <Text style={styles.title}>Resumen antes del diagnóstico</Text>
-
-            <Text style={styles.subtitle}>
-              Revisa la información que usaremos para crear tu primera orientación financiera.
-            </Text>
 
             <View style={styles.trustMessage}>
               <ShieldCheck color={colors.support} size={18} strokeWidth={2.4} />
               <Text style={styles.supportText}>
-                Puedes volver y ajustar cualquier respuesta antes de continuar.
+                Puedes ajustar cualquier respuesta antes de continuar. No necesitas que todo sea exacto.
               </Text>
             </View>
           </View>
 
           <View style={styles.noticeCard}>
+            <ShieldCheck color={colors.primary} size={20} strokeWidth={2.4} />
             <Text style={styles.noticeText}>
               Con esta información generaremos un diagnóstico educativo. No es una asesoría
               financiera ni una promesa de resultados.
@@ -159,43 +233,52 @@ export default function SummaryScreen() {
           </View>
 
           <SummarySection
+            description="Datos básicos para contextualizar tus recomendaciones."
             editAccessibilityLabel="Editar perfil básico"
             fields={[
               { label: "Rango de edad", value: onboarding.ageRange },
               { label: "País", value: onboarding.country },
               { label: "Ciudad", value: onboarding.city, optional: true }
             ]}
+            icon={UserRound}
             onEdit={() => router.push("/profile")}
+            tone="neutral"
             title="Perfil básico"
           />
 
           <SummarySection
+            description="Base para estimar tu capacidad mensual."
             editAccessibilityLabel="Editar ingresos"
             fields={[
               { label: incomeDisplay.label, value: incomeDisplay.value },
               { label: "Tipo de ingreso", value: onboarding.incomeType },
               { label: "Frecuencia de ingreso", value: onboarding.incomeFrequency }
             ]}
+            icon={Wallet}
             onEdit={() => router.push("/income")}
+            tone="support"
             title="Ingresos"
           />
 
           <SummarySection
+            description="Señales para entender dónde se concentra tu dinero."
             editAccessibilityLabel="Editar gastos"
             fields={[
               { label: expensesDisplay.label, value: expensesDisplay.value },
               { label: "Categorías principales", value: onboarding.expenseCategories },
-              { label: "Cómo siente sus gastos", value: onboarding.expensesFeeling }
+              { label: "Cómo sientes tus gastos", value: onboarding.expensesFeeling }
             ]}
+            icon={ReceiptText}
             onEdit={() => router.push("/expenses")}
             title="Gastos"
           />
 
           <SummarySection
+            description="Hábitos pequeños que pueden convertirse en margen."
             editAccessibilityLabel="Editar gastos hormiga"
             fields={[
               {
-                label: "Si tiene gastos pequeños frecuentes",
+                label: "Gastos pequeños frecuentes",
                 value: onboarding.hasSmallExpenses
               },
               {
@@ -208,24 +291,30 @@ export default function SummaryScreen() {
                 value: onboarding.smallExpensesIntention
               }
             ]}
+            icon={Coffee}
             onEdit={() => router.push("/small-expenses")}
+            tone="neutral"
             title="Gastos hormiga"
           />
 
           <SummarySection
+            description="Punto de partida para medir estabilidad y prioridad."
             editAccessibilityLabel="Editar ahorros, deudas e inversiones"
             fields={[
               { label: savingsDisplay.label, value: savingsDisplay.value },
               { label: "Cobertura de gastos esenciales", value: onboarding.emergencyCoverage },
               { label: "Situación de deudas", value: onboarding.debtSituation },
-              { label: "PESO MENSUAL DE DEUDAS", value: onboarding.debtPaymentShare },
+              { label: "Peso mensual de deudas", value: onboarding.debtPaymentShare },
               { label: "Situación de inversiones", value: onboarding.investmentSituation }
             ]}
+            icon={PiggyBank}
             onEdit={() => router.push("/savings-debts")}
+            tone="support"
             title="Ahorros, deudas e inversiones"
           />
 
           <SummarySection
+            description="La dirección principal que guiará el diagnóstico."
             editAccessibilityLabel="Editar meta financiera"
             fields={[
               { label: "Meta principal", value: onboarding.financialGoal },
@@ -245,6 +334,7 @@ export default function SummaryScreen() {
                 optional: true
               }
             ]}
+            icon={Target}
             onEdit={() => router.push("/goals-overview")}
             title="Meta financiera"
           />
@@ -252,7 +342,8 @@ export default function SummaryScreen() {
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel="Generar diagnóstico financiero"
-              icon={null}
+              icon={ChevronRight}
+              iconPosition="right"
               onPress={() => router.push("/diagnosis")}
               title="Generar diagnóstico"
             />
@@ -260,6 +351,7 @@ export default function SummaryScreen() {
               accessibilityLabel="Volver a meta financiera"
               icon={null}
               onPress={() => router.push("/goals")}
+              style={styles.backButton}
               title="Volver"
               variant="secondary"
             />
@@ -284,10 +376,10 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     flex: 1,
     gap: spacing.md,
-    maxWidth: 520,
+    maxWidth: 680,
     width: "100%"
   },
-  card: {
+  heroCard: {
     ...shadows.card,
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -296,13 +388,30 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.lg
   },
-  iconWrap: {
+  heroHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md
+  },
+  heroIcon: {
     alignItems: "center",
     backgroundColor: colors.primarySoft,
     borderRadius: radius.pill,
-    height: 54,
+    height: 58,
     justifyContent: "center",
-    width: 54
+    width: 58
+  },
+  heroCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 240
+  },
+  kicker: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   title: {
     color: colors.text,
@@ -331,14 +440,18 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.caption
   },
   noticeCard: {
+    alignItems: "flex-start",
     backgroundColor: colors.surfaceMuted,
-    borderColor: "#D7E7FF",
+    borderColor: colors.border,
     borderRadius: radius.lg,
     borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
     padding: spacing.lg
   },
   noticeText: {
     color: colors.primaryDark,
+    flex: 1,
     fontSize: typography.body,
     fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.body
@@ -353,27 +466,48 @@ const styles = StyleSheet.create({
     padding: spacing.lg
   },
   sectionHeader: {
-    alignItems: "center",
+    alignItems: "flex-start",
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.sm,
     justifyContent: "space-between"
   },
+  sectionIcon: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    height: 44,
+    justifyContent: "center",
+    width: 44
+  },
+  sectionHeading: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 210
+  },
   sectionTitle: {
     color: colors.text,
-    flex: 1,
     fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.sectionTitle
   },
+  sectionDescription: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
+  },
   editButton: {
+    alignItems: "center",
     backgroundColor: colors.primarySoft,
-    borderColor: "#D7E7FF",
+    borderColor: colors.border,
     borderRadius: radius.pill,
     borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 38,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs
   },
-  editButtonPressed: {
+  pressed: {
     opacity: 0.82,
     transform: [{ scale: 0.98 }]
   },
@@ -383,18 +517,41 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
   },
+  sectionStatus: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.supportSoft,
+    borderRadius: radius.pill,
+    flexDirection: "row",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  sectionStatusText: {
+    color: colors.support,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
   fieldsList: {
-    gap: spacing.md
+    gap: 0
   },
   fieldRow: {
-    gap: spacing.xs
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm
+  },
+  fieldRowFirst: {
+    borderTopWidth: 0,
+    paddingTop: 0
   },
   fieldLabel: {
     color: colors.textSubtle,
     fontSize: typography.caption,
     fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.caption,
-    textTransform: "uppercase"
+    lineHeight: typography.lineHeight.caption
   },
   fieldValue: {
     color: colors.text,
@@ -412,7 +569,7 @@ const styles = StyleSheet.create({
   },
   valueChip: {
     backgroundColor: colors.primarySoft,
-    borderColor: "#D7E7FF",
+    borderColor: colors.border,
     borderRadius: radius.pill,
     borderWidth: 1,
     paddingHorizontal: spacing.md,
@@ -427,5 +584,8 @@ const styles = StyleSheet.create({
   actions: {
     gap: spacing.sm,
     paddingBottom: spacing.md
+  },
+  backButton: {
+    backgroundColor: colors.surface
   }
 });

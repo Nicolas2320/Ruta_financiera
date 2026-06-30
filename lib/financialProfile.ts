@@ -4,6 +4,8 @@ import {
   getLegacyGoalFromOnboarding,
   getPrimaryFinancialGoal,
   initialOnboarding,
+  normalizeCompletedActionsState,
+  normalizeExpenseCategoryAmounts,
   normalizeFinancialGoals,
   normalizeGoalMonthlyBudget,
   type CompletedActionsState,
@@ -42,6 +44,10 @@ function normalizeOnboarding(onboarding: Partial<OnboardingData> | null | undefi
     expenseCategories: Array.isArray(onboarding?.expenseCategories)
       ? onboarding.expenseCategories
       : [],
+    expenseCategoryAmounts: normalizeExpenseCategoryAmounts(
+      onboarding?.expenseCategoryAmounts,
+      onboarding?.expenseCategories
+    ),
     smallExpenseCategories: Array.isArray(onboarding?.smallExpenseCategories)
       ? onboarding.smallExpenseCategories
       : [],
@@ -67,7 +73,7 @@ function normalizeOnboarding(onboarding: Partial<OnboardingData> | null | undefi
 function normalizeCompletedActions(
   completedActions: CompletedActionsState | null | undefined
 ) {
-  return completedActions ?? {};
+  return normalizeCompletedActionsState(completedActions);
 }
 
 export async function fetchFinancialProfile(userId: string): Promise<FinancialProfile> {

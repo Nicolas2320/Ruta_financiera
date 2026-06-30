@@ -5,7 +5,14 @@ import {
   type PriorityKey
 } from "./financialCalculations";
 import { formatCOP } from "./financialRanges";
-import type { CompletedActionsState, ExactFinancialValues, OnboardingData } from "../types/financial";
+import {
+  getActionProgressStatus,
+  isActionProgressCompleted,
+  type ActionProgressStatus,
+  type CompletedActionsState,
+  type ExactFinancialValues,
+  type OnboardingData
+} from "../types/financial";
 import { initialOnboarding } from "../types/financial";
 
 export type MonthlyPlanData = {
@@ -63,7 +70,7 @@ export type MonthlyGoalContext = {
   estimatedMonthsToGoal: number | null;
 };
 
-const monthlyPlanProgressVersion = "monthly-plan-v0.1";
+const monthlyPlanProgressVersion = "monthly-plan-v0.2";
 const monthlyPlanProgressKeyPrefix = `${monthlyPlanProgressVersion}:`;
 const monthlyPlanPriorityKeys: PriorityKey[] = [
   "debt_pressure",
@@ -241,6 +248,12 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
     goalPriority,
     goalAmountRange
   };
+}
+
+export function getMonthlyPlanPeriodKey(date = new Date()) {
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+
+  return `${date.getFullYear()}-${month}`;
 }
 
 export function getMonthlyPlanMetrics(
@@ -535,11 +548,12 @@ export function getMonthlyActions(
 export function getMonthlyPlanProgressKey(
   metrics: MonthlyPlanMetrics,
   actions: MonthlyAction[],
-  priorityKey = metrics.snapshot.priority.key
+  priorityKey = metrics.snapshot.priority.key,
+  periodKey = getMonthlyPlanPeriodKey()
 ) {
   const actionIds = actions.map((action) => action.id).join("|");
 
-  return `${monthlyPlanProgressVersion}:${priorityKey}:${actionIds}`;
+  return `${monthlyPlanProgressVersion}:${periodKey}:${priorityKey}:${actionIds}`;
 }
 
 export function getMonthlyPlanKeyFromActionProgressId(progressId: string) {
@@ -561,7 +575,7 @@ export function getMonthlyPlanPriorityKey(planProgressKey: string): PriorityKey 
     return null;
   }
 
-  const priorityKey = planProgressKey.split(":")[1] as PriorityKey | undefined;
+  const priorityKey = planProgressKey.split(":")[2] as PriorityKey | undefined;
 
   if (!priorityKey || !monthlyPlanPriorityKeys.includes(priorityKey)) {
     return null;
@@ -570,20 +584,33 @@ export function getMonthlyPlanPriorityKey(planProgressKey: string): PriorityKey 
   return priorityKey;
 }
 
+export function getMonthlyPlanPeriodFromKey(planProgressKey: string) {
+  if (!planProgressKey.startsWith(monthlyPlanProgressKeyPrefix)) {
+    return null;
+  }
+
+  return planProgressKey.split(":")[1] ?? null;
+}
+
 export function getActiveMonthlyPlanProgressKey(
   completedActions: CompletedActionsState,
   suggestedPlanProgressKey: string
 ) {
   const completedPlanCounts: Record<string, number> = {};
+  const suggestedPeriodKey = getMonthlyPlanPeriodFromKey(suggestedPlanProgressKey);
 
   Object.entries(completedActions).forEach(([progressId, completed]) => {
-    if (!completed) {
+    if (!isActionProgressCompleted(completed)) {
       return;
     }
 
     const planProgressKey = getMonthlyPlanKeyFromActionProgressId(progressId);
 
     if (!planProgressKey || !getMonthlyPlanPriorityKey(planProgressKey)) {
+      return;
+    }
+
+    if (getMonthlyPlanPeriodFromKey(planProgressKey) !== suggestedPeriodKey) {
       return;
     }
 
@@ -616,5 +643,17 @@ export function isMonthlyActionCompleted({
   completedActions: CompletedActionsState;
   planProgressKey: string;
 }) {
-  return Boolean(completedActions[getMonthlyActionProgressId(planProgressKey, actionId)]);
+  return isActionProgressCompleted(completedActions[getMonthlyActionProgressId(planProgressKey, actionId)]);
+}
+
+export function getMonthlyActionProgressStatus({
+  actionId,
+  completedActions,
+  planProgressKey
+}: {
+  actionId: string;
+  completedActions: CompletedActionsState;
+  planProgressKey: string;
+}): ActionProgressStatus {
+  return getActionProgressStatus(completedActions[getMonthlyActionProgressId(planProgressKey, actionId)]);
 }

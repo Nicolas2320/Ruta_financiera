@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import {
   AlertCircle,
   Baby,
+  Bot,
   Calendar,
   Car,
   ChartColumnIncreasing,
@@ -15,10 +16,13 @@ import {
   Gift,
   GraduationCap,
   HeartPulse,
+  Home,
   House,
+  LineChart,
   Minus,
   PenLine,
   PiggyBank,
+  PieChart,
   Plane,
   Plus,
   RotateCcw,
@@ -33,9 +37,12 @@ import {
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BottomNavigation } from "../components/BottomNavigation";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { usePlan } from "../context/PlanContext";
+import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
 import {
   getGoalTypeFromTitle,
   getLegacyFieldsFromGoal,
@@ -51,7 +58,7 @@ import {
   type GoalAllocation,
   type GoalViability
 } from "../utils/goalPlanning";
-import { getMonthlyPlanData, getMonthlyPlanMetrics } from "../utils/monthlyPlan";
+import { getMonthlyPlanData, getMonthlyPlanMetrics, getMonthlyPlanPeriodKey } from "../utils/monthlyPlan";
 
 type Tone = "primary" | "support" | "warning" | "danger" | "neutral" | "purple";
 
@@ -61,6 +68,8 @@ type IconProps = {
   size?: number;
   strokeWidth?: number;
 };
+
+type Route = Parameters<ReturnType<typeof useRouter>["push"]>[0];
 
 type GoalVisualOption = {
   title: string;
@@ -241,6 +250,19 @@ function getFormattedDate(value: string | null | undefined) {
     day: "2-digit",
     month: "short"
   });
+}
+
+function isEmergencyGoal(allocation: GoalAllocation) {
+  const normalizedTitle = allocation.goal.title
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return (
+    allocation.goal.type === "security" ||
+    normalizedTitle.includes("emergencia") ||
+    normalizedTitle.includes("imprevisto")
+  );
 }
 
 function getContributionPaceProgress(allocation: GoalAllocation) {
@@ -467,6 +489,35 @@ function ChoicePill({
   );
 }
 
+function BottomNavItem({
+  title,
+  route,
+  icon: Icon,
+  active,
+  onNavigate
+}: {
+  title: string;
+  route: Route;
+  icon: ComponentType<IconProps>;
+  active?: boolean;
+  onNavigate: (route: Route) => void;
+}) {
+  const color = active ? colors.primary : colors.textSubtle;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={() => onNavigate(route)}
+      style={({ pressed }) => [styles.navItem, pressed && styles.pressed]}
+    >
+      {active ? <View style={styles.navActiveLine} /> : null}
+      <Icon color={color} size={23} strokeWidth={2.4} />
+      <Text style={[styles.navText, active && styles.navTextActive]}>{title}</Text>
+    </Pressable>
+  );
+}
+
 function GoalOptionTile({
   option,
   selected,
@@ -568,6 +619,7 @@ function GoalCard({
   onDelete,
   onIncrease,
   onRegisterContribution,
+  recordedPlanContribution,
   onSetPrimary,
   onPause,
   onReset,
@@ -582,6 +634,7 @@ function GoalCard({
   onDelete: () => void;
   onIncrease: () => void;
   onRegisterContribution: (amount: number) => void;
+  recordedPlanContribution: number;
   onSetPrimary: () => void;
   onPause: () => void;
   onReset: () => void;
@@ -619,6 +672,13 @@ function GoalCard({
       ? `${formatCOP(allocation.requiredMonthlyContribution)} / mes`
       : "Sin referencia";
   const currentLabel = allocation.currentAmount > 0 ? formatCOP(allocation.currentAmount) : "$0";
+  const observedCurrentAmount = allocation.currentAmount + recordedPlanContribution;
+  const observedProgressPercentage =
+    allocation.targetAmount !== null && allocation.targetAmount > 0
+      ? Math.min((observedCurrentAmount / allocation.targetAmount) * 100, 100)
+      : null;
+  const observedProgressLabel =
+    observedProgressPercentage !== null ? `${Math.round(observedProgressPercentage)}%` : "Por medir";
   const progressLabel =
     allocation.progressPercentage !== null
       ? `${Math.round(allocation.progressPercentage)}%`
@@ -743,6 +803,22 @@ function GoalCard({
           Guardado: {currentLabel} de {targetLabel}
         </Text>
       </View>
+
+      {recordedPlanContribution > 0 ? (
+        <View style={styles.planContributionBox}>
+          <View style={styles.planContributionHeader}>
+            <Text style={styles.planContributionLabel}>Registro del plan mensual</Text>
+            <Chip label="Vista del mes" tone="support" />
+          </View>
+          <Text style={styles.planContributionValue}>
+            {formatCOP(recordedPlanContribution)} sumados como avance observado
+          </Text>
+          <Text style={styles.planContributionText}>
+            Con este registro: {formatCOP(observedCurrentAmount)} de {targetLabel} ({observedProgressLabel}).
+            Para hacerlo permanente, registra el aporte directamente en esta meta.
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.goalMetaGrid}>
         <View style={styles.metaBox}>
@@ -1053,7 +1129,9 @@ function GoalCard({
 
 export default function GoalsOverviewScreen() {
   const router = useRouter();
+  const navigate = (route: Route) => router.push(route);
   const { exactValues, onboarding, updateOnboarding } = useOnboarding();
+  const { completedActions } = usePlan();
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const goals = useMemo(() => getOnboardingGoals(onboarding), [onboarding]);
@@ -1071,6 +1149,18 @@ export default function GoalsOverviewScreen() {
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
     null;
+  const impactSummary = useMemo(
+    () =>
+      getMonthlyActionImpactSummary(completedActions, {
+        periodKey: getMonthlyPlanPeriodKey()
+      }),
+    [completedActions]
+  );
+  const primaryGoalPlanContribution =
+    primaryGoalAllocation !== null
+      ? impactSummary.goalContributionTotal +
+        (isEmergencyGoal(primaryGoalAllocation) ? impactSummary.emergencyContributionTotal : 0)
+      : 0;
   const isCompletedAllocation = (allocation: GoalAllocation) =>
     allocation.viability === "completed" || allocation.goal.status === "completed";
   const isPausedAllocation = (allocation: GoalAllocation) =>
@@ -1285,6 +1375,12 @@ export default function GoalsOverviewScreen() {
               tone="purple"
               value={investedInGoalsLabel}
             />
+            <StatCard
+              icon={<PiggyBank color={colors.support} size={20} strokeWidth={2.4} />}
+              label="Registrado este mes"
+              tone="support"
+              value={primaryGoalPlanContribution > 0 ? formatCOP(primaryGoalPlanContribution) : "$0"}
+            />
           </View>
 
           {primaryGoalIsCompleted ? (
@@ -1437,6 +1533,9 @@ export default function GoalsOverviewScreen() {
                     })
                   }
                   onRegisterContribution={(amount) => registerGoalContribution(allocation.goal.id, amount)}
+                  recordedPlanContribution={
+                    allocation.goal.id === primaryGoalAllocation?.goal.id ? primaryGoalPlanContribution : 0
+                  }
                   onReset={() => setGoalContribution(allocation.goal.id, null)}
                   onSetPrimary={() => setPrimaryGoal(allocation.goal.id)}
                   onUpdateGoal={(updates) => updateGoal(allocation.goal.id, updates)}
@@ -1460,16 +1559,18 @@ export default function GoalsOverviewScreen() {
               onPress={() => router.push("/goals?mode=add")}
               title="Crear nueva meta"
             />
-            <PrimaryButton
-              accessibilityLabel="Volver al inicio"
-              icon={null}
-              onPress={() => router.push("/dashboard")}
-              title="Volver al inicio"
-              variant="secondary"
-            />
           </View>
         </View>
       </ScrollView>
+
+      <BottomNavigation activeRoute="/goals-overview" />
+      <View style={styles.hidden}>
+        <BottomNavItem icon={Home} onNavigate={navigate} route="/dashboard" title="Inicio" />
+        <BottomNavItem icon={PieChart} onNavigate={navigate} route="/spending" title="Gastos" />
+        <BottomNavItem active icon={Flag} onNavigate={navigate} route="/goals-overview" title="Metas" />
+        <BottomNavItem icon={LineChart} onNavigate={navigate} route="/simulation" title="Simulación" />
+        <BottomNavItem icon={Bot} onNavigate={navigate} route="/assistant" title="Asistente" />
+      </View>
     </SafeAreaView>
   );
 }
@@ -1852,6 +1953,40 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
   },
+  planContributionBox: {
+    backgroundColor: colors.supportSoft,
+    borderColor: "#B9E9CD",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.md
+  },
+  planContributionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    justifyContent: "space-between"
+  },
+  planContributionLabel: {
+    color: colors.support,
+    flex: 1,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption,
+    minWidth: 160
+  },
+  planContributionValue: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  planContributionText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
+  },
   chipRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2164,9 +2299,51 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingBottom: spacing.md
   },
+  bottomNav: {
+    alignSelf: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderTopWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    maxWidth: 760,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+    width: "100%"
+  },
+  navItem: {
+    alignItems: "center",
+    flex: 1,
+    gap: spacing.xs,
+    minHeight: 68,
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.xs,
+    position: "relative"
+  },
+  navActiveLine: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    height: 4,
+    position: "absolute",
+    top: -spacing.xs,
+    width: "100%"
+  },
+  navText: {
+    color: colors.textSubtle,
+    fontSize: typography.small,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.small,
+    textAlign: "center"
+  },
+  navTextActive: {
+    color: colors.primary
+  },
   pressed: {
     opacity: 0.84,
     transform: [{ scale: 0.99 }]
+  },
+  hidden: {
+    display: "none"
   },
   disabledButton: {
     opacity: 0.45

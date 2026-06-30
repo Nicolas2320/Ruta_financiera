@@ -870,8 +870,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs
   },
   amountOptionFeatured: {
-    flexBasis: "100%",
-    minHeight: 72
+    flexBasis: "47%",
+    flexGrow: 1,
+    minHeight: 104,
+    paddingHorizontal: spacing.xs
   },
   amountTitle: {
     fontSize: typography.badge,
