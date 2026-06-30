@@ -21,7 +21,7 @@ import {
   type FinancialSnapshot
 } from "../utils/financialCalculations";
 import { formatCOP, type FinancialRangeEstimate } from "../utils/financialRanges";
-import type { ExactFinancialValues } from "../types/financial";
+import { getPrimaryFinancialGoal, type ExactFinancialValues } from "../types/financial";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
 
@@ -238,7 +238,9 @@ function getFinancialMetrics(
     midpoint: snapshot.values.smallExpenses,
     label:
       snapshot.values.smallExpenses !== null
-        ? `${formatCOP(snapshot.values.smallExpenses)} aprox.`
+        ? snapshot.sourceMap.smallExpenses === "exact"
+          ? formatCOP(snapshot.values.smallExpenses)
+          : `${formatCOP(snapshot.values.smallExpenses)} aprox.`
         : "No disponible"
   };
   const incomeMidpoint = snapshot.cashflow.monthlyIncome;
@@ -269,10 +271,14 @@ function getFinancialMetrics(
   const smallExpensesMetricLabel =
     onboarding.hasSmallExpenses === "No"
       ? "No identificados"
-      : onboarding.smallExpensesRange ?? "No disponible";
+      : snapshot.sourceMap.smallExpenses === "exact" && smallExpenseMidpoint !== null
+        ? formatCOP(smallExpenseMidpoint)
+        : onboarding.smallExpensesRange ?? "No disponible";
   const smallExpensesDetail =
     smallExpensePercentage !== null
-      ? `Cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
+      ? snapshot.sourceMap.smallExpenses === "exact"
+        ? `Dato exacto: cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
+        : `Cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
       : onboarding.smallExpensesRange
         ? "Rango seleccionado, sin porcentaje calculado."
         : "No disponible";
@@ -552,10 +558,7 @@ function getMeaningMessage(priority: MainPriority) {
   return "En tu caso, ya puedes empezar a traducir tu meta en una acción concreta y pequeña para esta semana, usando tus rangos como una primera referencia.";
 }
 
-function goalNeedsConcreteAmount(
-  onboarding: OnboardingSnapshot,
-  exactValues: ExactFinancialValues
-) {
+function goalNeedsConcreteAmount(onboarding: OnboardingSnapshot) {
   const goalsWithAmount = [
     "Crear un fondo de emergencia",
     "Pagar deudas",
@@ -566,10 +569,12 @@ function goalNeedsConcreteAmount(
     "Prepararme para el futuro"
   ];
 
+  const primaryGoal = getPrimaryFinancialGoal(onboarding);
+
   return (
     onboarding.financialGoal !== null &&
     goalsWithAmount.includes(onboarding.financialGoal) &&
-    exactValues.goalTargetAmount === undefined &&
+    primaryGoal?.targetAmount === null &&
     (!onboarding.goalAmountRange ||
       onboarding.goalAmountRange === "No tengo una cifra todavía" ||
       onboarding.goalAmountRange === "Prefiero definirla después")
@@ -618,7 +623,7 @@ function getRecommendedActions(
     addAction("Aprende la diferencia entre ahorrar e invertir.");
   }
 
-  if (goalNeedsConcreteAmount(onboarding, exactValues)) {
+  if (goalNeedsConcreteAmount(onboarding)) {
     addAction("Define una cifra más concreta para tu meta.");
   }
 

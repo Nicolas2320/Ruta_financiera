@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 import { useState } from "react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   CircleQuestionMark,
@@ -204,7 +204,10 @@ const investmentSituations = [
 
 export default function SavingsDebtsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ source?: string }>();
   const { onboarding, updateOnboarding } = useOnboarding();
+  const source = Array.isArray(params.source) ? params.source[0] : params.source;
+  const isProfileEditMode = source === "profile";
   const [selectedSavingsRange, setSelectedSavingsRange] = useState<string | null>(
     onboarding.savingsRange
   );
@@ -264,7 +267,7 @@ export default function SavingsDebtsScreen() {
       debtPaymentShare: selectedDebtPaymentShare,
       investmentSituation: selectedInvestmentSituation
     });
-    router.push("/goals");
+    router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/goals");
   };
 
   return (
@@ -276,12 +279,14 @@ export default function SavingsDebtsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <StepHeader
-            currentStep={7}
-            onBack={() => router.push("/small-expenses")}
-            title="Ahorros y deudas"
-            totalSteps={8}
-          />
+          {!isProfileEditMode ? (
+            <StepHeader
+              currentStep={7}
+              onBack={() => router.push("/small-expenses")}
+              title="Ahorros y deudas"
+              totalSteps={8}
+            />
+          ) : null}
 
           <HeroInfoCard
             badge="Puedes elegir “Prefiero no responder” si algún dato te incomoda."
@@ -418,19 +423,21 @@ export default function SavingsDebtsScreen() {
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel="Continuar hacia meta financiera"
+              accessibilityLabel={isProfileEditMode ? "Guardar cambios de ahorros y deudas" : "Continuar hacia meta financiera"}
               disabled={!canContinue}
               iconPosition="right"
               onPress={handleContinue}
               style={styles.primaryButton}
-              title="Continuar"
+              title={isProfileEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
-              accessibilityLabel="Volver a gastos hormiga"
+              accessibilityLabel={isProfileEditMode ? "Volver al perfil financiero" : "Volver a gastos hormiga"}
               icon={null}
-              onPress={() => router.push("/small-expenses")}
+              onPress={() =>
+                router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/small-expenses")
+              }
               style={styles.secondaryButton}
-              title="Volver"
+              title={isProfileEditMode ? "Volver al perfil" : "Volver"}
               variant="secondary"
             />
           </View>

@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { ChevronRight, LineChart, LogOut, Settings, UserRound } from "lucide-react-native";
+import { ChevronRight, ClipboardList, LineChart, LogOut, Settings, UserRound } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -69,7 +69,25 @@ export default function SettingsScreen() {
             <View style={styles.settingsLinkBody}>
               <Text style={styles.settingsLinkTitle}>Mejorar mi plan financiero</Text>
               <Text style={styles.settingsLinkText}>
-                Edita ingresos, gastos, ahorro actual y monto objetivo para mejorar tus cálculos.
+                Edita ingreso, gasto mensual, ahorro general y gastos pequeños para mejorar tus cálculos.
+              </Text>
+            </View>
+            <ChevronRight color={colors.primary} size={22} strokeWidth={2.5} />
+          </Pressable>
+
+          <Pressable
+            accessibilityLabel="Editar perfil financiero"
+            accessibilityRole="button"
+            onPress={() => router.push({ pathname: "/summary", params: { mode: "edit" } })}
+            style={({ pressed }) => [styles.settingsLinkCard, pressed && styles.pressed]}
+          >
+            <View style={styles.settingsLinkIcon}>
+              <ClipboardList color={colors.primary} size={24} strokeWidth={2.4} />
+            </View>
+            <View style={styles.settingsLinkBody}>
+              <Text style={styles.settingsLinkTitle}>Editar perfil financiero</Text>
+              <Text style={styles.settingsLinkText}>
+                Actualiza edad, país, tipo de ingreso, hábitos, deudas, inversiones y respuestas iniciales.
               </Text>
             </View>
             <ChevronRight color={colors.primary} size={22} strokeWidth={2.5} />

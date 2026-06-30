@@ -115,21 +115,13 @@ export function getGoalHorizonMonths(horizon: string | null | undefined) {
 
 export function getGoalTargetAmount(
   goal: FinancialGoal,
-  exactValues: ExactFinancialValues = {},
-  isPrimary = false
+  _exactValues: ExactFinancialValues = {},
+  _isPrimary = false
 ) {
   const goalTargetAmount = safePositive(goal.targetAmount);
 
   if (goalTargetAmount !== null) {
     return goalTargetAmount;
-  }
-
-  if (isPrimary) {
-    const exactTarget = safePositive(exactValues.goalTargetAmount);
-
-    if (exactTarget !== null) {
-      return exactTarget;
-    }
   }
 
   return getGoalAmountRangeEstimate(goal.amountRange).midpoint;

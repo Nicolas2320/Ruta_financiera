@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ArrowLeftRight, CalendarCheck, PiggyBank } from "lucide-react-native";
 import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -71,7 +71,10 @@ const incomeFrequencies = [
 
 export default function IncomeScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ source?: string }>();
   const { onboarding, updateOnboarding } = useOnboarding();
+  const source = Array.isArray(params.source) ? params.source[0] : params.source;
+  const isProfileEditMode = source === "profile";
   const [selectedIncomeRange, setSelectedIncomeRange] = useState<string | null>(
     onboarding.incomeRange
   );
@@ -96,7 +99,7 @@ export default function IncomeScreen() {
       incomeType: selectedIncomeType,
       incomeFrequency: selectedIncomeFrequency
     });
-    router.push("/expenses");
+    router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/expenses");
   };
 
   return (
@@ -108,12 +111,14 @@ export default function IncomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <StepHeader
-            currentStep={4}
-            onBack={() => router.push("/profile")}
-            title="Ingresos"
-            totalSteps={8}
-          />
+          {!isProfileEditMode ? (
+            <StepHeader
+              currentStep={4}
+              onBack={() => router.push("/profile")}
+              title="Ingresos"
+              totalSteps={8}
+            />
+          ) : null}
 
           <HeroInfoCard
             badge="Puedes ajustar esta información más adelante."
@@ -193,19 +198,21 @@ export default function IncomeScreen() {
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel="Continuar hacia preguntas de gastos"
+              accessibilityLabel={isProfileEditMode ? "Guardar cambios de ingresos" : "Continuar hacia preguntas de gastos"}
               disabled={!canContinue}
               iconPosition="right"
               onPress={handleContinue}
               style={styles.primaryButton}
-              title="Continuar"
+              title={isProfileEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
-              accessibilityLabel="Volver al perfil básico"
+              accessibilityLabel={isProfileEditMode ? "Volver al perfil financiero" : "Volver al perfil básico"}
               icon={null}
-              onPress={() => router.push("/profile")}
+              onPress={() =>
+                router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/profile")
+              }
               style={styles.secondaryButton}
-              title="Volver"
+              title={isProfileEditMode ? "Volver al perfil" : "Volver"}
               variant="secondary"
             />
           </View>

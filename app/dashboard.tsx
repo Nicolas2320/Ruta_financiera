@@ -916,7 +916,9 @@ export default function DashboardScreen() {
       : null;
   const smallExpensesValue =
     snapshot.smallExpenses.amount !== null
-      ? `${formatCOP(snapshot.smallExpenses.amount)} aprox.`
+      ? snapshot.sourceMap.smallExpenses === "exact"
+        ? formatCOP(snapshot.smallExpenses.amount)
+        : `${formatCOP(snapshot.smallExpenses.amount)} aprox.`
       : snapshot.sourceMap.smallExpenses === "unknown"
         ? "Por estimar"
         : `Rango: ${getDefinedLabel(data.smallExpensesRange)}`;
@@ -1041,7 +1043,7 @@ export default function DashboardScreen() {
           <RowCard
             actionLabel="Revisar gastos"
             icon={<Coffee color="#B45309" size={36} strokeWidth={2.4} />}
-            onPress={() => router.push("/small-expenses")}
+            onPress={() => router.push({ pathname: "/small-expenses", params: { source: "dashboard" } })}
             text={snapshot.smallExpenses.recommendation}
             title="Gastos pequeños"
             tone="warning"
@@ -1106,7 +1108,7 @@ export default function DashboardScreen() {
               <QuickAccessCard
                 icon={<PencilLine color="#B45309" size={31} strokeWidth={2.4} />}
                 onNavigate={navigate}
-                route="/summary"
+                route={{ pathname: "/summary", params: { mode: "edit" } }}
                 title="Editar respuestas"
                 tone="warning"
               />
