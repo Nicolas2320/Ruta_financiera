@@ -18,7 +18,7 @@ type PrimaryButtonProps = {
   onPress: () => void;
   accessibilityLabel: string;
   variant?: ButtonVariant;
-  icon?: ComponentType<IconProps>;
+  icon?: ComponentType<IconProps> | null;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -49,7 +49,7 @@ export function PrimaryButton({
         <Text style={[styles.text, isPrimary ? styles.primaryText : styles.secondaryText]}>
           {title}
         </Text>
-        <Icon color={contentColor} size={18} strokeWidth={2.4} />
+        {Icon ? <Icon color={contentColor} size={18} strokeWidth={2.4} /> : null}
       </View>
     </Pressable>
   );

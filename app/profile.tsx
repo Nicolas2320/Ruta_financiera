@@ -1,13 +1,13 @@
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { Compass } from "lucide-react-native";
+import { UserRound } from "lucide-react-native";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 
-export default function DemoScreen() {
+export default function ProfileScreen() {
   const router = useRouter();
 
   return (
@@ -21,21 +21,21 @@ export default function DemoScreen() {
         <View style={styles.container}>
           <View style={styles.card}>
             <View style={styles.iconWrap}>
-              <Compass color={colors.primary} size={28} strokeWidth={2.4} />
+              <UserRound color={colors.primary} size={28} strokeWidth={2.4} />
             </View>
 
-            <Text style={styles.title}>Demo próximamente</Text>
+            <Text style={styles.title}>Perfil próximamente</Text>
 
             <Text style={styles.text}>
-              Aquí podrás explorar un ejemplo de diagnóstico financiero sin ingresar tus datos.
+              Aquí comenzará el formulario de rangos para crear tu diagnóstico financiero.
             </Text>
           </View>
 
           <PrimaryButton
-            accessibilityLabel="Volver al inicio de Ruta Financiera"
+            accessibilityLabel="Volver a privacidad y confianza"
             icon={null}
-            onPress={() => router.push("/")}
-            title="Volver al inicio"
+            onPress={() => router.push("/privacy")}
+            title="Volver"
             variant="secondary"
           />
         </View>
