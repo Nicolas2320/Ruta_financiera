@@ -1,10 +1,11 @@
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { CheckCircle2, LockKeyhole, ShieldCheck } from "lucide-react-native";
+import { CircleOff, LockKeyhole, ShieldCheck } from "lucide-react-native";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
+import { StepIndicator } from "../components/StepIndicator";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 
 const excludedData = [
@@ -26,6 +27,8 @@ export default function PrivacyScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
+          <StepIndicator currentStep={2} label="Privacidad" totalSteps={8} />
+
           <View style={styles.card}>
             <View style={styles.iconWrap}>
               <ShieldCheck color={colors.support} size={26} strokeWidth={2.4} />
@@ -52,7 +55,7 @@ export default function PrivacyScreen() {
               {excludedData.map((item) => (
                 <View key={item} style={styles.dataItem}>
                   <View style={styles.dataIcon}>
-                    <CheckCircle2 color={colors.support} size={18} strokeWidth={2.4} />
+                    <CircleOff color={colors.support} size={18} strokeWidth={2.4} />
                   </View>
                   <Text style={styles.dataText}>{item}</Text>
                 </View>

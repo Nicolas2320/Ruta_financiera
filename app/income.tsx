@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { ShieldCheck, UserRound } from "lucide-react-native";
-import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { PiggyBank, ShieldCheck } from "lucide-react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
@@ -11,29 +11,45 @@ import { StepIndicator } from "../components/StepIndicator";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 
-const ageRanges = ["18–24", "25–30", "31–35", "36–40", "Más de 40"] as const;
-const countries = ["Colombia", "Otro"] as const;
+const incomeRanges = [
+  "Menos de $1.500.000",
+  "$1.500.000 – $3.000.000",
+  "$3.000.000 – $5.000.000",
+  "$5.000.000 – $8.000.000",
+  "Más de $8.000.000"
+] as const;
 
-export default function ProfileScreen() {
+const incomeTypes = ["Fijo", "Variable", "Mixto"] as const;
+const incomeFrequencies = ["Mensual", "Quincenal", "Semanal", "Irregular"] as const;
+
+export default function IncomeScreen() {
   const router = useRouter();
   const { onboarding, updateOnboarding } = useOnboarding();
-  const [selectedAgeRange, setSelectedAgeRange] = useState<string | null>(onboarding.ageRange);
-  const [selectedCountry, setSelectedCountry] = useState<string | null>(onboarding.country);
-  const [city, setCity] = useState(onboarding.city);
+  const [selectedIncomeRange, setSelectedIncomeRange] = useState<string | null>(
+    onboarding.incomeRange
+  );
+  const [selectedIncomeType, setSelectedIncomeType] = useState<string | null>(
+    onboarding.incomeType
+  );
+  const [selectedIncomeFrequency, setSelectedIncomeFrequency] = useState<string | null>(
+    onboarding.incomeFrequency
+  );
 
-  const canContinue = Boolean(selectedAgeRange && selectedCountry);
+  const canContinue = Boolean(
+    selectedIncomeRange && selectedIncomeType && selectedIncomeFrequency
+  );
 
   const handleContinue = () => {
-    if (!selectedAgeRange || !selectedCountry) {
+    if (!selectedIncomeRange || !selectedIncomeType || !selectedIncomeFrequency) {
       return;
     }
 
     updateOnboarding({
-      ageRange: selectedAgeRange,
-      country: selectedCountry,
-      city: city.trim()
+      incomeRange: selectedIncomeRange,
+      incomeType: selectedIncomeType,
+      incomeFrequency: selectedIncomeFrequency
     });
-    router.push("/income");
+    router.push("/expenses");
   };
 
   return (
@@ -42,86 +58,85 @@ export default function ProfileScreen() {
       <ScrollView
         alwaysBounceVertical={false}
         contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <StepIndicator currentStep={3} label="Perfil básico" totalSteps={8} />
+          <StepIndicator currentStep={4} label="Ingresos" totalSteps={8} />
 
           <View style={styles.card}>
             <View style={styles.iconWrap}>
-              <UserRound color={colors.primary} size={28} strokeWidth={2.4} />
+              <PiggyBank color={colors.primary} size={28} strokeWidth={2.4} />
             </View>
 
-            <Text style={styles.title}>Cuéntanos un poco sobre ti</Text>
+            <Text style={styles.title}>Tus ingresos</Text>
 
             <Text style={styles.subtitle}>
-              Usaremos esta información para adaptar tu diagnóstico. No necesitas dar datos exactos.
+              No necesitamos saber tu salario exacto. Con un rango aproximado podemos darte una
+              primera orientación.
             </Text>
 
             <View style={styles.trustMessage}>
               <ShieldCheck color={colors.support} size={18} strokeWidth={2.4} />
               <Text style={styles.supportText}>
-                Esta información solo ayuda a personalizar tu experiencia.
+                Puedes ajustar esta información más adelante.
               </Text>
             </View>
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.questionTitle}>¿Cuál es tu rango de edad?</Text>
+            <Text style={styles.questionTitle}>¿Cuál es tu rango de ingresos mensuales?</Text>
             <View style={styles.optionsList}>
-              {ageRanges.map((ageRange) => (
+              {incomeRanges.map((incomeRange) => (
                 <SelectableOption
-                  key={ageRange}
-                  label={ageRange}
-                  onPress={() => setSelectedAgeRange(ageRange)}
-                  selected={selectedAgeRange === ageRange}
+                  key={incomeRange}
+                  label={incomeRange}
+                  onPress={() => setSelectedIncomeRange(incomeRange)}
+                  selected={selectedIncomeRange === incomeRange}
                 />
               ))}
             </View>
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.questionTitle}>¿En qué país estás?</Text>
+            <Text style={styles.questionTitle}>¿Qué tipo de ingreso tienes?</Text>
             <View style={styles.optionsList}>
-              {countries.map((country) => (
+              {incomeTypes.map((incomeType) => (
                 <SelectableOption
-                  key={country}
-                  label={country}
-                  onPress={() => setSelectedCountry(country)}
-                  selected={selectedCountry === country}
+                  key={incomeType}
+                  label={incomeType}
+                  onPress={() => setSelectedIncomeType(incomeType)}
+                  selected={selectedIncomeType === incomeType}
                 />
               ))}
             </View>
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.questionTitle}>¿En qué ciudad vives?</Text>
-            <Text style={styles.optionalText}>Opcional</Text>
-            <TextInput
-              accessibilityLabel="Ciudad en la que vives"
-              autoCapitalize="words"
-              onChangeText={setCity}
-              placeholder="Ej: Bogotá, Medellín, Cali..."
-              placeholderTextColor={colors.textSubtle}
-              returnKeyType="done"
-              style={styles.cityInput}
-              value={city}
-            />
+            <Text style={styles.questionTitle}>¿Con qué frecuencia recibes ingresos?</Text>
+            <View style={styles.optionsList}>
+              {incomeFrequencies.map((incomeFrequency) => (
+                <SelectableOption
+                  key={incomeFrequency}
+                  label={incomeFrequency}
+                  onPress={() => setSelectedIncomeFrequency(incomeFrequency)}
+                  selected={selectedIncomeFrequency === incomeFrequency}
+                />
+              ))}
+            </View>
           </View>
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel="Continuar hacia preguntas de ingresos"
+              accessibilityLabel="Continuar hacia preguntas de gastos"
               disabled={!canContinue}
               icon={null}
               onPress={handleContinue}
               title="Continuar"
             />
             <PrimaryButton
-              accessibilityLabel="Volver a privacidad y confianza"
+              accessibilityLabel="Volver al perfil básico"
               icon={null}
-              onPress={() => router.push("/privacy")}
+              onPress={() => router.push("/profile")}
               title="Volver"
               variant="secondary"
             />
@@ -200,23 +215,6 @@ const styles = StyleSheet.create({
   },
   optionsList: {
     gap: spacing.sm
-  },
-  optionalText: {
-    color: colors.textSubtle,
-    fontSize: typography.caption,
-    fontWeight: "700",
-    marginTop: -spacing.sm,
-    textTransform: "uppercase"
-  },
-  cityInput: {
-    backgroundColor: colors.surfaceMuted,
-    borderColor: "#D7E7FF",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    color: colors.text,
-    fontSize: typography.body,
-    minHeight: 54,
-    paddingHorizontal: spacing.md
   },
   actions: {
     gap: spacing.sm,
