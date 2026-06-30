@@ -1,6 +1,11 @@
 import { supabase } from "./supabase";
 import {
+  getLegacyFieldsFromGoal,
+  getLegacyGoalFromOnboarding,
+  getPrimaryFinancialGoal,
   initialOnboarding,
+  normalizeFinancialGoals,
+  normalizeGoalMonthlyBudget,
   type CompletedActionsState,
   type ExactFinancialValues,
   type OnboardingData
@@ -31,7 +36,7 @@ function getSupabaseClient() {
 }
 
 function normalizeOnboarding(onboarding: Partial<OnboardingData> | null | undefined) {
-  return {
+  const normalizedBase: OnboardingData = {
     ...initialOnboarding,
     ...(onboarding ?? {}),
     expenseCategories: Array.isArray(onboarding?.expenseCategories)
@@ -39,7 +44,23 @@ function normalizeOnboarding(onboarding: Partial<OnboardingData> | null | undefi
       : [],
     smallExpenseCategories: Array.isArray(onboarding?.smallExpenseCategories)
       ? onboarding.smallExpenseCategories
-      : []
+      : [],
+    goalMonthlyBudget: normalizeGoalMonthlyBudget(onboarding?.goalMonthlyBudget),
+    goals: normalizeFinancialGoals(onboarding?.goals)
+  };
+
+  const legacyGoal = getLegacyGoalFromOnboarding(normalizedBase);
+  const goals =
+    normalizedBase.goals.length > 0 ? normalizedBase.goals : legacyGoal ? [legacyGoal] : [];
+  const normalizedWithGoals = {
+    ...normalizedBase,
+    goals
+  };
+  const primaryGoal = getPrimaryFinancialGoal(normalizedWithGoals);
+
+  return {
+    ...normalizedWithGoals,
+    ...getLegacyFieldsFromGoal(primaryGoal)
   };
 }
 

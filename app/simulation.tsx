@@ -20,6 +20,7 @@ import {
   type FinancialSnapshot
 } from "../utils/financialCalculations";
 import { formatCOP, type FinancialRangeEstimate } from "../utils/financialRanges";
+import { formatGoalContribution, getGoalPlanFromOnboarding } from "../utils/goalPlanning";
 import type { ExactFinancialValues } from "../types/financial";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
@@ -268,10 +269,7 @@ function getScenarios(metrics: SimulationBase): Scenario[] {
     suggestedContribution !== null
       ? suggestedContribution
       : contributionFromPositiveValue(metrics.estimatedMargin, 0.2);
-  const balancedSmallExpenseAdjustment = contributionFromPositiveValue(
-    metrics.smallExpenseEstimate.midpoint,
-    0.2
-  );
+  const balancedSmallExpenseAdjustment = metrics.snapshot.smallExpenses.opportunityAmount;
   const intensiveBase =
     suggestedContribution !== null
       ? suggestedContribution * 1.25
@@ -475,7 +473,7 @@ function ScenarioCard({
             ? `${formatCOP(scenario.monthlyContribution)} aprox.`
             : scenario.unavailableContributionLabel ?? "No disponible"}
         </Text>
-        {scenario.unavailableExplanation ? (
+        {scenario.monthlyContribution === null && scenario.unavailableExplanation ? (
           <Text style={styles.contributionDetail}>{scenario.unavailableExplanation}</Text>
         ) : null}
       </View>
@@ -533,6 +531,14 @@ export default function SimulationScreen() {
     [exactValues, onboarding]
   );
   const snapshot = metrics.snapshot;
+  const goalPlan = useMemo(
+    () => getGoalPlanFromOnboarding(onboarding, snapshot.cashflow.suggestedMonthlyContribution, exactValues),
+    [exactValues, onboarding, snapshot.cashflow.suggestedMonthlyContribution]
+  );
+  const primaryGoalAllocation =
+    goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
+    goalPlan.allocations[0] ??
+    null;
   const scenarios = useMemo(() => getScenarios(metrics), [metrics]);
   const impactfulVariable = useMemo(
     () => getMostImpactfulVariable(onboarding, metrics, exactValues),
@@ -543,24 +549,40 @@ export default function SimulationScreen() {
     0
   );
   const canCalculateMargin = metrics.estimatedMargin !== null;
-  const needsGoalAmountDefinition = snapshot.goal.targetAmount === null;
+  const simulatedGoalTargetAmount = primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount;
+  const simulatedGoalRemainingAmount = primaryGoalAllocation?.remainingAmount ?? snapshot.goal.remainingAmount;
+  const simulatedGoalEstimatedMonths =
+    primaryGoalAllocation?.estimatedMonthsToGoal ?? snapshot.goal.estimatedMonthsToGoal;
+  const hasExplicitGoalTarget =
+    primaryGoalAllocation?.goal.targetAmount !== null &&
+    primaryGoalAllocation?.goal.targetAmount !== undefined;
+  const simulatedGoalTargetIsExact =
+    hasExplicitGoalTarget || snapshot.sourceMap.goalTargetAmount === "exact";
+  const needsGoalAmountDefinition = simulatedGoalTargetAmount === null;
+  const simulatedGoalTitle =
+    primaryGoalAllocation?.goal.title ?? onboarding.financialGoal ?? snapshot.goal.name ?? "No definida";
+  const simulatedGoalHorizon =
+    primaryGoalAllocation?.goal.horizon ?? onboarding.goalHorizon ?? "No definido";
   const goalAmountLabel =
-    snapshot.sourceMap.goalTargetAmount === "exact"
+    simulatedGoalTargetIsExact
       ? "Monto objetivo ingresado"
       : "Monto objetivo estimado";
   const goalAmountRangeLabel =
-    snapshot.goal.targetAmount !== null
-      ? `${formatCOP(snapshot.goal.targetAmount)}${snapshot.sourceMap.goalTargetAmount === "exact" ? "" : " aprox."}`
-      : getGoalAmountRangeLabel(onboarding.goalAmountRange);
+    simulatedGoalTargetAmount !== null
+      ? `${formatCOP(simulatedGoalTargetAmount)}${simulatedGoalTargetIsExact ? "" : " aprox."}`
+      : getGoalAmountRangeLabel(primaryGoalAllocation?.goal.amountRange ?? onboarding.goalAmountRange);
   const suggestedContributionLabel =
     snapshot.cashflow.suggestedMonthlyContribution > 0
       ? `${formatCOP(snapshot.cashflow.suggestedMonthlyContribution)} aprox.`
       : "Por definir con margen mensual";
+  const simulatedGoalContributionLabel = primaryGoalAllocation
+    ? formatGoalContribution(primaryGoalAllocation.monthlyContribution)
+    : suggestedContributionLabel;
   const estimatedMonthsToGoalLabel =
-    snapshot.goal.estimatedMonthsToGoal !== null
-      ? `Podria tomar cerca de ${snapshot.goal.estimatedMonthsToGoal} meses con estos datos.`
-      : snapshot.goal.label;
-  const isInvestmentGoal = onboarding.financialGoal === "Empezar a invertir";
+    simulatedGoalEstimatedMonths !== null
+      ? `Podria tomar cerca de ${simulatedGoalEstimatedMonths} meses con el aporte asignado a esta meta.`
+      : primaryGoalAllocation?.viabilityLabel ?? snapshot.goal.label;
+  const isInvestmentGoal = simulatedGoalTitle === "Empezar a invertir";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -597,8 +619,8 @@ export default function SimulationScreen() {
             title="Meta simulada"
           >
             <View style={styles.valueRows}>
-              <ValueRow label="Meta principal" value={onboarding.financialGoal ?? "No definida"} />
-              <ValueRow label="Horizonte" value={onboarding.goalHorizon ?? "No definido"} />
+              <ValueRow label="Meta principal" value={simulatedGoalTitle} />
+              <ValueRow label="Horizonte" value={simulatedGoalHorizon} />
               <ValueRow
                 label={goalAmountLabel}
                 value={goalAmountRangeLabel}
@@ -606,11 +628,12 @@ export default function SimulationScreen() {
               <ValueRow
                 label="Monto restante estimado"
                 value={
-                  snapshot.goal.remainingAmount !== null
-                    ? `${formatCOP(snapshot.goal.remainingAmount)} aprox.`
+                  simulatedGoalRemainingAmount !== null
+                    ? `${formatCOP(simulatedGoalRemainingAmount)} aprox.`
                     : "Por calcular"
                 }
               />
+              <ValueRow label="Aporte asignado a meta" value={simulatedGoalContributionLabel} />
               <ValueRow label="Tiempo estimado" value={estimatedMonthsToGoalLabel} />
             </View>
 

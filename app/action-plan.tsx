@@ -25,6 +25,7 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
 import { formatCOP, getFinancialDataSourceLabel } from "../utils/financialRanges";
+import { formatGoalContribution, getGoalPlanFromOnboarding } from "../utils/goalPlanning";
 import {
   getActiveMonthlyPlanProgressKey,
   getMonthlyActions,
@@ -35,7 +36,8 @@ import {
   getMonthlyPlanPriorityKey,
   getMonthlyPlanProgressKey,
   isMonthlyActionCompleted,
-  type MonthlyAction
+  type MonthlyAction,
+  type MonthlyGoalContext
 } from "../utils/monthlyPlan";
 
 const financialFoundationImage = require("../assets/illustrations/financial-foundation.png");
@@ -252,7 +254,31 @@ export default function ActionPlanScreen() {
   const { completedActions, toggleActionCompleted } = usePlan();
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
-  const suggestedActions = useMemo(() => getMonthlyActions(data, metrics), [data, metrics]);
+  const goalPlan = useMemo(
+    () => getGoalPlanFromOnboarding(onboarding, metrics.snapshot.cashflow.suggestedMonthlyContribution, exactValues),
+    [exactValues, metrics.snapshot.cashflow.suggestedMonthlyContribution, onboarding]
+  );
+  const primaryGoalAllocation =
+    goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
+    goalPlan.allocations[0] ??
+    null;
+  const monthlyGoalContext = useMemo<MonthlyGoalContext>(
+    () => ({
+      title: primaryGoalAllocation?.goal.title ?? data.financialGoal,
+      monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
+      estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null
+    }),
+    [
+      data.financialGoal,
+      primaryGoalAllocation?.estimatedMonthsToGoal,
+      primaryGoalAllocation?.goal.title,
+      primaryGoalAllocation?.monthlyContribution
+    ]
+  );
+  const suggestedActions = useMemo(
+    () => getMonthlyActions(data, metrics, undefined, monthlyGoalContext),
+    [data, metrics, monthlyGoalContext]
+  );
   const suggestedPlanProgressKey = useMemo(
     () => getMonthlyPlanProgressKey(metrics, suggestedActions),
     [metrics, suggestedActions]
@@ -263,12 +289,12 @@ export default function ActionPlanScreen() {
   );
   const activePlanPriorityKey = getMonthlyPlanPriorityKey(activePlanProgressKey);
   const actions = useMemo(
-    () => getMonthlyActions(data, metrics, activePlanPriorityKey ?? undefined),
-    [activePlanPriorityKey, data, metrics]
+    () => getMonthlyActions(data, metrics, activePlanPriorityKey ?? undefined, monthlyGoalContext),
+    [activePlanPriorityKey, data, metrics, monthlyGoalContext]
   );
   const focus = useMemo(
-    () => getMonthlyFocus(data, metrics, activePlanPriorityKey ?? undefined),
-    [activePlanPriorityKey, data, metrics]
+    () => getMonthlyFocus(data, metrics, activePlanPriorityKey ?? undefined, monthlyGoalContext),
+    [activePlanPriorityKey, data, metrics, monthlyGoalContext]
   );
   const planProgressKey = useMemo(
     () => getMonthlyPlanProgressKey(metrics, actions, activePlanPriorityKey ?? undefined),
@@ -282,10 +308,23 @@ export default function ActionPlanScreen() {
     })
   ).length;
   const progressPercentage = Math.round((completedCount / actions.length) * 100);
-  const contributionLabel =
+  const fallbackContributionLabel =
     metrics.balancedScenarioAmount > 0
       ? `${formatCOP(metrics.balancedScenarioAmount)} aprox.`
       : "Por definir";
+  const contributionLabel =
+    activePlanPriorityKey === "advance_goal" && primaryGoalAllocation
+      ? formatGoalContribution(primaryGoalAllocation.monthlyContribution)
+      : fallbackContributionLabel;
+  const contributionMetricLabel =
+    activePlanPriorityKey === "advance_goal" ? "Aporte asignado a meta" : "Posible aporte mensual";
+  const shouldShowGoalContributionSummary =
+    activePlanPriorityKey !== "advance_goal" && primaryGoalAllocation !== null;
+  const goalContributionSummaryLabel =
+    goalPlan.allocations.length > 1 ? "Aporte meta principal" : "Aporte asignado a meta";
+  const goalContributionSummaryValue = primaryGoalAllocation
+    ? formatGoalContribution(primaryGoalAllocation.monthlyContribution)
+    : "Por definir";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -350,9 +389,17 @@ export default function ActionPlanScreen() {
                   />
                   <SummaryMetric
                     icon={<Wallet color={colors.primary} size={20} strokeWidth={2.4} />}
-                    label="Posible aporte mensual"
+                    label={contributionMetricLabel}
                     value={contributionLabel}
                   />
+                  {shouldShowGoalContributionSummary ? (
+                    <SummaryMetric
+                      icon={<PiggyBank color="#7C3AED" size={20} strokeWidth={2.4} />}
+                      label={goalContributionSummaryLabel}
+                      tone="purple"
+                      value={goalContributionSummaryValue}
+                    />
+                  ) : null}
                   <SummaryMetric
                     icon={<Target color="#7C3AED" size={20} strokeWidth={2.4} />}
                     label="Enfoque"

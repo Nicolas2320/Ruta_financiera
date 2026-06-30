@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { getOnboardingGoals } from "../types/financial";
 import {
   getCurrentSavingsDisplay,
   getGoalTargetAmountDisplay,
@@ -116,6 +117,7 @@ export default function SummaryScreen() {
   const router = useRouter();
   const { exactValues, onboarding } = useOnboarding();
   const financialProfile = { onboarding, exactValues };
+  const goals = getOnboardingGoals(onboarding);
   const incomeDisplay = getMonthlyIncomeDisplay(financialProfile);
   const expensesDisplay = getMonthlyExpensesDisplay(financialProfile);
   const savingsDisplay = getCurrentSavingsDisplay(financialProfile);
@@ -227,6 +229,11 @@ export default function SummaryScreen() {
             editAccessibilityLabel="Editar meta financiera"
             fields={[
               { label: "Meta principal", value: onboarding.financialGoal },
+              {
+                label: "Metas creadas",
+                value: goals.length > 0 ? goals.length.toString() : null,
+                optional: true
+              },
               { label: "Horizonte", value: onboarding.goalHorizon },
               { label: "Importancia", value: onboarding.goalPriority },
               {
@@ -238,7 +245,7 @@ export default function SummaryScreen() {
                 optional: true
               }
             ]}
-            onEdit={() => router.push("/goals")}
+            onEdit={() => router.push("/goals-overview")}
             title="Meta financiera"
           />
 

@@ -69,8 +69,8 @@ const fields: FieldConfig[] = [
   },
   {
     id: "goalTargetAmount",
-    label: "Monto objetivo de la meta",
-    helper: "Cuánto quieres alcanzar para tu meta principal.",
+    label: "Monto objetivo de la meta principal",
+    helper: "Este valor mejora los calculos de la meta marcada como principal.",
     icon: Target,
     iconColor: "#7C3AED",
     iconBackground: "#F1E8FF"
@@ -108,6 +108,22 @@ function getValuesToSave(inputValues: InputValues): ExactFinancialValues {
   }, {});
 }
 
+function getComparableExactValue(values: ExactFinancialValues, fieldId: ExactFinancialValueKey) {
+  const value = values[fieldId];
+  return hasExactFinancialValue(value) ? value : null;
+}
+
+function hasUnsavedExactValueChanges(
+  savedValues: ExactFinancialValues,
+  draftValues: ExactFinancialValues
+) {
+  return fields.some(
+    (field) =>
+      getComparableExactValue(savedValues, field.id) !==
+      getComparableExactValue(draftValues, field.id)
+  );
+}
+
 export default function ImprovePlanScreen() {
   const router = useRouter();
   const { exactValues, onboardingSyncError, saveExactValues } = useOnboarding();
@@ -125,9 +141,17 @@ export default function ImprovePlanScreen() {
   }, [exactValues, hasEdited]);
 
   const valuesToSave = useMemo(() => getValuesToSave(inputValues), [inputValues]);
-  const precisionStatus = useMemo(
+  const savedPrecisionStatus = useMemo(
+    () => getPlanPrecisionStatus(exactValues),
+    [exactValues]
+  );
+  const draftPrecisionStatus = useMemo(
     () => getPlanPrecisionStatus(valuesToSave),
     [valuesToSave]
+  );
+  const hasUnsavedChanges = useMemo(
+    () => hasUnsavedExactValueChanges(exactValues, valuesToSave),
+    [exactValues, valuesToSave]
   );
 
   const handleInputChange = (fieldId: ExactFinancialValueKey, value: string) => {
@@ -189,11 +213,19 @@ export default function ImprovePlanScreen() {
             </View>
             <View style={styles.statusRow}>
               <View style={styles.statusBadge}>
-                <Text style={styles.statusBadgeText}>{precisionStatus.state}</Text>
+                <Text style={styles.statusBadgeText}>{savedPrecisionStatus.state}</Text>
               </View>
-              <Text style={styles.progressText}>{precisionStatus.count} de 4 datos agregados</Text>
+              <Text style={styles.progressText}>{savedPrecisionStatus.count} de 4 datos guardados</Text>
             </View>
-            <Text style={styles.helperText}>{precisionStatus.message}</Text>
+            <Text style={styles.helperText}>{savedPrecisionStatus.message}</Text>
+            {hasUnsavedChanges ? (
+              <View style={styles.unsavedNotice}>
+                <Text style={styles.unsavedNoticeText}>
+                  Cambios sin guardar: {draftPrecisionStatus.count} de 4 datos listos para guardar.
+                  Guarda para actualizar tu Dashboard.
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.form}>
@@ -373,6 +405,19 @@ const styles = StyleSheet.create({
   },
   helperText: {
     color: colors.textSubtle,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  unsavedNotice: {
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing.sm
+  },
+  unsavedNoticeText: {
+    color: "#B45309",
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
