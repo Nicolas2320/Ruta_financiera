@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Globe, MapPin } from "lucide-react-native";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -19,7 +19,10 @@ const countries = ["Colombia", "Otro"] as const;
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ source?: string }>();
   const { onboarding, updateOnboarding } = useOnboarding();
+  const source = Array.isArray(params.source) ? params.source[0] : params.source;
+  const isProfileEditMode = source === "profile";
   const [selectedAgeRange, setSelectedAgeRange] = useState<string | null>(onboarding.ageRange);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(onboarding.country);
   const [city, setCity] = useState(onboarding.city);
@@ -36,7 +39,7 @@ export default function ProfileScreen() {
       country: selectedCountry,
       city: city.trim()
     });
-    router.push("/income");
+    router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/income");
   };
 
   return (
@@ -49,12 +52,14 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <StepHeader
-            currentStep={3}
-            onBack={() => router.push("/privacy")}
-            title="Perfil básico"
-            totalSteps={8}
-          />
+          {!isProfileEditMode ? (
+            <StepHeader
+              currentStep={3}
+              onBack={() => router.push("/privacy")}
+              title="Perfil básico"
+              totalSteps={8}
+            />
+          ) : null}
 
           <HeroInfoCard
             badge="Esta información solo ayuda a personalizar tu experiencia."
@@ -125,14 +130,16 @@ export default function ProfileScreen() {
               iconPosition="right"
               onPress={handleContinue}
               style={styles.primaryButton}
-              title="Continuar"
+              title={isProfileEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
-              accessibilityLabel="Volver a privacidad y confianza"
+              accessibilityLabel={isProfileEditMode ? "Volver al perfil financiero" : "Volver a privacidad y confianza"}
               icon={null}
-              onPress={() => router.push("/privacy")}
+              onPress={() =>
+                router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/privacy")
+              }
               style={styles.secondaryButton}
-              title="Volver"
+              title={isProfileEditMode ? "Volver al perfil" : "Volver"}
               variant="secondary"
             />
           </View>

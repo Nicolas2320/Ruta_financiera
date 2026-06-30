@@ -183,7 +183,7 @@ export const exactFinancialValueKeys = [
   "monthlyIncome",
   "monthlyExpenses",
   "currentSavings",
-  "goalTargetAmount"
+  "smallExpenses"
 ] as const;
 
 export type ExactFinancialValueKey = (typeof exactFinancialValueKeys)[number];

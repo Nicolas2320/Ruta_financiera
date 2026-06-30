@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   ChevronRight,
@@ -24,7 +24,8 @@ import {
   getCurrentSavingsDisplay,
   getGoalTargetAmountDisplay,
   getMonthlyExpensesDisplay,
-  getMonthlyIncomeDisplay
+  getMonthlyIncomeDisplay,
+  getSmallExpensesDisplay
 } from "../utils/financialRanges";
 
 type SummaryField = {
@@ -184,12 +185,16 @@ function SummarySection({
 
 export default function SummaryScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ mode?: string }>();
   const { exactValues, onboarding } = useOnboarding();
+  const mode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
+  const isEditMode = mode === "edit";
   const financialProfile = { onboarding, exactValues };
   const goals = getOnboardingGoals(onboarding);
   const incomeDisplay = getMonthlyIncomeDisplay(financialProfile);
   const expensesDisplay = getMonthlyExpensesDisplay(financialProfile);
   const savingsDisplay = getCurrentSavingsDisplay(financialProfile);
+  const smallExpensesDisplay = getSmallExpensesDisplay(financialProfile);
   const goalAmountDisplay = getGoalTargetAmountDisplay(financialProfile);
 
   return (
@@ -208,10 +213,16 @@ export default function SummaryScreen() {
               </View>
 
               <View style={styles.heroCopy}>
-                <Text style={styles.kicker}>Revisión final</Text>
-                <Text style={styles.title}>Resumen antes del diagnóstico</Text>
+                <Text style={styles.kicker}>
+                  {isEditMode ? "Perfil financiero" : "Revisión final"}
+                </Text>
+                <Text style={styles.title}>
+                  {isEditMode ? "Editar tus respuestas" : "Resumen antes del diagnóstico"}
+                </Text>
                 <Text style={styles.subtitle}>
-                  Confirma la información que usaremos para crear tu primera orientación financiera.
+                  {isEditMode
+                    ? "Actualiza el contexto que usamos para adaptar tus recomendaciones."
+                    : "Confirma la información que usaremos para crear tu primera orientación financiera."}
                 </Text>
               </View>
             </View>
@@ -219,7 +230,9 @@ export default function SummaryScreen() {
             <View style={styles.trustMessage}>
               <ShieldCheck color={colors.support} size={18} strokeWidth={2.4} />
               <Text style={styles.supportText}>
-                Puedes ajustar cualquier respuesta antes de continuar. No necesitas que todo sea exacto.
+                {isEditMode
+                  ? "Estos cambios actualizan tu perfil y recalculan las pantallas que dependen de tus respuestas."
+                  : "Puedes ajustar cualquier respuesta antes de continuar. No necesitas que todo sea exacto."}
               </Text>
             </View>
           </View>
@@ -227,8 +240,9 @@ export default function SummaryScreen() {
           <View style={styles.noticeCard}>
             <ShieldCheck color={colors.primary} size={20} strokeWidth={2.4} />
             <Text style={styles.noticeText}>
-              Con esta información generaremos un diagnóstico educativo. No es una asesoría
-              financiera ni una promesa de resultados.
+              {isEditMode
+                ? "Al cambiar estas respuestas, tu diagnóstico, simulación y plan mensual pueden recalcularse."
+                : "Con esta información generaremos un diagnóstico educativo. No es una asesoría financiera ni una promesa de resultados."}
             </Text>
           </View>
 
@@ -241,7 +255,9 @@ export default function SummaryScreen() {
               { label: "Ciudad", value: onboarding.city, optional: true }
             ]}
             icon={UserRound}
-            onEdit={() => router.push("/profile")}
+            onEdit={() =>
+              router.push(isEditMode ? { pathname: "/profile", params: { source: "profile" } } : "/profile")
+            }
             tone="neutral"
             title="Perfil básico"
           />
@@ -255,7 +271,9 @@ export default function SummaryScreen() {
               { label: "Frecuencia de ingreso", value: onboarding.incomeFrequency }
             ]}
             icon={Wallet}
-            onEdit={() => router.push("/income")}
+            onEdit={() =>
+              router.push(isEditMode ? { pathname: "/income", params: { source: "profile" } } : "/income")
+            }
             tone="support"
             title="Ingresos"
           />
@@ -269,7 +287,9 @@ export default function SummaryScreen() {
               { label: "Cómo sientes tus gastos", value: onboarding.expensesFeeling }
             ]}
             icon={ReceiptText}
-            onEdit={() => router.push("/expenses")}
+            onEdit={() =>
+              router.push(isEditMode ? { pathname: "/expenses", params: { source: "profile" } } : "/expenses")
+            }
             title="Gastos"
           />
 
@@ -285,14 +305,20 @@ export default function SummaryScreen() {
                 label: "Categorías seleccionadas",
                 value: onboarding.smallExpenseCategories
               },
-              { label: "Rango mensual estimado", value: onboarding.smallExpensesRange },
+              { label: smallExpensesDisplay.label, value: smallExpensesDisplay.value },
               {
                 label: "Qué quiere hacer con esos gastos",
                 value: onboarding.smallExpensesIntention
               }
             ]}
             icon={Coffee}
-            onEdit={() => router.push("/small-expenses")}
+            onEdit={() =>
+              router.push(
+                isEditMode
+                  ? { pathname: "/small-expenses", params: { source: "profile" } }
+                  : "/small-expenses"
+              )
+            }
             tone="neutral"
             title="Gastos hormiga"
           />
@@ -308,7 +334,13 @@ export default function SummaryScreen() {
               { label: "Situación de inversiones", value: onboarding.investmentSituation }
             ]}
             icon={PiggyBank}
-            onEdit={() => router.push("/savings-debts")}
+            onEdit={() =>
+              router.push(
+                isEditMode
+                  ? { pathname: "/savings-debts", params: { source: "profile" } }
+                  : "/savings-debts"
+              )
+            }
             tone="support"
             title="Ahorros, deudas e inversiones"
           />
@@ -341,18 +373,18 @@ export default function SummaryScreen() {
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel="Generar diagnóstico financiero"
+              accessibilityLabel={isEditMode ? "Volver a configuración" : "Generar diagnóstico financiero"}
               icon={ChevronRight}
               iconPosition="right"
-              onPress={() => router.push("/diagnosis")}
-              title="Generar diagnóstico"
+              onPress={() => router.push(isEditMode ? "/settings" : "/diagnosis")}
+              title={isEditMode ? "Volver a configuración" : "Generar diagnóstico"}
             />
             <PrimaryButton
-              accessibilityLabel="Volver a meta financiera"
+              accessibilityLabel={isEditMode ? "Ir al Dashboard" : "Volver a meta financiera"}
               icon={null}
-              onPress={() => router.push("/goals")}
+              onPress={() => router.push(isEditMode ? "/dashboard" : "/goals")}
               style={styles.backButton}
-              title="Volver"
+              title={isEditMode ? "Ir al Dashboard" : "Volver"}
               variant="secondary"
             />
           </View>

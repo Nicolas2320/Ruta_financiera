@@ -212,6 +212,8 @@ export default function ExpensesScreen() {
   const { onboarding, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isSpendingEditMode = source === "spending";
+  const isProfileEditMode = source === "profile";
+  const isEditMode = isSpendingEditMode || isProfileEditMode;
   const navigate = (route: Route) => router.push(route);
   const [selectedExpenseRange, setSelectedExpenseRange] = useState<string | null>(
     normalizeExpenseRange(onboarding.expensesRange)
@@ -250,7 +252,13 @@ export default function ExpensesScreen() {
       ),
       expensesFeeling: selectedExpenseFeeling
     });
-    router.push(isSpendingEditMode ? "/spending" : "/small-expenses");
+    router.push(
+      isSpendingEditMode
+        ? "/spending"
+        : isProfileEditMode
+          ? { pathname: "/summary", params: { mode: "edit" } }
+          : "/small-expenses"
+    );
   };
 
   return (
@@ -262,7 +270,7 @@ export default function ExpensesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          {!isSpendingEditMode ? (
+          {!isEditMode ? (
           <StepHeader
             currentStep={5}
             onBack={() => router.push("/income")}
@@ -331,20 +339,28 @@ export default function ExpensesScreen() {
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel={
-                isSpendingEditMode ? "Guardar cambios de gastos" : "Continuar hacia gastos hormiga"
+                isEditMode ? "Guardar cambios de gastos" : "Continuar hacia gastos hormiga"
               }
               disabled={!canContinue}
               iconPosition="right"
               onPress={handleContinue}
               style={styles.primaryButton}
-              title={isSpendingEditMode ? "Guardar cambios" : "Continuar"}
+              title={isEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
-              accessibilityLabel={isSpendingEditMode ? "Volver a Gastos" : "Volver a ingresos"}
+              accessibilityLabel={isEditMode ? "Volver al perfil financiero" : "Volver a ingresos"}
               icon={null}
-              onPress={() => router.push(isSpendingEditMode ? "/spending" : "/income")}
+              onPress={() =>
+                router.push(
+                  isSpendingEditMode
+                    ? "/spending"
+                    : isProfileEditMode
+                      ? { pathname: "/summary", params: { mode: "edit" } }
+                      : "/income"
+                )
+              }
               style={styles.secondaryButton}
-              title={isSpendingEditMode ? "Volver a Gastos" : "Volver"}
+              title={isEditMode ? "Volver" : "Volver"}
               variant="secondary"
             />
           </View>

@@ -6,10 +6,10 @@ import {
   ArrowLeft,
   Banknote,
   CheckCircle2,
+  Coffee,
   PiggyBank,
   ReceiptText,
-  ShieldCheck,
-  Target
+  ShieldCheck
 } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -61,17 +61,17 @@ const fields: FieldConfig[] = [
   },
   {
     id: "currentSavings",
-    label: "Ahorro actual",
-    helper: "Dinero disponible o reservado actualmente.",
+    label: "Ahorro disponible general",
+    helper: "Dinero disponible fuera del ahorro específico de tus metas.",
     icon: PiggyBank,
     iconColor: colors.primary,
     iconBackground: colors.primarySoft
   },
   {
-    id: "goalTargetAmount",
-    label: "Monto objetivo de la meta principal",
-    helper: "Este valor mejora los calculos de la meta marcada como principal.",
-    icon: Target,
+    id: "smallExpenses",
+    label: "Gastos pequeños mensuales",
+    helper: "Monto aproximado que se va en consumos pequeños frecuentes.",
+    icon: Coffee,
     iconColor: "#7C3AED",
     iconBackground: "#F1E8FF"
   }
@@ -91,7 +91,7 @@ function getInitialInputValues(exactValues: ExactFinancialValues): InputValues {
       monthlyIncome: "",
       monthlyExpenses: "",
       currentSavings: "",
-      goalTargetAmount: ""
+      smallExpenses: ""
     }
   );
 }
@@ -207,8 +207,8 @@ export default function ImprovePlanScreen() {
               <Text style={styles.title}>Mejorar mi plan financiero</Text>
               <Text style={styles.subtitle}>
                 Tus resultados actuales pueden estar basados en rangos. Agrega algunos valores
-                opcionales para calcular mejor tu margen mensual, tu fondo de emergencia y el
-                avance hacia tu meta.
+                opcionales para calcular mejor tu margen mensual, tu fondo de emergencia y tus
+                oportunidades en gastos pequeÃ±os.
               </Text>
             </View>
             <View style={styles.statusRow}>

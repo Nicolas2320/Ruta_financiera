@@ -339,7 +339,7 @@ export function getPlanPrecisionStatus(exactValues: ExactFinancialValues | null 
     count,
     state: "Más claro",
     message:
-      "Tu plan tiene una base más clara para calcular margen, meta y fondo de emergencia."
+      "Tu plan tiene una base más clara para calcular margen, gastos pequeños y fondo de emergencia."
   };
 }
 
@@ -378,12 +378,6 @@ export function getPreferredCurrentSavings(profile: FinancialValueProfile) {
 }
 
 export function getPreferredGoalTargetAmount(profile: FinancialValueProfile) {
-  const exactValue = getProfileExactValues(profile).goalTargetAmount;
-
-  if (hasExactFinancialValue(exactValue)) {
-    return exactValue;
-  }
-
   const primaryGoal = profile.onboarding
     ? getPrimaryFinancialGoal({ ...initialOnboarding, ...profile.onboarding })
     : null;
@@ -395,6 +389,16 @@ export function getPreferredGoalTargetAmount(profile: FinancialValueProfile) {
   return getGoalAmountRangeEstimate(
     primaryGoal?.amountRange ?? profile.onboarding?.goalAmountRange ?? null
   ).midpoint;
+}
+
+export function getPreferredSmallExpenses(profile: FinancialValueProfile) {
+  const exactValue = getProfileExactValues(profile).smallExpenses;
+
+  if (hasExactFinancialValue(exactValue)) {
+    return exactValue;
+  }
+
+  return getSmallExpenseRangeEstimate(profile.onboarding?.smallExpensesRange ?? null).midpoint;
 }
 
 function getExactDisplay(
@@ -459,10 +463,20 @@ export function getMonthlyExpensesDisplay(profile: FinancialValueProfile): Finan
 export function getCurrentSavingsDisplay(profile: FinancialValueProfile): FinancialValueDisplay {
   return (
     getExactDisplay(
-      "Ahorro actual",
+      "Ahorro disponible general",
       getProfileExactValues(profile).currentSavings,
       "Dato ingresado para estimar tu fondo de emergencia."
     ) ?? getRangeDisplay("Rango de ahorros", profile.onboarding?.savingsRange)
+  );
+}
+
+export function getSmallExpensesDisplay(profile: FinancialValueProfile): FinancialValueDisplay {
+  return (
+    getExactDisplay(
+      "Gastos pequeños mensuales",
+      getProfileExactValues(profile).smallExpenses,
+      "Dato ingresado para estimar oportunidades en gastos pequeños."
+    ) ?? getRangeDisplay("Rango mensual estimado", profile.onboarding?.smallExpensesRange)
   );
 }
 
@@ -477,11 +491,6 @@ export function getGoalTargetAmountDisplay(
     getExactDisplay(
       "Monto objetivo de la meta",
       primaryGoal?.targetAmount ?? undefined,
-      "Dato ingresado para estimar tu avance hacia la meta."
-    ) ??
-    getExactDisplay(
-      "Monto objetivo de la meta",
-      getProfileExactValues(profile).goalTargetAmount,
       "Dato ingresado para estimar tu avance hacia la meta."
     ) ?? getRangeDisplay("Cifra aproximada", primaryGoal?.amountRange ?? profile.onboarding?.goalAmountRange)
   );

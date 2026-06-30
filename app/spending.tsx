@@ -435,7 +435,7 @@ function getSmallExpensesValue(metrics: MonthlyPlanMetrics) {
     return "No disponible";
   }
 
-  return `${formatCOP(amount)} aprox.`;
+  return source === "exact" ? formatCOP(amount) : `${formatCOP(amount)} aprox.`;
 }
 
 function getSmallExpensesToIncomePercentage(metrics: MonthlyPlanMetrics) {
@@ -465,7 +465,9 @@ function getSmallExpensesShareText(metrics: MonthlyPlanMetrics) {
       ? Math.round((smallExpenses / metrics.expenseMidpoint) * 100)
       : null;
 
-  return `Gastos pequeños: ${formatCOP(smallExpenses)} aprox.${
+  return `Gastos pequeños: ${formatCOP(smallExpenses)}${
+    metrics.snapshot.sourceMap.smallExpenses === "exact" ? "" : " aprox."
+  }${
     expenseShare !== null ? ` · ${expenseShare}% de tus gastos` : ""
   }`;
 }

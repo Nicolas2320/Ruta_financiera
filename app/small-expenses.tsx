@@ -237,6 +237,9 @@ export default function SmallExpensesScreen() {
   const { onboarding, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isSpendingEditMode = source === "spending";
+  const isProfileEditMode = source === "profile";
+  const isDashboardEditMode = source === "dashboard";
+  const isEditMode = isSpendingEditMode || isProfileEditMode || isDashboardEditMode;
   const navigate = (route: Route) => router.push(route);
   const [selectedPresence, setSelectedPresence] = useState<string | null>(
     onboarding.hasSmallExpenses
@@ -294,7 +297,15 @@ export default function SmallExpensesScreen() {
       smallExpensesRange: selectedRange,
       smallExpensesIntention: selectedIntention
     });
-    router.push(isSpendingEditMode ? "/spending" : "/savings-debts");
+    router.push(
+      isSpendingEditMode
+        ? "/spending"
+        : isDashboardEditMode
+          ? "/dashboard"
+        : isProfileEditMode
+          ? { pathname: "/summary", params: { mode: "edit" } }
+          : "/savings-debts"
+    );
   };
 
   return (
@@ -306,7 +317,7 @@ export default function SmallExpensesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          {!isSpendingEditMode ? (
+          {!isEditMode ? (
           <StepHeader
             currentStep={6}
             onBack={() => router.push("/expenses")}
@@ -431,7 +442,7 @@ export default function SmallExpensesScreen() {
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel={
-                isSpendingEditMode
+                isEditMode
                   ? "Guardar cambios de gastos pequeÃ±os"
                   : "Continuar hacia ahorros y deudas"
               }
@@ -439,22 +450,30 @@ export default function SmallExpensesScreen() {
               iconPosition="right"
               onPress={handleContinue}
               style={styles.primaryButton}
-              title={isSpendingEditMode ? "Guardar cambios" : "Continuar"}
+              title={isEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
               accessibilityLabel={
-                isSpendingEditMode ? "Volver a Gastos" : "Volver a gastos mensuales"
+                isDashboardEditMode
+                  ? "Volver al Dashboard"
+                  : isEditMode
+                    ? "Volver al perfil financiero"
+                    : "Volver a gastos mensuales"
               }
               icon={null}
               onPress={() =>
                 router.push(
                   isSpendingEditMode
                     ? "/spending"
+                    : isDashboardEditMode
+                      ? "/dashboard"
+                    : isProfileEditMode
+                      ? { pathname: "/summary", params: { mode: "edit" } }
                     : "/expenses"
                 )
               }
               style={styles.secondaryButton}
-              title={isSpendingEditMode ? "Volver a Gastos" : "Volver"}
+              title={isEditMode ? "Volver" : "Volver"}
               variant="secondary"
             />
           </View>

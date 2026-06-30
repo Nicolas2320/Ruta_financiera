@@ -8,7 +8,7 @@ import {
 import { formatCOP } from "./financialRanges";
 
 export type SnapshotSource = "exact" | "estimated" | "missing";
-export type SmallExpensesSource = "estimated" | "unknown" | "missing";
+export type SmallExpensesSource = "exact" | "estimated" | "unknown" | "missing";
 export type SavingsCapacityLevel = "negative" | "very_tight" | "low" | "medium" | "high" | "unknown";
 export type EmergencyFundStatus = "none" | "starter" | "building" | "solid" | "strong" | "unknown";
 export type GoalStatus =
@@ -175,7 +175,7 @@ const precisionMessages: Record<PrecisionStatus, { label: string; message: strin
   clearer: {
     label: "Más claro",
     message:
-      "Tu plan tiene una base más clara para calcular margen, meta y fondo de emergencia."
+      "Tu plan tiene una base más clara para calcular margen, gastos pequeños y fondo de emergencia."
   }
 };
 
@@ -337,7 +337,7 @@ export function getExactValuesCount(exactValues: ExactFinancialValues | null | u
   return exactFinancialValueKeys.filter((key) => {
     const value = exactValues?.[key];
 
-    if (key === "currentSavings") {
+    if (key === "currentSavings" || key === "smallExpenses") {
       return isNonNegativeNumber(value);
     }
 
@@ -587,7 +587,7 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const exactMonthlyIncome = exactValues.monthlyIncome;
   const exactMonthlyExpenses = exactValues.monthlyExpenses;
   const exactCurrentSavings = exactValues.currentSavings;
-  const exactGoalTargetAmount = exactValues.goalTargetAmount;
+  const exactSmallExpenses = exactValues.smallExpenses;
 
   const estimatedMonthlyIncome = estimateIncomeFromRange(onboarding.incomeRange);
   const estimatedMonthlyExpenses = estimateExpensesFromRange(onboarding.expensesRange);
@@ -608,10 +608,10 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
     : estimatedCurrentSavings;
   const goalTargetAmount = isPositiveNumber(primaryGoal?.targetAmount)
     ? primaryGoal.targetAmount
-    : isPositiveNumber(exactGoalTargetAmount)
-      ? exactGoalTargetAmount
-      : estimatedGoalTargetAmount;
-  const smallExpenses = estimatedSmallExpenses;
+    : estimatedGoalTargetAmount;
+  const smallExpenses = isNonNegativeNumber(exactSmallExpenses)
+    ? exactSmallExpenses
+    : estimatedSmallExpenses;
   const goalCurrentSavings = isNonNegativeNumber(primaryGoal?.currentAmount)
     ? primaryGoal.currentAmount
     : currentSavings;
@@ -671,11 +671,13 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
         ? "exact"
         : getSource(currentSavings),
       goalTargetAmount:
-        isPositiveNumber(primaryGoal?.targetAmount) || isPositiveNumber(exactGoalTargetAmount)
+        isPositiveNumber(primaryGoal?.targetAmount)
           ? "exact"
           : getSource(goalTargetAmount),
       smallExpenses:
-        onboarding.smallExpensesRange === "No sé" || onboarding.smallExpensesRange === "No estoy seguro"
+        isNonNegativeNumber(exactSmallExpenses)
+          ? "exact"
+          : onboarding.smallExpensesRange === "No sé" || onboarding.smallExpensesRange === "No estoy seguro"
           ? "unknown"
           : smallExpenses === null
             ? "missing"
