@@ -48,6 +48,33 @@ npm run typecheck
 npx expo install --check
 ```
 
+## Web y GitHub Pages
+
+La app se puede exportar como sitio estatico con Expo:
+
+```bash
+npm run export:web
+```
+
+El workflow `.github/workflows/deploy-web.yml` publica `dist/` en GitHub Pages cuando hay cambios en `main` o cuando se ejecuta manualmente desde GitHub Actions.
+
+Para publicar en GitHub Pages:
+
+1. En GitHub, ve a `Settings > Pages`.
+2. En `Build and deployment`, selecciona `GitHub Actions`.
+3. Configura estos secretos del repositorio si quieres que Supabase funcione en la web publicada:
+
+```bash
+EXPO_PUBLIC_SUPABASE_URL=...
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+```
+
+El build usa `EXPO_BASE_URL=/Ruta_financiera` para que los assets y rutas funcionen bajo:
+
+```text
+https://Nicolas2320.github.io/Ruta_financiera/
+```
+
 ## Supabase
 
 La app puede persistir el onboarding y el progreso del plan mensual en Supabase.
