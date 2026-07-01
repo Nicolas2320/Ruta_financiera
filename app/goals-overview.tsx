@@ -797,9 +797,10 @@ function GoalCard({
       : "Define un objetivo";
   const latestContribution = allocation.goal.contributions?.[0];
   const contributionCount = allocation.goal.contributions?.length ?? 0;
+  const isPausedGoal = allocation.goal.status === "paused";
   const quickContribution =
     getParsedCurrencyInput(contributionInput) ??
-    (allocation.goal.status === "paused"
+    (isPausedGoal
       ? 0
       : allocation.monthlyContribution > 0
         ? allocation.monthlyContribution
@@ -894,7 +895,7 @@ function GoalCard({
   };
 
   const handleRegisterContribution = () => {
-    if (quickContribution <= 0) {
+    if (isPausedGoal || quickContribution <= 0) {
       return;
     }
 
@@ -997,7 +998,7 @@ function GoalCard({
         </View>
       ) : null}
 
-      {!isCompletedGoal ? (
+      {!isCompletedGoal && !isPausedGoal ? (
         <View style={styles.registerBox}>
           <View style={styles.contributionHeader}>
             <View>
@@ -1026,6 +1027,23 @@ function GoalCard({
               <Text style={styles.registerButtonText}>Registrar</Text>
             </Pressable>
           </View>
+        </View>
+      ) : isPausedGoal ? (
+        <View style={styles.pausedContributionBox}>
+          <AlertCircle color="#B45309" size={19} strokeWidth={2.4} />
+          <View style={styles.pausedContributionCopy}>
+            <Text style={styles.pausedContributionTitle}>Meta pausada</Text>
+            <Text style={styles.pausedContributionText}>
+              Activa esta meta para registrar aportes o ajustar su aporte mensual.
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onActivate}
+            style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
+          >
+            <Text style={styles.smallActionText}>Activar</Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -2580,6 +2598,33 @@ const styles = StyleSheet.create({
     color: colors.surface,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  pausedContributionBox: {
+    alignItems: "flex-start",
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  pausedContributionCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 180
+  },
+  pausedContributionTitle: {
+    color: "#92400E",
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  pausedContributionText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
     lineHeight: typography.lineHeight.caption
   },
   contributionAdjustInline: {
