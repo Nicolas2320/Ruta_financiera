@@ -10,6 +10,7 @@ import {
   Calendar,
   Car,
   ChartColumnIncreasing,
+  ChevronLeft,
   CircleQuestionMark,
   Clock,
   CreditCard,
@@ -426,12 +427,26 @@ export default function GoalsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <StepHeader
-            currentStep={8}
-            onBack={() => router.push(isAddMode ? "/goals-overview" : "/savings-debts")}
-            title={isAddMode ? "Nueva meta" : "Meta financiera"}
-            totalSteps={8}
-          />
+          {isAddMode ? (
+            <View style={styles.addHeader}>
+              <Pressable
+                accessibilityLabel="Volver a mis metas"
+                accessibilityRole="button"
+                onPress={() => router.push("/goals-overview")}
+                style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+              >
+                <ChevronLeft color="#0B1B3F" size={21} strokeWidth={2.5} />
+              </Pressable>
+              <Text style={styles.addHeaderTitle}>Nueva meta</Text>
+            </View>
+          ) : (
+            <StepHeader
+              currentStep={8}
+              onBack={() => router.push("/savings-debts")}
+              title="Meta financiera"
+              totalSteps={8}
+            />
+          )}
 
           <HeroInfoCard
             badge="No necesitas tener una cifra exacta para empezar."
@@ -698,6 +713,30 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     maxWidth: 520,
     width: "100%"
+  },
+  addHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "space-between"
+  },
+  backButton: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: "#D6E4F7",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: "center",
+    width: 38
+  },
+  addHeaderTitle: {
+    color: colors.text,
+    flex: 1,
+    fontSize: typography.sectionTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.sectionTitle,
+    textAlign: "right"
   },
   heroImage: {
     height: 132,

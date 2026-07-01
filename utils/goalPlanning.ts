@@ -369,15 +369,18 @@ export function getGoalAllocationPlan({
   const goalMetrics = normalizedGoals.map((goal, index) => {
     const horizonMonths = getGoalHorizonMonths(goal.horizon);
     const targetAmount = getGoalTargetAmount(goal, exactValues, goal.isPrimary === true || index === 0);
+    const isCompleted = goal.status === "completed";
     const currentAmount = Math.max(0, goal.currentAmount ?? 0);
     const remainingAmount =
-      targetAmount !== null ? Math.max(targetAmount - currentAmount, 0) : null;
+      targetAmount !== null ? (isCompleted ? 0 : Math.max(targetAmount - currentAmount, 0)) : null;
     const progressPercentage =
       targetAmount !== null && targetAmount > 0
-        ? Math.min((currentAmount / targetAmount) * 100, 100)
+        ? isCompleted
+          ? 100
+          : Math.min((currentAmount / targetAmount) * 100, 100)
         : null;
     const requiredMonthlyContribution =
-      remainingAmount !== null && horizonMonths !== null && horizonMonths > 0
+      !isCompleted && remainingAmount !== null && horizonMonths !== null && horizonMonths > 0
         ? Math.ceil(remainingAmount / horizonMonths)
         : null;
     const score =
