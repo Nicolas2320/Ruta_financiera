@@ -44,7 +44,6 @@ import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
-import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
 import {
   getGoalTypeFromTitle,
   getLegacyFieldsFromGoal,
@@ -53,7 +52,7 @@ import {
   type FinancialGoal
 } from "../types/financial";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
-import { applyGoalContribution } from "../utils/goalContributions";
+import { applyGoalContribution, getGoalContributionPeriodSummary } from "../utils/goalContributions";
 import {
   formatGoalContribution,
   getAllocationProgress,
@@ -361,19 +360,6 @@ function getFormattedDate(value: string | null | undefined) {
     day: "2-digit",
     month: "short"
   });
-}
-
-function isEmergencyGoal(allocation: GoalAllocation) {
-  const normalizedTitle = allocation.goal.title
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-
-  return (
-    allocation.goal.type === "security" ||
-    normalizedTitle.includes("emergencia") ||
-    normalizedTitle.includes("imprevisto")
-  );
 }
 
 function getContributionPaceProgress(allocation: GoalAllocation) {
@@ -733,8 +719,6 @@ function GoalCard({
   onDelete,
   onIncrease,
   onRegisterContribution,
-  pendingPlanContribution,
-  recordedPlanContribution,
   onSetPrimary,
   onPause,
   onReset,
@@ -749,8 +733,6 @@ function GoalCard({
   onDelete: () => void;
   onIncrease: () => void;
   onRegisterContribution: (amount: number) => void;
-  pendingPlanContribution: number;
-  recordedPlanContribution: number;
   onSetPrimary: () => void;
   onPause: () => void;
   onReset: () => void;
@@ -794,16 +776,9 @@ function GoalCard({
       ? `${formatCOP(allocation.requiredMonthlyContribution)} / mes`
       : "Sin referencia";
   const currentLabel = allocation.currentAmount > 0 ? formatCOP(allocation.currentAmount) : "$0";
-  const displayedCurrentAmount = allocation.currentAmount + pendingPlanContribution;
-  const displayedProgressPercentage =
-    pendingPlanContribution > 0 && allocation.targetAmount !== null && allocation.targetAmount > 0
-      ? Math.min((displayedCurrentAmount / allocation.targetAmount) * 100, 100)
-      : allocation.progressPercentage;
-  const displayedProgress =
-    displayedProgressPercentage !== null ? displayedProgressPercentage : progress;
   const progressLabel =
-    displayedProgressPercentage !== null
-      ? `${Math.round(displayedProgressPercentage)}%`
+    allocation.progressPercentage !== null
+      ? `${Math.round(allocation.progressPercentage)}%`
       : "Por medir";
   const remainingLabel =
     allocation.remainingAmount !== null
@@ -884,6 +859,7 @@ function GoalCard({
       priority: selectedPriority || null,
       targetAmount,
       currentAmount,
+      ...(currentAmount <= 0 ? { contributions: [] } : {}),
       status: nextStatus
     };
 
@@ -988,38 +964,18 @@ function GoalCard({
       <View style={styles.progressSummary}>
         <View style={styles.progressHeader}>
           <View>
-            <Text style={styles.progressLabel}>
-              {pendingPlanContribution > 0 ? "Progreso del mes" : "Progreso individual"}
-            </Text>
+            <Text style={styles.progressLabel}>Progreso individual</Text>
             <Text style={styles.progressValue}>{progressLabel}</Text>
           </View>
           <Text style={styles.progressDetail}>{remainingLabel}</Text>
         </View>
         <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: toPercentWidth(displayedProgress) }]} />
+          <View style={[styles.progressFill, { width: toPercentWidth(progress) }]} />
         </View>
         <Text style={styles.helperText}>
-          {pendingPlanContribution > 0
-            ? `Guardado: ${currentLabel}. Plan mensual: +${formatCOP(pendingPlanContribution)} este mes.`
-            : `Guardado: ${currentLabel} de ${targetLabel}`}
+          Guardado: {currentLabel} de {targetLabel}
         </Text>
       </View>
-
-      {recordedPlanContribution > 0 ? (
-        <View style={styles.planContributionBox}>
-          <View style={styles.planContributionHeader}>
-            <Text style={styles.planContributionLabel}>Registro del plan mensual</Text>
-            <Chip label="Vista del mes" tone="support" />
-          </View>
-          <Text style={styles.planContributionValue}>
-            {formatCOP(recordedPlanContribution)} registrados en el plan mensual
-          </Text>
-          <Text style={styles.planContributionText}>
-            Si el aporte nacio en el plan o completo la accion del mes, queda enlazado con esta meta y
-            cuenta dentro del progreso guardado.
-          </Text>
-        </View>
-      ) : null}
 
       {!isCompletedGoal && !isPausedGoal ? (
         <View style={styles.registerBox}>
@@ -1496,32 +1452,18 @@ export default function GoalsOverviewScreen() {
   const primaryGoalContributionProgressId = primaryGoalContributionAction
     ? getMonthlyActionProgressId(monthlyPlanProgressKey, primaryGoalContributionAction.id)
     : null;
-  const impactSummary = useMemo(
-    () =>
-      getMonthlyActionImpactSummary(completedActions, {
-        periodKey: getMonthlyPlanPeriodKey()
-      }),
-    [completedActions]
+  const periodKey = getMonthlyPlanPeriodKey();
+  const primaryGoalContributionThisMonthSummary = useMemo(
+    () => getGoalContributionPeriodSummary(primaryGoalAllocation?.goal, periodKey),
+    [periodKey, primaryGoalAllocation?.goal]
   );
-  const primaryGoalPlanContribution =
+  const primaryGoalContributionThisMonth =
     primaryGoalAllocation !== null
-      ? impactSummary.goalContributionTotal +
-        (isEmergencyGoal(primaryGoalAllocation) ? impactSummary.emergencyContributionTotal : 0)
+      ? Math.min(
+          primaryGoalContributionThisMonthSummary.amount,
+          Math.max(primaryGoalAllocation.currentAmount, 0)
+        )
       : 0;
-  const linkedPrimaryGoalPlanContribution =
-    primaryGoalAllocation !== null
-      ? (primaryGoalAllocation.goal.contributions ?? []).reduce((total, contribution) => {
-          const isLinkedToCurrentPlan = impactSummary.realContributions.some(
-            (item) => item.progressId === contribution.sourceProgressId
-          );
-
-          return isLinkedToCurrentPlan ? total + contribution.amount : total;
-        }, 0)
-      : 0;
-  const pendingPrimaryGoalPlanContribution = Math.max(
-    primaryGoalPlanContribution - linkedPrimaryGoalPlanContribution,
-    0
-  );
   const isCompletedAllocation = (allocation: GoalAllocation) =>
     allocation.viability === "completed" || allocation.goal.status === "completed";
   const isPausedAllocation = (allocation: GoalAllocation) =>
@@ -1818,7 +1760,7 @@ export default function GoalsOverviewScreen() {
               icon={<PiggyBank color={colors.support} size={20} strokeWidth={2.4} />}
               label="Registrado este mes"
               tone="support"
-              value={primaryGoalPlanContribution > 0 ? formatCOP(primaryGoalPlanContribution) : "$0"}
+              value={primaryGoalContributionThisMonth > 0 ? formatCOP(primaryGoalContributionThisMonth) : "$0"}
             />
           </View>
 
@@ -2014,14 +1956,6 @@ export default function GoalsOverviewScreen() {
                     })
                   }
                   onRegisterContribution={(amount) => registerGoalContribution(allocation.goal.id, amount)}
-                  pendingPlanContribution={
-                    allocation.goal.id === primaryGoalAllocation?.goal.id
-                      ? pendingPrimaryGoalPlanContribution
-                      : 0
-                  }
-                  recordedPlanContribution={
-                    allocation.goal.id === primaryGoalAllocation?.goal.id ? primaryGoalPlanContribution : 0
-                  }
                   onReset={() => setGoalContribution(allocation.goal.id, null)}
                   onSetPrimary={() => confirmSetPrimaryGoal(allocation)}
                   onUpdateGoal={(updates) => updateGoal(allocation.goal.id, updates)}
@@ -2520,40 +2454,6 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  planContributionBox: {
-    backgroundColor: colors.supportSoft,
-    borderColor: "#B9E9CD",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: spacing.xs,
-    padding: spacing.md
-  },
-  planContributionHeader: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    justifyContent: "space-between"
-  },
-  planContributionLabel: {
-    color: colors.support,
-    flex: 1,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption,
-    minWidth: 160
-  },
-  planContributionValue: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
-  },
-  planContributionText: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
     lineHeight: typography.lineHeight.caption
   },
   chipRow: {

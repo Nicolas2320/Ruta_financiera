@@ -12,6 +12,11 @@ type GoalContributionInput = {
   sourceProgressId?: string | null;
 };
 
+export type GoalContributionPeriodSummary = {
+  amount: number;
+  latestDate: string | null;
+};
+
 function getSafeAmount(value: number) {
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
@@ -37,6 +42,20 @@ function isLinkedContribution(
     contribution.id === id ||
     (Boolean(sourceProgressId) && contribution.sourceProgressId === sourceProgressId)
   );
+}
+
+function getPeriodKeyFromDate(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}`;
 }
 
 function getStatusAfterContribution(
@@ -177,4 +196,32 @@ export function removeGoalContributionBySource(
       status
     };
   });
+}
+
+export function getGoalContributionPeriodSummary(
+  goal: FinancialGoal | null | undefined,
+  periodKey: string
+): GoalContributionPeriodSummary {
+  return (goal?.contributions ?? []).reduce<GoalContributionPeriodSummary>(
+    (summary, contribution) => {
+      if (getPeriodKeyFromDate(contribution.date) !== periodKey) {
+        return summary;
+      }
+
+      const amount = getSafeAmount(contribution.amount);
+      const latestDate =
+        !summary.latestDate || new Date(contribution.date) > new Date(summary.latestDate)
+          ? contribution.date
+          : summary.latestDate;
+
+      return {
+        amount: summary.amount + amount,
+        latestDate
+      };
+    },
+    {
+      amount: 0,
+      latestDate: null
+    }
+  );
 }

@@ -42,23 +42,24 @@ import {
 import {
   getActionImpactMessage,
   getActionProgressImpactItem,
-  getMonthlyActionImpactSummary,
   getMonthlyImpactHeadline,
   getNextPlanAdjustmentHint,
   type MonthlyActionImpactItem
 } from "../utils/actionProgressImpact";
 import {
+  getEffectiveMonthlyPlanProgress,
+  removeStoredGoalContributionActionsForPeriod
+} from "../utils/monthlyPlanProgress";
+import {
   getActiveMonthlyPlanProgressKey,
   getMonthlyActions,
   getMonthlyActionProgressId,
-  getMonthlyActionProgressStatus,
   getMonthlyFocus,
   getMonthlyPlanData,
   getMonthlyPlanMetrics,
   getMonthlyPlanPeriodKey,
   getMonthlyPlanPriorityKey,
   getMonthlyPlanProgressKey,
-  isMonthlyActionCompleted,
   type MonthlyAction,
   type MonthlyGoalContext
 } from "../utils/monthlyPlan";
@@ -753,6 +754,7 @@ export default function ActionPlanScreen() {
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const goals = useMemo(() => getOnboardingGoals(onboarding), [onboarding]);
+  const periodKey = getMonthlyPlanPeriodKey();
   const goalPlan = useMemo(
     () => getGoalPlanFromOnboarding(onboarding, metrics.snapshot.cashflow.suggestedMonthlyContribution, exactValues),
     [exactValues, metrics.snapshot.cashflow.suggestedMonthlyContribution, onboarding]
@@ -774,6 +776,10 @@ export default function ActionPlanScreen() {
       primaryGoalAllocation?.monthlyContribution
     ]
   );
+  const completedActionsForPlanSelection = useMemo(
+    () => removeStoredGoalContributionActionsForPeriod(completedActions, periodKey),
+    [completedActions, periodKey]
+  );
   const suggestedActions = useMemo(
     () => getMonthlyActions(data, metrics, undefined, monthlyGoalContext),
     [data, metrics, monthlyGoalContext]
@@ -783,8 +789,8 @@ export default function ActionPlanScreen() {
     [metrics, suggestedActions]
   );
   const activePlanProgressKey = useMemo(
-    () => getActiveMonthlyPlanProgressKey(completedActions, suggestedPlanProgressKey),
-    [completedActions, suggestedPlanProgressKey]
+    () => getActiveMonthlyPlanProgressKey(completedActionsForPlanSelection, suggestedPlanProgressKey),
+    [completedActionsForPlanSelection, suggestedPlanProgressKey]
   );
   const activePlanPriorityKey = getMonthlyPlanPriorityKey(activePlanProgressKey);
   const actions = useMemo(
@@ -799,21 +805,19 @@ export default function ActionPlanScreen() {
     () => getMonthlyPlanProgressKey(metrics, actions, activePlanPriorityKey ?? undefined),
     [activePlanPriorityKey, actions, metrics]
   );
-  const completedCount = actions.filter((action) =>
-    isMonthlyActionCompleted({
-      actionId: action.id,
-      completedActions,
-      planProgressKey
-    })
-  ).length;
-  const inProgressCount = actions.filter(
-    (action) =>
-      getMonthlyActionProgressStatus({
-        actionId: action.id,
-        completedActions,
-        planProgressKey
-      }) === "in_progress"
-  ).length;
+  const monthlyPlanProgress = useMemo(
+    () =>
+      getEffectiveMonthlyPlanProgress({
+        actions,
+        completedActions: completedActionsForPlanSelection,
+        periodKey,
+        planProgressKey,
+        primaryGoalAllocation
+      }),
+    [actions, completedActionsForPlanSelection, periodKey, planProgressKey, primaryGoalAllocation]
+  );
+  const { completedCount, effectiveCompletedActions, impactSummary, inProgressCount } =
+    monthlyPlanProgress;
   const actionCount = actions.length;
   const progressPercentage = actionCount > 0 ? Math.round((completedCount / actionCount) * 100) : 0;
   const engagedCount = completedCount + inProgressCount;
@@ -835,13 +839,6 @@ export default function ActionPlanScreen() {
     ? formatGoalContribution(primaryGoalAllocation.monthlyContribution)
     : "Por definir";
   const primaryGoalTitle = primaryGoalAllocation?.goal.title ?? data.financialGoal;
-  const impactSummary = useMemo(
-    () =>
-      getMonthlyActionImpactSummary(completedActions, {
-        periodKey: getMonthlyPlanPeriodKey()
-      }),
-    [completedActions]
-  );
   const impactHeadline = getMonthlyImpactHeadline(impactSummary);
   const nextPlanHint = getNextPlanAdjustmentHint(impactSummary);
   const realContributionLabel =
@@ -1035,7 +1032,7 @@ export default function ActionPlanScreen() {
           <View style={styles.actionsList}>
             {actions.map((action, index) => {
               const actionProgressId = getMonthlyActionProgressId(planProgressKey, action.id);
-              const actionProgress = completedActions[actionProgressId];
+              const actionProgress = effectiveCompletedActions[actionProgressId];
               const impactItem = getActionProgressImpactItem(actionProgressId, actionProgress);
 
               return (

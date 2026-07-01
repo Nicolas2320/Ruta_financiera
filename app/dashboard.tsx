@@ -32,12 +32,13 @@ import { BottomNavigation } from "../components/BottomNavigation";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
-import {
-  getMonthlyActionImpactSummary,
-  getNextPlanAdjustmentHint
-} from "../utils/actionProgressImpact";
+import { getNextPlanAdjustmentHint } from "../utils/actionProgressImpact";
 import { formatCOP } from "../utils/financialRanges";
 import { getGoalPlanFromOnboarding, type GoalAllocation } from "../utils/goalPlanning";
+import {
+  getEffectiveMonthlyPlanProgress,
+  removeStoredGoalContributionActionsForPeriod
+} from "../utils/monthlyPlanProgress";
 import {
   getActiveMonthlyPlanProgressKey,
   getMonthlyActions,
@@ -49,7 +50,6 @@ import {
   getMonthlyPlanProgressKey,
   goalNeedsAmount,
   hasLowEmergencyCoverage,
-  isMonthlyActionCompleted,
   type MonthlyAction,
   type MonthlyGoalContext
 } from "../utils/monthlyPlan";
@@ -763,6 +763,7 @@ export default function DashboardScreen() {
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const snapshot = metrics.snapshot;
+  const periodKey = getMonthlyPlanPeriodKey();
   const goalPlan = useMemo(
     () => getGoalPlanFromOnboarding(onboarding, snapshot.cashflow.suggestedMonthlyContribution, exactValues),
     [exactValues, onboarding, snapshot.cashflow.suggestedMonthlyContribution]
@@ -793,9 +794,13 @@ export default function DashboardScreen() {
     () => getMonthlyPlanProgressKey(metrics, suggestedActions),
     [metrics, suggestedActions]
   );
+  const completedActionsForPlanSelection = useMemo(
+    () => removeStoredGoalContributionActionsForPeriod(completedActions, periodKey),
+    [completedActions, periodKey]
+  );
   const activePlanProgressKey = useMemo(
-    () => getActiveMonthlyPlanProgressKey(completedActions, suggestedPlanProgressKey),
-    [completedActions, suggestedPlanProgressKey]
+    () => getActiveMonthlyPlanProgressKey(completedActionsForPlanSelection, suggestedPlanProgressKey),
+    [completedActionsForPlanSelection, suggestedPlanProgressKey]
   );
   const activePlanPriorityKey = getMonthlyPlanPriorityKey(activePlanProgressKey);
   const actions = useMemo(
@@ -810,22 +815,20 @@ export default function DashboardScreen() {
     () => getMonthlyPlanProgressKey(metrics, actions, activePlanPriorityKey ?? undefined),
     [activePlanPriorityKey, actions, metrics]
   );
-  const completedCount = actions.filter((action) =>
-    isMonthlyActionCompleted({
-      actionId: action.id,
-      completedActions,
-      planProgressKey
-    })
-  ).length;
+  const monthlyPlanProgress = useMemo(
+    () =>
+      getEffectiveMonthlyPlanProgress({
+        actions,
+        completedActions: completedActionsForPlanSelection,
+        periodKey,
+        planProgressKey,
+        primaryGoalAllocation
+      }),
+    [actions, completedActionsForPlanSelection, periodKey, planProgressKey, primaryGoalAllocation]
+  );
+  const { completedCount, impactSummary } = monthlyPlanProgress;
   const actionCount = actions.length;
   const progressPercentage = actionCount > 0 ? Math.round((completedCount / actionCount) * 100) : 0;
-  const impactSummary = useMemo(
-    () =>
-      getMonthlyActionImpactSummary(completedActions, {
-        periodKey: getMonthlyPlanPeriodKey()
-      }),
-    [completedActions]
-  );
   const impactDetail = getNextPlanAdjustmentHint(impactSummary);
   const realContributionLabel =
     impactSummary.realContributionTotal > 0 ? formatCOP(impactSummary.realContributionTotal) : "$0";
