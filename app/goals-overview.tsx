@@ -799,7 +799,11 @@ function GoalCard({
   const contributionCount = allocation.goal.contributions?.length ?? 0;
   const quickContribution =
     getParsedCurrencyInput(contributionInput) ??
-    (allocation.monthlyContribution > 0 ? allocation.monthlyContribution : contributionStep);
+    (allocation.goal.status === "paused"
+      ? 0
+      : allocation.monthlyContribution > 0
+        ? allocation.monthlyContribution
+        : contributionStep);
   const isCompletedGoal = allocation.goal.status === "completed";
   const remainingContributionAmount =
     allocation.remainingAmount !== null ? Math.max(0, allocation.remainingAmount) : null;
@@ -857,7 +861,7 @@ function GoalCard({
           ? "active"
           : allocation.goal.status;
 
-    onUpdateGoal({
+    const goalUpdates: Partial<FinancialGoal> = {
       title: cleanTitle,
       iconKey: nextIconKey,
       type: getGoalTypeFromTitle(cleanTitle),
@@ -866,7 +870,13 @@ function GoalCard({
       targetAmount,
       currentAmount,
       status: nextStatus
-    });
+    };
+
+    if (allocation.goal.status === "completed" && nextStatus === "active") {
+      goalUpdates.manualMonthlyContribution = null;
+    }
+
+    onUpdateGoal(goalUpdates);
 
     if (
       allocation.goal.status === "completed" &&
@@ -1067,37 +1077,55 @@ function GoalCard({
               />
             </View>
 
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  styles.contributionProgressFill,
-                  { width: toPercentWidth(contributionPaceProgress) }
-                ]}
-              />
-            </View>
-            <Text style={styles.helperText}>{contributionPaceLabel}</Text>
-
-            {!isCompletedGoal ? (
-              <View style={styles.adjustRow}>
+            <View style={styles.contributionAdjustInline}>
+              {allocation.goal.status !== "paused" && !isCompletedGoal ? (
                 <IconButton
                   accessibilityLabel={`Reducir aporte para ${allocation.goal.title}`}
                   disabled={allocation.monthlyContribution <= 0}
                   icon={<Minus color={colors.primary} size={18} strokeWidth={2.6} />}
                   onPress={onDecrease}
                 />
+              ) : null}
+              <View style={styles.contributionProgressArea}>
+                <View style={styles.progressTrack}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      styles.contributionProgressFill,
+                      { width: toPercentWidth(contributionPaceProgress) }
+                    ]}
+                  />
+                </View>
+                <Text style={styles.helperText}>{contributionPaceLabel}</Text>
+              </View>
+              {allocation.goal.status !== "paused" && !isCompletedGoal ? (
                 <IconButton
                   accessibilityLabel={`Aumentar aporte para ${allocation.goal.title}`}
                   icon={<Plus color={colors.primary} size={18} strokeWidth={2.6} />}
                   onPress={onIncrease}
                 />
+              ) : null}
+            </View>
+
+            {!isCompletedGoal ? (
+              <View style={styles.adjustRow}>
+                {allocation.goal.status === "paused" ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={onActivate}
+                    style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.smallActionText}>Activar</Text>
+                  </Pressable>
+                ) : (
                 <Pressable
                   accessibilityRole="button"
                   onPress={onPause}
                   style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
                 >
-                  <Text style={styles.smallActionText}>Pausar</Text>
+                  <Text style={styles.smallActionText}>Pausar meta</Text>
                 </Pressable>
+                )}
                 {allocation.contributionMode === "manual" ? (
                   <Pressable
                     accessibilityRole="button"
@@ -1106,15 +1134,6 @@ function GoalCard({
                   >
                     <RotateCcw color={colors.primary} size={15} strokeWidth={2.4} />
                     <Text style={styles.smallActionText}>Recomendada</Text>
-                  </Pressable>
-                ) : null}
-                {allocation.goal.status === "paused" ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={onActivate}
-                    style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
-                  >
-                    <Text style={styles.smallActionText}>Activar</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -1700,17 +1719,29 @@ export default function GoalsOverviewScreen() {
               value={activeGoalsCount.toString()}
             />
             <StatCard
+              icon={<CheckCircle2 color={colors.support} size={20} strokeWidth={2.4} />}
+              label="Completadas"
+              tone="support"
+              value={completedGoalsCount.toString()}
+            />
+            <StatCard
+              icon={<Calendar color="#B45309" size={20} strokeWidth={2.4} />}
+              label="Pausadas"
+              tone="warning"
+              value={pausedGoalsCount.toString()}
+            />
+            <StatCard
               icon={<ChartColumnIncreasing color="#7C3AED" size={20} strokeWidth={2.4} />}
               label="Invertido en metas"
               tone="purple"
               value={investedInGoalsLabel}
             />
-          </View>
-
-          <View style={styles.compactStatsLine}>
-            <Text style={styles.compactStatsText}>
-              {completedGoalsCount} completadas - {pausedGoalsCount} pausadas - {primaryGoalPlanContribution > 0 ? formatCOP(primaryGoalPlanContribution) : "$0"} registrado este mes
-            </Text>
+            <StatCard
+              icon={<PiggyBank color={colors.support} size={20} strokeWidth={2.4} />}
+              label="Registrado este mes"
+              tone="support"
+              value={primaryGoalPlanContribution > 0 ? formatCOP(primaryGoalPlanContribution) : "$0"}
+            />
           </View>
 
           {primaryGoalIsCompleted ? (
@@ -2027,20 +2058,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
-  },
-  compactStatsLine: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  compactStatsText: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.caption
   },
   statCard: {
     alignItems: "center",
@@ -2564,6 +2581,17 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
+  },
+  contributionAdjustInline: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: spacing.sm
+  },
+  contributionProgressArea: {
+    flex: 1,
+    gap: spacing.sm,
+    minWidth: 0,
+    paddingTop: 14
   },
   contributionHeader: {
     alignItems: "flex-start",

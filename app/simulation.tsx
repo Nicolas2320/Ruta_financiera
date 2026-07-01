@@ -72,12 +72,9 @@ type Scenario = {
   monthlyContribution: number | null;
   assumption: string;
   tags: string[];
-  comment: string;
   tone: Tone;
   unavailableContributionLabel?: string;
   unavailableAdvanceLabel?: string;
-  unavailableExplanation?: string;
-  calculationNote?: string;
   recommended?: boolean;
 };
 
@@ -239,7 +236,6 @@ function sumAvailableParts(parts: Array<number | null>) {
 }
 
 function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scenario[] {
-  const marginWasUsed = metrics.estimatedMargin !== null && metrics.estimatedMargin > 0;
   const suggestedContribution =
     metrics.snapshot.cashflow.suggestedMonthlyContribution > 0
       ? metrics.snapshot.cashflow.suggestedMonthlyContribution
@@ -252,11 +248,6 @@ function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scen
     suggestedContribution !== null
       ? suggestedContribution * 1.25
       : contributionFromPositiveValue(metrics.estimatedMargin, 0.35);
-  const smallExpensesOnlyNote =
-    !marginWasUsed && metrics.smallExpenseValue !== null
-      ? "Usa solo gastos pequeños porque el margen mensual aparece ajustado."
-      : undefined;
-
   return [
     ...(registeredContribution > 0
       ? [
@@ -266,7 +257,6 @@ function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scen
             monthlyContribution: registeredContribution,
             assumption: "Monto que registraste en el plan mensual.",
             tags: ["Real del mes", "No reemplaza"],
-            comment: "Sirve para comparar tu avance real con los ritmos sugeridos.",
             tone: "purple" as Tone
           }
         ]
@@ -277,11 +267,9 @@ function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scen
       monthlyContribution: suggestedContribution,
       assumption: "Aporte mensual sugerido por el plan.",
       tags: ["Bajo esfuerzo", "Gradual"],
-      comment: "Avance lento, más fácil de sostener.",
       tone: "primary",
       unavailableContributionLabel: "No disponible",
-      unavailableAdvanceLabel: "No calculado",
-      unavailableExplanation: "Necesitamos margen positivo para estimar un aporte mensual."
+      unavailableAdvanceLabel: "No calculado"
     },
     {
       key: "balanced",
@@ -292,9 +280,7 @@ function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scen
       ]),
       assumption: "Aporte sugerido + parte de gastos pequeños.",
       tags: ["Recomendado", "Sostenible"],
-      comment: "Pequeños cambios pueden liberar espacio sin extremos.",
       tone: "support",
-      calculationNote: smallExpensesOnlyNote,
       recommended: true
     },
     {
@@ -306,9 +292,7 @@ function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scen
       ]),
       assumption: "Aporte ampliado + ajuste mayor en gastos pequeños.",
       tags: ["Más exigente", "Revisar"],
-      comment: "Úsalo como referencia, no como obligación.",
-      tone: "warning",
-      calculationNote: smallExpensesOnlyNote
+      tone: "warning"
     }
   ];
 }
@@ -607,13 +591,6 @@ function ScenarioCard({
             <ValuePill label="12 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 12)} />
           </View>
 
-          {scenario.unavailableExplanation ? (
-            <Text style={styles.helperText}>{scenario.unavailableExplanation}</Text>
-          ) : null}
-          {scenario.calculationNote ? (
-            <Text style={styles.helperText}>{scenario.calculationNote}</Text>
-          ) : null}
-          <Text style={styles.scenarioComment}>{scenario.comment}</Text>
         </View>
       ) : null}
     </View>
@@ -782,9 +759,6 @@ export default function SimulationScreen() {
             icon={<ClipboardCheck color={colors.primary} size={22} strokeWidth={2.4} />}
             title="Escenarios"
           >
-            <Text style={styles.helperText}>
-              Los avances son una referencia: aporte mensual estimado multiplicado por 3, 6 y 12 meses.
-            </Text>
             <View style={styles.scenariosList}>
               {scenarios.map((scenario) => (
                 <ScenarioCard
@@ -1082,15 +1056,15 @@ const styles = StyleSheet.create({
   },
   scenarioTitle: {
     color: colors.text,
-    fontSize: typography.question,
+    fontSize: typography.brand,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.question
+    lineHeight: typography.lineHeight.brand
   },
   scenarioAssumption: {
     color: colors.textMuted,
-    fontSize: typography.caption,
+    fontSize: typography.body,
     fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.caption
+    lineHeight: typography.lineHeight.body
   },
   scenarioMainRow: {
     alignItems: "flex-start",
@@ -1105,9 +1079,9 @@ const styles = StyleSheet.create({
   },
   amountLabel: {
     color: colors.textSubtle,
-    fontSize: typography.caption,
+    fontSize: typography.body,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
+    lineHeight: typography.lineHeight.body
   },
   amountValue: {
     color: colors.primary,
@@ -1133,9 +1107,9 @@ const styles = StyleSheet.create({
   scenarioCompactResult: {
     color: colors.text,
     flex: 1,
-    fontSize: typography.caption,
+    fontSize: typography.question,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption,
+    lineHeight: typography.lineHeight.question,
     minWidth: 160
   },
   detailToggle: {
