@@ -252,13 +252,61 @@ function getCategorySharePercentage(amount: number | null, totalExpenses: number
   return Math.round((amount / totalExpenses) * 100);
 }
 
-function getCategoryShareLabel(amount: number | null, totalExpenses: number | null) {
+function getCategoryShareLabel(
+  amount: number | null,
+  totalExpenses: number | null,
+  isExactMonthlyExpense: boolean
+) {
   const share = getCategorySharePercentage(amount, totalExpenses);
-  if (share === null) {
-    return "-";
+
+  if (amount === null) {
+    return "Sin monto";
   }
 
-  return share > 100 ? "100%+" : `${share}%`;
+  if (share === null) {
+    return "Agrega tu gasto mensual";
+  }
+
+  if (share > 100) {
+    return "Supera el gasto mensual";
+  }
+
+  return `${share}% del gasto mensual ${isExactMonthlyExpense ? "ingresado" : "estimado"}`;
+}
+
+function getCategoryAmountsTotal(amounts: Record<string, number>) {
+  return Object.values(amounts).reduce((total, amount) => total + Math.max(0, amount), 0);
+}
+
+function getCategoryCoverageText({
+  categorizedAmount,
+  isExactMonthlyExpense,
+  totalExpenses
+}: {
+  categorizedAmount: number;
+  isExactMonthlyExpense: boolean;
+  totalExpenses: number | null;
+}) {
+  if (totalExpenses === null || totalExpenses <= 0) {
+    return "Agrega un gasto mensual para comparar tus categorias contra el total.";
+  }
+
+  if (categorizedAmount > totalExpenses) {
+    return "La suma de categorias supera tu gasto mensual. Revisa montos o actualiza tu gasto mensual.";
+  }
+
+  if (categorizedAmount === 0) {
+    return "Ingresa montos aproximados para encontrar que categoria revisar primero.";
+  }
+
+  const unclassifiedAmount = totalExpenses - categorizedAmount;
+  if (unclassifiedAmount > 0) {
+    return `Quedan ${formatCOP(unclassifiedAmount)} sin clasificar del gasto mensual ${
+      isExactMonthlyExpense ? "ingresado" : "estimado"
+    }.`;
+  }
+
+  return "Tus categorias cubren el gasto mensual registrado.";
 }
 
 function getPrioritizedCategoryLabels(categories: string[], amounts: Record<string, number>) {
@@ -403,26 +451,6 @@ function getExpenseSourceText({
   return "Agrega un rango o un dato manual para estimar mejor tus gastos.";
 }
 
-function getCashflowText(metrics: MonthlyPlanMetrics, hasExactMonthlyAmounts: boolean) {
-  if (metrics.estimatedMargin === null || metrics.expensePercentage === null) {
-    return "Completa ingresos y gastos para calcular esta relación.";
-  }
-
-  if (metrics.estimatedMargin < 0) {
-    return `Tus gastos superan tus ingresos por ${formatCOP(
-      Math.abs(metrics.estimatedMargin)
-    )} aprox. Puedes revisar una categoría a la vez.`;
-  }
-
-  if (metrics.estimatedMargin === 0) {
-    return "Tus ingresos y gastos parecen quedar muy cerca. Un ajuste pequeño puede darte más espacio.";
-  }
-
-  return `Margen mensual ${hasExactMonthlyAmounts ? "calculado" : "estimado"}: ${formatCOP(
-    metrics.estimatedMargin
-  )}.`;
-}
-
 function getSmallExpensesValue(metrics: MonthlyPlanMetrics) {
   const { amount } = metrics.snapshot.smallExpenses;
   const source = metrics.snapshot.sourceMap.smallExpenses;
@@ -449,15 +477,15 @@ function getSmallExpensesToIncomePercentage(metrics: MonthlyPlanMetrics) {
   return Math.round((smallExpenses / income) * 100);
 }
 
-function getSmallExpensesShareText(metrics: MonthlyPlanMetrics) {
+function getSmallExpensesComparisonValue(metrics: MonthlyPlanMetrics) {
   const smallExpenses = metrics.snapshot.smallExpenses.amount;
 
   if (metrics.snapshot.sourceMap.smallExpenses === "unknown") {
-    return "Gastos pequeños: monto no claro aún.";
+    return "Monto no claro aún";
   }
 
   if (smallExpenses === null) {
-    return "Gastos pequeños: sin monto disponible.";
+    return "Sin monto disponible";
   }
 
   const expenseShare =
@@ -465,11 +493,27 @@ function getSmallExpensesShareText(metrics: MonthlyPlanMetrics) {
       ? Math.round((smallExpenses / metrics.expenseMidpoint) * 100)
       : null;
 
-  return `Gastos pequeños: ${formatCOP(smallExpenses)}${
+  return `${formatCOP(smallExpenses)}${
     metrics.snapshot.sourceMap.smallExpenses === "exact" ? "" : " aprox."
   }${
-    expenseShare !== null ? ` · ${expenseShare}% de tus gastos` : ""
+    expenseShare !== null ? ` (${expenseShare}% de tus gastos)` : ""
   }`;
+}
+
+function getCashflowMetricLabel(hasExactMonthlyAmounts: boolean) {
+  return `Margen mensual ${hasExactMonthlyAmounts ? "calculado" : "estimado"}`;
+}
+
+function getCashflowMetricValue(metrics: MonthlyPlanMetrics) {
+  if (metrics.estimatedMargin === null || metrics.expensePercentage === null) {
+    return "Por calcular";
+  }
+
+  if (metrics.estimatedMargin < 0) {
+    return `-${formatCOP(Math.abs(metrics.estimatedMargin))}`;
+  }
+
+  return formatCOP(metrics.estimatedMargin);
 }
 
 function getSmallExpensesText(data: MonthlyPlanData, metrics: MonthlyPlanMetrics) {
@@ -627,12 +671,116 @@ function SectionCard({
   );
 }
 
+function CategorySummaryMetric({
+  label,
+  value,
+  tone = "neutral"
+}: {
+  label: string;
+  value: string;
+  tone?: Tone;
+}) {
+  const toneColors = getToneColors(tone);
+
+  return (
+    <View style={[styles.categorySummaryMetric, { borderColor: toneColors.border }]}>
+      <Text style={styles.categorySummaryMetricLabel}>{label}</Text>
+      <Text style={[styles.categorySummaryMetricValue, { color: toneColors.text }]}>{value}</Text>
+    </View>
+  );
+}
+
+function ComparisonMetric({
+  label,
+  value,
+  tone = "neutral"
+}: {
+  label: string;
+  value: string;
+  tone?: Tone;
+}) {
+  const toneColors = getToneColors(tone);
+
+  return (
+    <View
+      style={[
+        styles.comparisonMetric,
+        {
+          backgroundColor: toneColors.background,
+          borderColor: toneColors.border
+        }
+      ]}
+    >
+      <View style={styles.comparisonMetricHeader}>
+        <View style={[styles.comparisonMetricDot, { backgroundColor: toneColors.text }]} />
+        <Text style={styles.comparisonMetricLabel}>{label}</Text>
+      </View>
+      <Text style={styles.comparisonMetricValue}>{value}</Text>
+    </View>
+  );
+}
+
+function CategoryCoverageSummary({
+  categorizedAmount,
+  isExactMonthlyExpense,
+  totalExpenses
+}: {
+  categorizedAmount: number;
+  isExactMonthlyExpense: boolean;
+  totalExpenses: number | null;
+}) {
+  const hasTotalExpenses = totalExpenses !== null && totalExpenses > 0;
+  const unclassifiedAmount = hasTotalExpenses ? Math.max(totalExpenses - categorizedAmount, 0) : null;
+  const excessAmount = hasTotalExpenses ? Math.max(categorizedAmount - totalExpenses, 0) : 0;
+  const coverageText = getCategoryCoverageText({
+    categorizedAmount,
+    isExactMonthlyExpense,
+    totalExpenses
+  });
+
+  return (
+    <View style={[styles.categorySummaryCard, excessAmount > 0 && styles.categorySummaryCardWarning]}>
+      <View style={styles.categorySummaryHeader}>
+        <Text style={styles.categorySummaryTitle}>Montos por categoria</Text>
+      </View>
+      <View style={styles.categorySummaryGrid}>
+        <CategorySummaryMetric
+          label="Categorizado"
+          tone={categorizedAmount > 0 ? "support" : "neutral"}
+          value={categorizedAmount > 0 ? formatCOP(categorizedAmount) : "$0"}
+        />
+        <CategorySummaryMetric
+          label={isExactMonthlyExpense ? "Gasto mensual ingresado" : "Gasto mensual estimado"}
+          tone={hasTotalExpenses ? "primary" : "neutral"}
+          value={hasTotalExpenses && totalExpenses !== null ? formatCOP(totalExpenses) : "Sin total"}
+        />
+        <CategorySummaryMetric
+          label={excessAmount > 0 ? "Exceso" : "Sin clasificar"}
+          tone={excessAmount > 0 ? "warning" : "neutral"}
+          value={
+            excessAmount > 0
+              ? formatCOP(excessAmount)
+              : unclassifiedAmount !== null
+                ? formatCOP(unclassifiedAmount)
+                : "Por calcular"
+          }
+        />
+      </View>
+      <Text style={[styles.categorySummaryText, excessAmount > 0 && styles.categorySummaryWarningText]}>
+        {coverageText}
+      </Text>
+    </View>
+  );
+}
+
 function CategoryAmountRow({
+  isExactMonthlyExpense,
   inputValue,
   label,
   onChangeText,
   totalExpenses
 }: {
+  isExactMonthlyExpense: boolean;
   inputValue: string;
   label: string;
   onChangeText: (value: string) => void;
@@ -642,6 +790,7 @@ function CategoryAmountRow({
   const Icon = visual.icon;
   const amount = parseCOPInput(inputValue);
   const sharePercentage = getCategorySharePercentage(amount, totalExpenses);
+  const shareIsOverTotal = sharePercentage !== null && sharePercentage > 100;
 
   return (
     <View style={styles.categoryAmountRow}>
@@ -662,10 +811,10 @@ function CategoryAmountRow({
           style={styles.categoryAmountInput}
           value={inputValue}
         />
-        <Text style={[styles.categoryShareText, { color: visual.color }]}>
-          {getCategoryShareLabel(amount, totalExpenses)}
-        </Text>
       </View>
+      <Text style={[styles.categoryShareText, { color: shareIsOverTotal ? "#C2410C" : visual.color }]}>
+        {getCategoryShareLabel(amount, totalExpenses, isExactMonthlyExpense)}
+      </Text>
       <View style={styles.categoryShareTrack}>
         {sharePercentage !== null ? (
           <View
@@ -787,6 +936,10 @@ export default function SpendingScreen() {
     () => getCategoryAmountsFromInputs(expenseCategories, categoryAmountInputs),
     [categoryAmountInputs, expenseCategories]
   );
+  const categorizedAmountTotal = useMemo(
+    () => getCategoryAmountsTotal(categoryAmountsFromInputs),
+    [categoryAmountsFromInputs]
+  );
   const prioritizedExpenseCategories = useMemo(
     () => getPrioritizedCategoryLabels(expenseCategories, savedCategoryAmounts),
     [expenseCategories, savedCategoryAmounts]
@@ -804,11 +957,19 @@ export default function SpendingScreen() {
     categoryAmountsFromInputs
   );
   const expenseBarWidth = metrics.expensePercentage ?? 0;
-  const smallExpensesBarWidth = getSmallExpensesToIncomePercentage(metrics) ?? 0;
+  const smallExpensesBarWidth = Math.min(
+    getSmallExpensesToIncomePercentage(metrics) ?? 0,
+    expenseBarWidth,
+    100
+  );
   const expensesMayExceedIncome =
     metrics.expensePercentage !== null && metrics.expensePercentage >= 100;
   const expensesAreHigh =
     metrics.expensePercentage !== null && metrics.expensePercentage >= 85;
+  const cashflowTone: Tone =
+    metrics.estimatedMargin === null ? "neutral" : metrics.estimatedMargin <= 0 ? "warning" : "support";
+  const hasPositiveMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin > 0;
+  const hasNoMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0;
   const navigate = (route: Route) => router.push(route);
 
   useEffect(() => {
@@ -873,17 +1034,37 @@ export default function SpendingScreen() {
 
           <View style={styles.comparisonCard}>
             <View style={styles.comparisonHeader}>
-              <Text style={styles.comparisonTitle}>Relación gastos vs ingresos</Text>
-              <Text
+              <View style={styles.comparisonTitleGroup}>
+                <IconBubble
+                  icon={<PieChart color={expensesAreHigh ? "#C2410C" : colors.primary} size={20} strokeWidth={2.4} />}
+                  size="small"
+                  tone={expensesAreHigh ? "warning" : "primary"}
+                />
+                <Text style={styles.comparisonTitle}>Relación gastos vs ingresos</Text>
+              </View>
+              <View
                 style={[
-                  styles.comparisonValue,
-                  expensesMayExceedIncome && styles.comparisonValueWarning
+                  styles.comparisonPercentBadge,
+                  expensesMayExceedIncome && styles.comparisonPercentBadgeWarning
                 ]}
               >
-                {getPercentageLabel(metrics.expensePercentage, hasExactMonthlyAmounts)}
-              </Text>
+                <Text
+                  style={[
+                    styles.comparisonValue,
+                    expensesMayExceedIncome && styles.comparisonValueWarning
+                  ]}
+                >
+                  {getPercentageLabel(metrics.expensePercentage, hasExactMonthlyAmounts)}
+                </Text>
+              </View>
             </View>
-            <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressTrack,
+                hasPositiveMargin && styles.progressTrackMargin,
+                hasNoMargin && styles.progressTrackWarning
+              ]}
+            >
               <View
                 style={[
                   styles.expenseFill,
@@ -895,30 +1076,29 @@ export default function SpendingScreen() {
                 <View
                   style={[
                     styles.smallExpenseFill,
+                    expensesAreHigh && styles.smallExpenseFillWarning,
                     { width: toPercentWidth(smallExpensesBarWidth) }
                   ]}
                 />
               ) : null}
             </View>
-            <View style={styles.comparisonLegend}>
-              <View style={styles.legendItem}>
-                <View
-                  style={[
-                    styles.legendDot,
-                    styles.legendDotExpenses,
-                    expensesAreHigh && styles.legendDotExpensesWarning
-                  ]}
-                />
-                <Text style={[styles.legendText, expensesAreHigh && styles.legendTextWarning]}>
-                  Gastos mensuales: {getAmountLabel(metrics.expenseMidpoint, hasExactMonthlyExpenses)}
-                </Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, styles.legendDotSmallExpenses]} />
-                <Text style={styles.legendText}>{getSmallExpensesShareText(metrics)}</Text>
-              </View>
+            <View style={styles.comparisonMetrics}>
+              <ComparisonMetric
+                label="Gastos mensuales"
+                tone={expensesAreHigh ? "warning" : "primary"}
+                value={getAmountLabel(metrics.expenseMidpoint, hasExactMonthlyExpenses)}
+              />
+              <ComparisonMetric
+                label="Gastos pequeños"
+                tone="warning"
+                value={getSmallExpensesComparisonValue(metrics)}
+              />
+              <ComparisonMetric
+                label={getCashflowMetricLabel(hasExactMonthlyAmounts)}
+                tone={cashflowTone}
+                value={getCashflowMetricValue(metrics)}
+              />
             </View>
-            <Text style={styles.helperText}>{getCashflowText(metrics, hasExactMonthlyAmounts)}</Text>
           </View>
 
           <View style={styles.opportunityCard}>
@@ -976,10 +1156,16 @@ export default function SpendingScreen() {
           >
             {expenseCategories.length > 0 ? (
               <View style={styles.categoryAmountSection}>
+                <CategoryCoverageSummary
+                  categorizedAmount={categorizedAmountTotal}
+                  isExactMonthlyExpense={hasExactMonthlyExpenses}
+                  totalExpenses={metrics.expenseMidpoint}
+                />
                 <View style={styles.categoryAmountList}>
                   {prioritizedExpenseCategories.map((category) => (
                     <CategoryAmountRow
                       key={category}
+                      isExactMonthlyExpense={hasExactMonthlyExpenses}
                       inputValue={categoryAmountInputs[category] ?? ""}
                       label={category}
                       onChangeText={(value) => updateCategoryAmountInput(category, value)}
@@ -1160,27 +1346,50 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.lg,
     borderWidth: 1,
-    gap: spacing.sm,
+    gap: spacing.md,
     padding: spacing.lg
   },
   comparisonHeader: {
     alignItems: "center",
     flexDirection: "row",
-    gap: spacing.md,
+    flexWrap: "wrap",
+    gap: spacing.sm,
     justifyContent: "space-between"
+  },
+  comparisonTitleGroup: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minWidth: 220
   },
   comparisonTitle: {
     color: colors.text,
     flex: 1,
-    fontSize: typography.body,
+    fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.sectionTitle
+  },
+  comparisonPercentBadge: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderColor: "#BBD3FF",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 36,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs
+  },
+  comparisonPercentBadgeWarning: {
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA"
   },
   comparisonValue: {
     color: colors.primary,
-    fontSize: typography.body,
+    fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.sectionTitle
   },
   comparisonValueWarning: {
     color: "#C2410C"
@@ -1191,6 +1400,12 @@ const styles = StyleSheet.create({
     height: 12,
     overflow: "hidden",
     position: "relative"
+  },
+  progressTrackMargin: {
+    backgroundColor: colors.support
+  },
+  progressTrackWarning: {
+    backgroundColor: "#FED7AA"
   },
   expenseFill: {
     backgroundColor: colors.primary,
@@ -1205,48 +1420,52 @@ const styles = StyleSheet.create({
   },
   smallExpenseFill: {
     backgroundColor: "#F59E0B",
-    borderRadius: radius.pill,
+    borderBottomLeftRadius: radius.pill,
+    borderTopLeftRadius: radius.pill,
     height: "100%",
     left: 0,
     position: "absolute",
     top: 0
   },
-  comparisonLegend: {
+  smallExpenseFillWarning: {
+    backgroundColor: "#B45309"
+  },
+  comparisonMetrics: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
   },
-  legendItem: {
+  comparisonMetric: {
+    backgroundColor: "#F8FBFF",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexBasis: 190,
+    flexGrow: 1,
+    gap: spacing.xs,
+    minHeight: 74,
+    padding: spacing.sm
+  },
+  comparisonMetricHeader: {
     alignItems: "center",
     flexDirection: "row",
-    flexBasis: 260,
-    flexGrow: 1,
     gap: spacing.xs
   },
-  legendDot: {
+  comparisonMetricDot: {
     borderRadius: radius.pill,
     height: 10,
     width: 10
   },
-  legendDotExpenses: {
-    backgroundColor: colors.primary
-  },
-  legendDotExpensesWarning: {
-    backgroundColor: "#F97316"
-  },
-  legendDotSmallExpenses: {
-    backgroundColor: "#F59E0B"
-  },
-  legendText: {
+  comparisonMetricLabel: {
     color: colors.textMuted,
-    flex: 1,
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
   },
-  legendTextWarning: {
-    color: "#C2410C",
-    fontWeight: typography.weight.black
+  comparisonMetricValue: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
   },
   opportunityCard: {
     ...shadows.card,
@@ -1361,7 +1580,64 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.body
   },
   categoryAmountSection: {
+    gap: spacing.md
+  },
+  categorySummaryCard: {
+    backgroundColor: "#F8FBFF",
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  categorySummaryCardWarning: {
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA"
+  },
+  categorySummaryHeader: {
+    gap: spacing.xs
+  },
+  categorySummaryTitle: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  categorySummaryText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  categorySummaryWarningText: {
+    color: "#92400E"
+  },
+  categorySummaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.sm
+  },
+  categorySummaryMetric: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexBasis: 150,
+    flexGrow: 1,
+    gap: 2,
+    minHeight: 64,
+    padding: spacing.sm
+  },
+  categorySummaryMetricLabel: {
+    color: colors.textSubtle,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.small
+  },
+  categorySummaryMetricValue: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
   },
   categoryAmountList: {
     flexDirection: "row",
@@ -1375,8 +1651,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexBasis: 210,
     flexGrow: 1,
-    gap: spacing.md,
-    minHeight: 142,
+    gap: spacing.sm,
+    minHeight: 152,
     padding: spacing.md
   },
   categoryMainRow: {
@@ -1420,9 +1696,9 @@ const styles = StyleSheet.create({
   },
   categoryShareText: {
     color: colors.primary,
-    fontSize: typography.body,
+    fontSize: typography.caption,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.caption
   },
   categoryInputRow: {
     alignItems: "center",

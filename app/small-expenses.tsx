@@ -31,6 +31,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNavigation } from "../components/BottomNavigation";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { CategoryChip } from "../components/ui/CategoryChip";
+import { ContextHeader } from "../components/ui/ContextHeader";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
@@ -317,6 +318,27 @@ export default function SmallExpensesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
+          {isEditMode ? (
+            <ContextHeader
+              onBack={() =>
+                router.push(
+                  isSpendingEditMode
+                    ? "/spending"
+                    : isDashboardEditMode
+                      ? "/dashboard"
+                      : { pathname: "/summary", params: { mode: "edit" } }
+                )
+              }
+              subtitle={
+                isSpendingEditMode
+                  ? "Volveras a Gastos."
+                  : isDashboardEditMode
+                    ? "Volveras al Dashboard."
+                    : "Volveras al perfil financiero."
+              }
+              title="Editar gastos pequenos"
+            />
+          ) : null}
           {!isEditMode ? (
           <StepHeader
             currentStep={6}
@@ -479,9 +501,9 @@ export default function SmallExpensesScreen() {
           </View>
         </View>
       </ScrollView>
-      {isSpendingEditMode ? (
+      {isSpendingEditMode || isDashboardEditMode ? (
         <>
-        <BottomNavigation activeRoute="/spending" />
+        <BottomNavigation activeRoute={isDashboardEditMode ? "/dashboard" : "/spending"} />
         <View style={styles.hidden}>
           <BottomNavItem icon={Home} onNavigate={navigate} route="/dashboard" title="Inicio" />
           <BottomNavItem active icon={PieChart} onNavigate={navigate} route="/spending" title="Gastos" />

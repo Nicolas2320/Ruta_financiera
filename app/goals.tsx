@@ -10,7 +10,6 @@ import {
   Calendar,
   Car,
   ChartColumnIncreasing,
-  ChevronLeft,
   CircleQuestionMark,
   Clock,
   CreditCard,
@@ -36,6 +35,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
+import { ContextHeader } from "../components/ui/ContextHeader";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
@@ -428,17 +428,11 @@ export default function GoalsScreen() {
       >
         <View style={styles.container}>
           {isAddMode ? (
-            <View style={styles.addHeader}>
-              <Pressable
-                accessibilityLabel="Volver a mis metas"
-                accessibilityRole="button"
-                onPress={() => router.push("/goals-overview")}
-                style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-              >
-                <ChevronLeft color="#0B1B3F" size={21} strokeWidth={2.5} />
-              </Pressable>
-              <Text style={styles.addHeaderTitle}>Nueva meta</Text>
-            </View>
+            <ContextHeader
+              onBack={() => router.push("/goals-overview")}
+              subtitle="Volveras a Mis metas."
+              title="Nueva meta"
+            />
           ) : (
             <StepHeader
               currentStep={8}
@@ -713,30 +707,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     maxWidth: 520,
     width: "100%"
-  },
-  addHeader: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: spacing.sm,
-    justifyContent: "space-between"
-  },
-  backButton: {
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: "#D6E4F7",
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    height: 38,
-    justifyContent: "center",
-    width: 38
-  },
-  addHeaderTitle: {
-    color: colors.text,
-    flex: 1,
-    fontSize: typography.sectionTitle,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.sectionTitle,
-    textAlign: "right"
   },
   heroImage: {
     height: 132,
