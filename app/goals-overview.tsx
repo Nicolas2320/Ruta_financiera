@@ -8,6 +8,8 @@ import {
   Calendar,
   Car,
   ChartColumnIncreasing,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   BriefcaseBusiness,
   CreditCard,
@@ -756,6 +758,7 @@ function GoalCard({
     amount: number;
     remainingAmount: number;
   } | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
   const [selectedHorizon, setSelectedHorizon] = useState(allocation.goal.horizon ?? "");
   const [selectedPriority, setSelectedPriority] = useState(allocation.goal.priority ?? "");
   const viabilityTone = getViabilityTone(allocation.viability);
@@ -794,9 +797,14 @@ function GoalCard({
       : "Define un objetivo";
   const latestContribution = allocation.goal.contributions?.[0];
   const contributionCount = allocation.goal.contributions?.length ?? 0;
+  const isPausedGoal = allocation.goal.status === "paused";
   const quickContribution =
     getParsedCurrencyInput(contributionInput) ??
-    (allocation.monthlyContribution > 0 ? allocation.monthlyContribution : contributionStep);
+    (isPausedGoal
+      ? 0
+      : allocation.monthlyContribution > 0
+        ? allocation.monthlyContribution
+        : contributionStep);
   const isCompletedGoal = allocation.goal.status === "completed";
   const remainingContributionAmount =
     allocation.remainingAmount !== null ? Math.max(0, allocation.remainingAmount) : null;
@@ -821,6 +829,10 @@ function GoalCard({
     allocation.goal.title,
     allocation.targetAmount
   ]);
+
+  useEffect(() => {
+    setShowDetails(false);
+  }, [allocation.goal.id]);
 
   const handleCurrencyInputChange = (
     value: string,
@@ -850,7 +862,7 @@ function GoalCard({
           ? "active"
           : allocation.goal.status;
 
-    onUpdateGoal({
+    const goalUpdates: Partial<FinancialGoal> = {
       title: cleanTitle,
       iconKey: nextIconKey,
       type: getGoalTypeFromTitle(cleanTitle),
@@ -859,7 +871,13 @@ function GoalCard({
       targetAmount,
       currentAmount,
       status: nextStatus
-    });
+    };
+
+    if (allocation.goal.status === "completed" && nextStatus === "active") {
+      goalUpdates.manualMonthlyContribution = null;
+    }
+
+    onUpdateGoal(goalUpdates);
 
     if (
       allocation.goal.status === "completed" &&
@@ -877,7 +895,7 @@ function GoalCard({
   };
 
   const handleRegisterContribution = () => {
-    if (quickContribution <= 0) {
+    if (isPausedGoal || quickContribution <= 0) {
       return;
     }
 
@@ -980,26 +998,7 @@ function GoalCard({
         </View>
       ) : null}
 
-      <View style={styles.goalMetaGrid}>
-        <View style={styles.metaBox}>
-          <Text style={styles.metaLabel}>Objetivo</Text>
-          <Text style={styles.metaValue}>{targetLabel}</Text>
-        </View>
-        <View style={styles.metaBox}>
-          <Text style={styles.metaLabel}>Horizonte</Text>
-          <Text style={styles.metaValue}>{allocation.goal.horizon ?? "No definido"}</Text>
-        </View>
-        <View style={styles.metaBox}>
-          <Text style={styles.metaLabel}>Necesario</Text>
-          <Text style={styles.metaValue}>{requiredLabel}</Text>
-        </View>
-        <View style={styles.metaBox}>
-          <Text style={styles.metaLabel}>Tiempo</Text>
-          <Text style={styles.metaValue}>{estimatedTime}</Text>
-        </View>
-      </View>
-
-      {!isCompletedGoal ? (
+      {!isCompletedGoal && !isPausedGoal ? (
         <View style={styles.registerBox}>
           <View style={styles.contributionHeader}>
             <View>
@@ -1029,75 +1028,137 @@ function GoalCard({
             </Pressable>
           </View>
         </View>
-      ) : null}
-
-      <View style={styles.contributionBox}>
-        <View style={styles.contributionHeader}>
-          <View>
-            <Text style={styles.contributionLabel}>Aporte mensual asignado</Text>
-            <Text style={styles.contributionValue}>
-              {formatGoalContribution(allocation.monthlyContribution)}
+      ) : isPausedGoal ? (
+        <View style={styles.pausedContributionBox}>
+          <AlertCircle color="#B45309" size={19} strokeWidth={2.4} />
+          <View style={styles.pausedContributionCopy}>
+            <Text style={styles.pausedContributionTitle}>Meta pausada</Text>
+            <Text style={styles.pausedContributionText}>
+              Activa esta meta para registrar aportes o ajustar su aporte mensual.
             </Text>
           </View>
-          <Chip
-            label={allocation.contributionMode === "manual" ? "Manual" : "Recomendado"}
-            tone={allocation.contributionMode === "manual" ? "warning" : "support"}
-          />
+          <Pressable
+            accessibilityRole="button"
+            onPress={onActivate}
+            style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
+          >
+            <Text style={styles.smallActionText}>Activar</Text>
+          </Pressable>
         </View>
+      ) : null}
 
-        <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressFill,
-              styles.contributionProgressFill,
-              { width: toPercentWidth(contributionPaceProgress) }
-            ]}
-          />
-        </View>
-        <Text style={styles.helperText}>{contributionPaceLabel}</Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setShowDetails((current) => !current)}
+        style={({ pressed }) => [styles.detailsToggle, pressed && styles.pressed]}
+      >
+        <Text style={styles.detailsToggleText}>{showDetails ? "Ocultar detalles" : "Ver detalles"}</Text>
+        {showDetails ? (
+          <ChevronUp color={colors.primary} size={18} strokeWidth={2.5} />
+        ) : (
+          <ChevronDown color={colors.primary} size={18} strokeWidth={2.5} />
+        )}
+      </Pressable>
 
-        {!isCompletedGoal ? (
-          <View style={styles.adjustRow}>
-            <IconButton
-              accessibilityLabel={`Reducir aporte para ${allocation.goal.title}`}
-              disabled={allocation.monthlyContribution <= 0}
-              icon={<Minus color={colors.primary} size={18} strokeWidth={2.6} />}
-              onPress={onDecrease}
-            />
-            <IconButton
-              accessibilityLabel={`Aumentar aporte para ${allocation.goal.title}`}
-              icon={<Plus color={colors.primary} size={18} strokeWidth={2.6} />}
-              onPress={onIncrease}
-            />
-            <Pressable
-              accessibilityRole="button"
-              onPress={onPause}
-              style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
-            >
-              <Text style={styles.smallActionText}>Pausar</Text>
-            </Pressable>
-            {allocation.contributionMode === "manual" ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={onReset}
-                style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
-              >
-                <RotateCcw color={colors.primary} size={15} strokeWidth={2.4} />
-                <Text style={styles.smallActionText}>Recomendada</Text>
-              </Pressable>
-            ) : null}
-            {allocation.goal.status === "paused" ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={onActivate}
-                style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
-              >
-                <Text style={styles.smallActionText}>Activar</Text>
-              </Pressable>
+      {showDetails ? (
+        <View style={styles.detailsPanel}>
+          <View style={styles.goalMetaGrid}>
+            <View style={styles.metaBox}>
+              <Text style={styles.metaLabel}>Objetivo</Text>
+              <Text style={styles.metaValue}>{targetLabel}</Text>
+            </View>
+            <View style={styles.metaBox}>
+              <Text style={styles.metaLabel}>Horizonte</Text>
+              <Text style={styles.metaValue}>{allocation.goal.horizon ?? "No definido"}</Text>
+            </View>
+            <View style={styles.metaBox}>
+              <Text style={styles.metaLabel}>Necesario</Text>
+              <Text style={styles.metaValue}>{requiredLabel}</Text>
+            </View>
+            <View style={styles.metaBox}>
+              <Text style={styles.metaLabel}>Tiempo</Text>
+              <Text style={styles.metaValue}>{estimatedTime}</Text>
+            </View>
+          </View>
+
+          <View style={styles.contributionBox}>
+            <View style={styles.contributionHeader}>
+              <View>
+                <Text style={styles.contributionLabel}>Aporte mensual asignado</Text>
+                <Text style={styles.contributionValue}>
+                  {formatGoalContribution(allocation.monthlyContribution)}
+                </Text>
+              </View>
+              <Chip
+                label={allocation.contributionMode === "manual" ? "Manual" : "Recomendado"}
+                tone={allocation.contributionMode === "manual" ? "warning" : "support"}
+              />
+            </View>
+
+            <View style={styles.contributionAdjustInline}>
+              {allocation.goal.status !== "paused" && !isCompletedGoal ? (
+                <IconButton
+                  accessibilityLabel={`Reducir aporte para ${allocation.goal.title}`}
+                  disabled={allocation.monthlyContribution <= 0}
+                  icon={<Minus color={colors.primary} size={18} strokeWidth={2.6} />}
+                  onPress={onDecrease}
+                />
+              ) : null}
+              <View style={styles.contributionProgressArea}>
+                <View style={styles.progressTrack}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      styles.contributionProgressFill,
+                      { width: toPercentWidth(contributionPaceProgress) }
+                    ]}
+                  />
+                </View>
+                <Text style={styles.helperText}>{contributionPaceLabel}</Text>
+              </View>
+              {allocation.goal.status !== "paused" && !isCompletedGoal ? (
+                <IconButton
+                  accessibilityLabel={`Aumentar aporte para ${allocation.goal.title}`}
+                  icon={<Plus color={colors.primary} size={18} strokeWidth={2.6} />}
+                  onPress={onIncrease}
+                />
+              ) : null}
+            </View>
+
+            {!isCompletedGoal ? (
+              <View style={styles.adjustRow}>
+                {allocation.goal.status === "paused" ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={onActivate}
+                    style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.smallActionText}>Activar</Text>
+                  </Pressable>
+                ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={onPause}
+                  style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
+                >
+                  <Text style={styles.smallActionText}>Pausar meta</Text>
+                </Pressable>
+                )}
+                {allocation.contributionMode === "manual" ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={onReset}
+                    style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
+                  >
+                    <RotateCcw color={colors.primary} size={15} strokeWidth={2.4} />
+                    <Text style={styles.smallActionText}>Recomendada</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
           </View>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
 
       <View style={styles.secondaryActions}>
         <Pressable
@@ -1356,6 +1417,7 @@ export default function GoalsOverviewScreen() {
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const goals = useMemo(() => getOnboardingGoals(onboarding), [onboarding]);
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
+  const [showBudgetSettings, setShowBudgetSettings] = useState(false);
   const [budgetInput, setBudgetInput] = useState(
     getCurrencyInputValue(onboarding.goalMonthlyBudget)
   );
@@ -1770,6 +1832,22 @@ export default function GoalsOverviewScreen() {
                     : "La bolsa se calcula desde tu margen mensual sugerido. Puedes ajustar aportes sin cambiar tus respuestas financieras."}
                 </Text>
               </View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setShowBudgetSettings((current) => !current)}
+                style={({ pressed }) => [styles.detailsToggle, styles.budgetToggle, pressed && styles.pressed]}
+              >
+                <Text style={styles.detailsToggleText}>
+                  {showBudgetSettings ? "Ocultar ajuste de bolsa" : "Ajustar bolsa"}
+                </Text>
+                {showBudgetSettings ? (
+                  <ChevronUp color={colors.primary} size={18} strokeWidth={2.5} />
+                ) : (
+                  <ChevronDown color={colors.primary} size={18} strokeWidth={2.5} />
+                )}
+              </Pressable>
+              {showBudgetSettings ? (
+                <>
               <View style={styles.budgetSettings}>
                 <View style={styles.budgetSettingCopy}>
                   <Text style={styles.inputLabel}>Bolsa mensual manual</Text>
@@ -1829,6 +1907,8 @@ export default function GoalsOverviewScreen() {
                   <RotateCcw color={colors.primary} size={17} strokeWidth={2.4} />
                   <Text style={styles.resetButtonText}>Usar recomendada</Text>
                 </Pressable>
+              ) : null}
+                </>
               ) : null}
             </View>
           </View>
@@ -2193,6 +2273,9 @@ const styles = StyleSheet.create({
   budgetFooter: {
     gap: spacing.sm
   },
+  budgetToggle: {
+    alignSelf: "flex-start"
+  },
   budgetSettings: {
     backgroundColor: "#F8FAFC",
     borderColor: colors.border,
@@ -2424,6 +2507,27 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.small
   },
+  detailsToggle: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.primarySoft,
+    borderColor: "#CFE0FF",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 38,
+    paddingHorizontal: spacing.md
+  },
+  detailsToggleText: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  detailsPanel: {
+    gap: spacing.md
+  },
   goalMetaGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2495,6 +2599,44 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
+  },
+  pausedContributionBox: {
+    alignItems: "flex-start",
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  pausedContributionCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 180
+  },
+  pausedContributionTitle: {
+    color: "#92400E",
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  pausedContributionText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
+  },
+  contributionAdjustInline: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: spacing.sm
+  },
+  contributionProgressArea: {
+    flex: 1,
+    gap: spacing.sm,
+    minWidth: 0,
+    paddingTop: 14
   },
   contributionHeader: {
     alignItems: "flex-start",
