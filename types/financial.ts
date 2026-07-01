@@ -34,6 +34,8 @@ export type FinancialGoalContribution = {
   id: string;
   amount: number;
   date: string;
+  source?: "manual" | "monthly_plan";
+  sourceProgressId?: string | null;
 };
 
 export type FinancialGoal = {
@@ -288,7 +290,9 @@ function normalizeGoalContributions(value: unknown): FinancialGoalContribution[]
     contributions.push({
       id: normalizeGoalString(rawContribution.id) ?? `contribution-${index + 1}`,
       amount,
-      date: normalizeGoalString(rawContribution.date) ?? new Date().toISOString()
+      date: normalizeGoalString(rawContribution.date) ?? new Date().toISOString(),
+      source: rawContribution.source === "monthly_plan" ? "monthly_plan" : "manual",
+      sourceProgressId: normalizeGoalString(rawContribution.sourceProgressId)
     });
 
     return contributions;

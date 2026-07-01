@@ -24,14 +24,21 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
 import {
+  getLegacyFieldsFromGoal,
+  getOnboardingGoals,
   normalizeActionProgressRecord,
   type ActionProgressEvidence,
   type ActionProgressPatch,
   type ActionProgressStatus,
-  type ActionProgressValue
+  type ActionProgressValue,
+  type FinancialGoal
 } from "../types/financial";
 import { formatCOP, getFinancialDataSourceLabel } from "../utils/financialRanges";
 import { formatGoalContribution, getGoalPlanFromOnboarding } from "../utils/goalPlanning";
+import {
+  applyGoalContribution,
+  removeGoalContributionBySource
+} from "../utils/goalContributions";
 import {
   getActionImpactMessage,
   getActionProgressImpactItem,
@@ -740,11 +747,12 @@ function ActionCard({
 
 export default function ActionPlanScreen() {
   const router = useRouter();
-  const { exactValues, onboarding } = useOnboarding();
+  const { exactValues, onboarding, updateOnboarding } = useOnboarding();
   const { completedActions, planSyncError, planSyncStatus, updateActionProgress } = usePlan();
   const [expandedActionId, setExpandedActionId] = useState<string | null>(null);
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
+  const goals = useMemo(() => getOnboardingGoals(onboarding), [onboarding]);
   const goalPlan = useMemo(
     () => getGoalPlanFromOnboarding(onboarding, metrics.snapshot.cashflow.suggestedMonthlyContribution, exactValues),
     [exactValues, metrics.snapshot.cashflow.suggestedMonthlyContribution, onboarding]
@@ -838,6 +846,50 @@ export default function ActionPlanScreen() {
   const nextPlanHint = getNextPlanAdjustmentHint(impactSummary);
   const realContributionLabel =
     impactSummary.realContributionTotal > 0 ? formatCOP(impactSummary.realContributionTotal) : "$0";
+  const persistGoals = (nextGoals: FinancialGoal[]) => {
+    const hasPrimaryGoal = nextGoals.some((goal) => goal.isPrimary);
+    const normalizedGoals = nextGoals.map((goal, index) => ({
+      ...goal,
+      isPrimary: hasPrimaryGoal ? goal.isPrimary : index === 0,
+      updatedAt: new Date().toISOString()
+    }));
+    const primaryGoal = normalizedGoals.find((goal) => goal.isPrimary) ?? normalizedGoals[0] ?? null;
+
+    updateOnboarding({
+      goals: normalizedGoals,
+      ...getLegacyFieldsFromGoal(primaryGoal)
+    });
+  };
+  const syncGoalContributionFromPlan = (
+    action: MonthlyAction,
+    actionProgressId: string,
+    patch: ActionProgressPatch
+  ) => {
+    if (action.id !== "set-goal-contribution" && action.id !== "redirect-small-expenses") {
+      return;
+    }
+
+    const goalId = primaryGoalAllocation?.goal.id;
+
+    if (!goalId) {
+      return;
+    }
+
+    if (patch.status === "completed" && typeof patch.evidence?.amount === "number") {
+      persistGoals(
+        applyGoalContribution(goals, goalId, {
+          amount: patch.evidence.amount,
+          source: "monthly_plan",
+          sourceProgressId: actionProgressId
+        })
+      );
+      return;
+    }
+
+    if (patch.clearEvidence || patch.status === "pending" || patch.status === "skipped") {
+      persistGoals(removeGoalContributionBySource(goals, goalId, actionProgressId));
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -993,7 +1045,10 @@ export default function ActionPlanScreen() {
                   actionNumber={index + 1}
                   expanded={expandedActionId === actionProgressId}
                   impactItem={impactItem}
-                  onProgressChange={(patch) => updateActionProgress(actionProgressId, patch)}
+                  onProgressChange={(patch) => {
+                    updateActionProgress(actionProgressId, patch);
+                    syncGoalContributionFromPlan(action, actionProgressId, patch);
+                  }}
                   onToggleExpanded={() =>
                     setExpandedActionId((currentActionId) =>
                       currentActionId === actionProgressId ? null : actionProgressId
