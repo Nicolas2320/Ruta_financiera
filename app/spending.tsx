@@ -451,26 +451,6 @@ function getExpenseSourceText({
   return "Agrega un rango o un dato manual para estimar mejor tus gastos.";
 }
 
-function getCashflowText(metrics: MonthlyPlanMetrics, hasExactMonthlyAmounts: boolean) {
-  if (metrics.estimatedMargin === null || metrics.expensePercentage === null) {
-    return "Completa ingresos y gastos para calcular esta relación.";
-  }
-
-  if (metrics.estimatedMargin < 0) {
-    return `Tus gastos superan tus ingresos por ${formatCOP(
-      Math.abs(metrics.estimatedMargin)
-    )} aprox. Puedes revisar una categoría a la vez.`;
-  }
-
-  if (metrics.estimatedMargin === 0) {
-    return "Tus ingresos y gastos parecen quedar muy cerca. Un ajuste pequeño puede darte más espacio.";
-  }
-
-  return `Margen mensual ${hasExactMonthlyAmounts ? "calculado" : "estimado"}: ${formatCOP(
-    metrics.estimatedMargin
-  )}.`;
-}
-
 function getSmallExpensesValue(metrics: MonthlyPlanMetrics) {
   const { amount } = metrics.snapshot.smallExpenses;
   const source = metrics.snapshot.sourceMap.smallExpenses;
@@ -497,15 +477,15 @@ function getSmallExpensesToIncomePercentage(metrics: MonthlyPlanMetrics) {
   return Math.round((smallExpenses / income) * 100);
 }
 
-function getSmallExpensesShareText(metrics: MonthlyPlanMetrics) {
+function getSmallExpensesComparisonValue(metrics: MonthlyPlanMetrics) {
   const smallExpenses = metrics.snapshot.smallExpenses.amount;
 
   if (metrics.snapshot.sourceMap.smallExpenses === "unknown") {
-    return "Gastos pequeños: monto no claro aún.";
+    return "Monto no claro aún";
   }
 
   if (smallExpenses === null) {
-    return "Gastos pequeños: sin monto disponible.";
+    return "Sin monto disponible";
   }
 
   const expenseShare =
@@ -513,11 +493,27 @@ function getSmallExpensesShareText(metrics: MonthlyPlanMetrics) {
       ? Math.round((smallExpenses / metrics.expenseMidpoint) * 100)
       : null;
 
-  return `Gastos pequeños: ${formatCOP(smallExpenses)}${
+  return `${formatCOP(smallExpenses)}${
     metrics.snapshot.sourceMap.smallExpenses === "exact" ? "" : " aprox."
   }${
-    expenseShare !== null ? ` · ${expenseShare}% de tus gastos` : ""
+    expenseShare !== null ? ` (${expenseShare}% de tus gastos)` : ""
   }`;
+}
+
+function getCashflowMetricLabel(hasExactMonthlyAmounts: boolean) {
+  return `Margen mensual ${hasExactMonthlyAmounts ? "calculado" : "estimado"}`;
+}
+
+function getCashflowMetricValue(metrics: MonthlyPlanMetrics) {
+  if (metrics.estimatedMargin === null || metrics.expensePercentage === null) {
+    return "Por calcular";
+  }
+
+  if (metrics.estimatedMargin < 0) {
+    return `-${formatCOP(Math.abs(metrics.estimatedMargin))}`;
+  }
+
+  return formatCOP(metrics.estimatedMargin);
 }
 
 function getSmallExpensesText(data: MonthlyPlanData, metrics: MonthlyPlanMetrics) {
@@ -694,6 +690,28 @@ function CategorySummaryMetric({
   );
 }
 
+function ComparisonMetric({
+  label,
+  value,
+  tone = "neutral"
+}: {
+  label: string;
+  value: string;
+  tone?: Tone;
+}) {
+  const toneColors = getToneColors(tone);
+
+  return (
+    <View style={[styles.comparisonMetric, { borderColor: toneColors.border }]}>
+      <View style={styles.comparisonMetricHeader}>
+        <View style={[styles.comparisonMetricDot, { backgroundColor: toneColors.text }]} />
+        <Text style={styles.comparisonMetricLabel}>{label}</Text>
+      </View>
+      <Text style={styles.comparisonMetricValue}>{value}</Text>
+    </View>
+  );
+}
+
 function CategoryCoverageSummary({
   categorizedAmount,
   isExactMonthlyExpense,
@@ -716,9 +734,6 @@ function CategoryCoverageSummary({
     <View style={[styles.categorySummaryCard, excessAmount > 0 && styles.categorySummaryCardWarning]}>
       <View style={styles.categorySummaryHeader}>
         <Text style={styles.categorySummaryTitle}>Montos por categoria</Text>
-        <Text style={styles.categorySummaryText}>
-          Estos montos son aproximados. No tienen que cuadrar perfecto; sirven para encontrar que categoria revisar primero.
-        </Text>
       </View>
       <View style={styles.categorySummaryGrid}>
         <CategorySummaryMetric
@@ -939,6 +954,8 @@ export default function SpendingScreen() {
     metrics.expensePercentage !== null && metrics.expensePercentage >= 100;
   const expensesAreHigh =
     metrics.expensePercentage !== null && metrics.expensePercentage >= 85;
+  const cashflowTone: Tone =
+    metrics.estimatedMargin === null ? "neutral" : metrics.estimatedMargin < 0 ? "warning" : "support";
   const navigate = (route: Route) => router.push(route);
 
   useEffect(() => {
@@ -1003,15 +1020,29 @@ export default function SpendingScreen() {
 
           <View style={styles.comparisonCard}>
             <View style={styles.comparisonHeader}>
-              <Text style={styles.comparisonTitle}>Relación gastos vs ingresos</Text>
-              <Text
+              <View style={styles.comparisonTitleGroup}>
+                <IconBubble
+                  icon={<PieChart color={expensesAreHigh ? "#C2410C" : colors.primary} size={20} strokeWidth={2.4} />}
+                  size="small"
+                  tone={expensesAreHigh ? "warning" : "primary"}
+                />
+                <Text style={styles.comparisonTitle}>Relación gastos vs ingresos</Text>
+              </View>
+              <View
                 style={[
-                  styles.comparisonValue,
-                  expensesMayExceedIncome && styles.comparisonValueWarning
+                  styles.comparisonPercentBadge,
+                  expensesMayExceedIncome && styles.comparisonPercentBadgeWarning
                 ]}
               >
-                {getPercentageLabel(metrics.expensePercentage, hasExactMonthlyAmounts)}
-              </Text>
+                <Text
+                  style={[
+                    styles.comparisonValue,
+                    expensesMayExceedIncome && styles.comparisonValueWarning
+                  ]}
+                >
+                  {getPercentageLabel(metrics.expensePercentage, hasExactMonthlyAmounts)}
+                </Text>
+              </View>
             </View>
             <View style={styles.progressTrack}>
               <View
@@ -1030,25 +1061,23 @@ export default function SpendingScreen() {
                 />
               ) : null}
             </View>
-            <View style={styles.comparisonLegend}>
-              <View style={styles.legendItem}>
-                <View
-                  style={[
-                    styles.legendDot,
-                    styles.legendDotExpenses,
-                    expensesAreHigh && styles.legendDotExpensesWarning
-                  ]}
-                />
-                <Text style={[styles.legendText, expensesAreHigh && styles.legendTextWarning]}>
-                  Gastos mensuales: {getAmountLabel(metrics.expenseMidpoint, hasExactMonthlyExpenses)}
-                </Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, styles.legendDotSmallExpenses]} />
-                <Text style={styles.legendText}>{getSmallExpensesShareText(metrics)}</Text>
-              </View>
+            <View style={styles.comparisonMetrics}>
+              <ComparisonMetric
+                label="Gastos mensuales"
+                tone={expensesAreHigh ? "warning" : "primary"}
+                value={getAmountLabel(metrics.expenseMidpoint, hasExactMonthlyExpenses)}
+              />
+              <ComparisonMetric
+                label="Gastos pequeños"
+                tone="warning"
+                value={getSmallExpensesComparisonValue(metrics)}
+              />
+              <ComparisonMetric
+                label={getCashflowMetricLabel(hasExactMonthlyAmounts)}
+                tone={cashflowTone}
+                value={getCashflowMetricValue(metrics)}
+              />
             </View>
-            <Text style={styles.helperText}>{getCashflowText(metrics, hasExactMonthlyAmounts)}</Text>
           </View>
 
           <View style={styles.opportunityCard}>
@@ -1296,27 +1325,50 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.lg,
     borderWidth: 1,
-    gap: spacing.sm,
+    gap: spacing.md,
     padding: spacing.lg
   },
   comparisonHeader: {
     alignItems: "center",
     flexDirection: "row",
-    gap: spacing.md,
+    flexWrap: "wrap",
+    gap: spacing.sm,
     justifyContent: "space-between"
+  },
+  comparisonTitleGroup: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minWidth: 220
   },
   comparisonTitle: {
     color: colors.text,
     flex: 1,
-    fontSize: typography.body,
+    fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.sectionTitle
+  },
+  comparisonPercentBadge: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderColor: "#BBD3FF",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 36,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs
+  },
+  comparisonPercentBadgeWarning: {
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA"
   },
   comparisonValue: {
     color: colors.primary,
-    fontSize: typography.body,
+    fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.sectionTitle
   },
   comparisonValueWarning: {
     color: "#C2410C"
@@ -1347,42 +1399,42 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0
   },
-  comparisonLegend: {
+  comparisonMetrics: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
   },
-  legendItem: {
+  comparisonMetric: {
+    backgroundColor: "#F8FBFF",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexBasis: 190,
+    flexGrow: 1,
+    gap: spacing.xs,
+    minHeight: 74,
+    padding: spacing.sm
+  },
+  comparisonMetricHeader: {
     alignItems: "center",
     flexDirection: "row",
-    flexBasis: 260,
-    flexGrow: 1,
     gap: spacing.xs
   },
-  legendDot: {
+  comparisonMetricDot: {
     borderRadius: radius.pill,
     height: 10,
     width: 10
   },
-  legendDotExpenses: {
-    backgroundColor: colors.primary
-  },
-  legendDotExpensesWarning: {
-    backgroundColor: "#F97316"
-  },
-  legendDotSmallExpenses: {
-    backgroundColor: "#F59E0B"
-  },
-  legendText: {
+  comparisonMetricLabel: {
     color: colors.textMuted,
-    flex: 1,
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
   },
-  legendTextWarning: {
-    color: "#C2410C",
-    fontWeight: typography.weight.black
+  comparisonMetricValue: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
   },
   opportunityCard: {
     ...shadows.card,
