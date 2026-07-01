@@ -1,4 +1,4 @@
-import { useMemo, type ComponentType, type ReactNode } from "react";
+import { useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -6,6 +6,8 @@ import {
   Bot,
   CalendarCheck,
   ChartColumnIncreasing,
+  ChevronDown,
+  ChevronUp,
   ClipboardCheck,
   Flag,
   Home,
@@ -521,11 +523,15 @@ function BottomNavItem({
 }
 
 function ScenarioCard({
+  expanded,
   scenario,
-  maxMonthlyContribution
+  maxMonthlyContribution,
+  onToggle
 }: {
+  expanded: boolean;
   scenario: Scenario;
   maxMonthlyContribution: number;
+  onToggle: () => void;
 }) {
   const toneColors = getToneColors(scenario.tone);
   const relativeWidth =
@@ -568,28 +574,48 @@ function ScenarioCard({
         </View>
       </View>
 
-      <View style={styles.progressTrack}>
-        <View
-          style={[
-            styles.progressFill,
-            { backgroundColor: toneColors.text, width: toPercentWidth(relativeWidth) }
-          ]}
-        />
+      <View style={styles.scenarioCompactFooter}>
+        <Text style={styles.scenarioCompactResult}>6 meses: {getAdvanceLabel(scenario, 6)}</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onToggle}
+          style={({ pressed }) => [styles.detailToggle, pressed && styles.pressed]}
+        >
+          <Text style={styles.detailToggleText}>{expanded ? "Ocultar detalle" : "Ver detalle"}</Text>
+          {expanded ? (
+            <ChevronUp color={colors.primary} size={18} strokeWidth={2.5} />
+          ) : (
+            <ChevronDown color={colors.primary} size={18} strokeWidth={2.5} />
+          )}
+        </Pressable>
       </View>
 
-      <View style={styles.advanceGrid}>
-        <ValuePill label="3 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 3)} />
-        <ValuePill label="6 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 6)} />
-        <ValuePill label="12 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 12)} />
-      </View>
+      {expanded ? (
+        <View style={styles.scenarioDetailBlock}>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                { backgroundColor: toneColors.text, width: toPercentWidth(relativeWidth) }
+              ]}
+            />
+          </View>
 
-      {scenario.unavailableExplanation ? (
-        <Text style={styles.helperText}>{scenario.unavailableExplanation}</Text>
+          <View style={styles.advanceGrid}>
+            <ValuePill label="3 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 3)} />
+            <ValuePill label="6 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 6)} />
+            <ValuePill label="12 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 12)} />
+          </View>
+
+          {scenario.unavailableExplanation ? (
+            <Text style={styles.helperText}>{scenario.unavailableExplanation}</Text>
+          ) : null}
+          {scenario.calculationNote ? (
+            <Text style={styles.helperText}>{scenario.calculationNote}</Text>
+          ) : null}
+          <Text style={styles.scenarioComment}>{scenario.comment}</Text>
+        </View>
       ) : null}
-      {scenario.calculationNote ? (
-        <Text style={styles.helperText}>{scenario.calculationNote}</Text>
-      ) : null}
-      <Text style={styles.scenarioComment}>{scenario.comment}</Text>
     </View>
   );
 }
@@ -599,6 +625,8 @@ export default function SimulationScreen() {
   const params = useLocalSearchParams<{ source?: string }>();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isFlowMode = source === "flow";
+  const [expandedScenarioKey, setExpandedScenarioKey] = useState<string | null | undefined>(undefined);
+  const [showCalculationDetails, setShowCalculationDetails] = useState(false);
   const navigate = (route: Route) => router.push(route);
   const { exactValues, onboarding } = useOnboarding();
   const { completedActions } = usePlan();
@@ -631,6 +659,10 @@ export default function SimulationScreen() {
     () => getScenarios(metrics, impactSummary.realContributionTotal),
     [impactSummary.realContributionTotal, metrics]
   );
+  const defaultExpandedScenarioKey =
+    scenarios.find((scenario) => scenario.recommended)?.key ?? scenarios[0]?.key ?? null;
+  const activeExpandedScenarioKey =
+    expandedScenarioKey === undefined ? defaultExpandedScenarioKey : expandedScenarioKey;
   const maxMonthlyContribution = Math.max(
     ...scenarios.map((scenario) => scenario.monthlyContribution ?? 0),
     0
@@ -757,7 +789,15 @@ export default function SimulationScreen() {
               {scenarios.map((scenario) => (
                 <ScenarioCard
                   key={scenario.key}
+                  expanded={activeExpandedScenarioKey === scenario.key}
                   maxMonthlyContribution={maxMonthlyContribution}
+                  onToggle={() =>
+                    setExpandedScenarioKey((current) => {
+                      const currentExpandedKey =
+                        current === undefined ? defaultExpandedScenarioKey : current;
+                      return currentExpandedKey === scenario.key ? null : scenario.key;
+                    })
+                  }
                   scenario={scenario}
                 />
               ))}
@@ -784,8 +824,24 @@ export default function SimulationScreen() {
 
           <SectionCard
             icon={<WalletCards color={colors.primary} size={22} strokeWidth={2.4} />}
-            title="Datos usados"
+            title="Como se calculo"
           >
+            <Text style={styles.helperText}>{snapshot.precision.message}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setShowCalculationDetails((current) => !current)}
+              style={({ pressed }) => [styles.detailToggle, styles.calculationToggle, pressed && styles.pressed]}
+            >
+              <Text style={styles.detailToggleText}>
+                {showCalculationDetails ? "Ocultar datos usados" : "Ver datos usados"}
+              </Text>
+              {showCalculationDetails ? (
+                <ChevronUp color={colors.primary} size={18} strokeWidth={2.5} />
+              ) : (
+                <ChevronDown color={colors.primary} size={18} strokeWidth={2.5} />
+              )}
+            </Pressable>
+            {showCalculationDetails ? (
             <View style={styles.valueGrid}>
               <ValuePill label={metrics.incomeDisplay.label} value={metrics.incomeDisplay.value} />
               <ValuePill label={metrics.expenseDisplay.label} value={metrics.expenseDisplay.value} />
@@ -795,7 +851,7 @@ export default function SimulationScreen() {
                 value={getSmallExpenseLabel(onboarding, metrics)}
               />
             </View>
-            <Text style={styles.helperText}>{snapshot.precision.message}</Text>
+            ) : null}
           </SectionCard>
 
           <View style={styles.actions}>
@@ -1067,6 +1123,42 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm
   },
+  scenarioCompactFooter: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    justifyContent: "space-between"
+  },
+  scenarioCompactResult: {
+    color: colors.text,
+    flex: 1,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption,
+    minWidth: 160
+  },
+  detailToggle: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.primarySoft,
+    borderColor: "#CFE0FF",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 38,
+    paddingHorizontal: spacing.md
+  },
+  detailToggleText: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  scenarioDetailBlock: {
+    gap: spacing.md
+  },
   progressTrack: {
     backgroundColor: "#E4EAF2",
     borderRadius: radius.pill,
@@ -1087,6 +1179,9 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
+  },
+  calculationToggle: {
+    marginTop: -spacing.xs
   },
   insightsGrid: {
     flexDirection: "row",

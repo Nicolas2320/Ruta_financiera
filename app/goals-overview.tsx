@@ -8,6 +8,8 @@ import {
   Calendar,
   Car,
   ChartColumnIncreasing,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   BriefcaseBusiness,
   CreditCard,
@@ -756,6 +758,7 @@ function GoalCard({
     amount: number;
     remainingAmount: number;
   } | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
   const [selectedHorizon, setSelectedHorizon] = useState(allocation.goal.horizon ?? "");
   const [selectedPriority, setSelectedPriority] = useState(allocation.goal.priority ?? "");
   const viabilityTone = getViabilityTone(allocation.viability);
@@ -821,6 +824,10 @@ function GoalCard({
     allocation.goal.title,
     allocation.targetAmount
   ]);
+
+  useEffect(() => {
+    setShowDetails(false);
+  }, [allocation.goal.id]);
 
   const handleCurrencyInputChange = (
     value: string,
@@ -980,25 +987,6 @@ function GoalCard({
         </View>
       ) : null}
 
-      <View style={styles.goalMetaGrid}>
-        <View style={styles.metaBox}>
-          <Text style={styles.metaLabel}>Objetivo</Text>
-          <Text style={styles.metaValue}>{targetLabel}</Text>
-        </View>
-        <View style={styles.metaBox}>
-          <Text style={styles.metaLabel}>Horizonte</Text>
-          <Text style={styles.metaValue}>{allocation.goal.horizon ?? "No definido"}</Text>
-        </View>
-        <View style={styles.metaBox}>
-          <Text style={styles.metaLabel}>Necesario</Text>
-          <Text style={styles.metaValue}>{requiredLabel}</Text>
-        </View>
-        <View style={styles.metaBox}>
-          <Text style={styles.metaLabel}>Tiempo</Text>
-          <Text style={styles.metaValue}>{estimatedTime}</Text>
-        </View>
-      </View>
-
       {!isCompletedGoal ? (
         <View style={styles.registerBox}>
           <View style={styles.contributionHeader}>
@@ -1031,73 +1019,109 @@ function GoalCard({
         </View>
       ) : null}
 
-      <View style={styles.contributionBox}>
-        <View style={styles.contributionHeader}>
-          <View>
-            <Text style={styles.contributionLabel}>Aporte mensual asignado</Text>
-            <Text style={styles.contributionValue}>
-              {formatGoalContribution(allocation.monthlyContribution)}
-            </Text>
-          </View>
-          <Chip
-            label={allocation.contributionMode === "manual" ? "Manual" : "Recomendado"}
-            tone={allocation.contributionMode === "manual" ? "warning" : "support"}
-          />
-        </View>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setShowDetails((current) => !current)}
+        style={({ pressed }) => [styles.detailsToggle, pressed && styles.pressed]}
+      >
+        <Text style={styles.detailsToggleText}>{showDetails ? "Ocultar detalles" : "Ver detalles"}</Text>
+        {showDetails ? (
+          <ChevronUp color={colors.primary} size={18} strokeWidth={2.5} />
+        ) : (
+          <ChevronDown color={colors.primary} size={18} strokeWidth={2.5} />
+        )}
+      </Pressable>
 
-        <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressFill,
-              styles.contributionProgressFill,
-              { width: toPercentWidth(contributionPaceProgress) }
-            ]}
-          />
-        </View>
-        <Text style={styles.helperText}>{contributionPaceLabel}</Text>
+      {showDetails ? (
+        <View style={styles.detailsPanel}>
+          <View style={styles.goalMetaGrid}>
+            <View style={styles.metaBox}>
+              <Text style={styles.metaLabel}>Objetivo</Text>
+              <Text style={styles.metaValue}>{targetLabel}</Text>
+            </View>
+            <View style={styles.metaBox}>
+              <Text style={styles.metaLabel}>Horizonte</Text>
+              <Text style={styles.metaValue}>{allocation.goal.horizon ?? "No definido"}</Text>
+            </View>
+            <View style={styles.metaBox}>
+              <Text style={styles.metaLabel}>Necesario</Text>
+              <Text style={styles.metaValue}>{requiredLabel}</Text>
+            </View>
+            <View style={styles.metaBox}>
+              <Text style={styles.metaLabel}>Tiempo</Text>
+              <Text style={styles.metaValue}>{estimatedTime}</Text>
+            </View>
+          </View>
 
-        {!isCompletedGoal ? (
-          <View style={styles.adjustRow}>
-            <IconButton
-              accessibilityLabel={`Reducir aporte para ${allocation.goal.title}`}
-              disabled={allocation.monthlyContribution <= 0}
-              icon={<Minus color={colors.primary} size={18} strokeWidth={2.6} />}
-              onPress={onDecrease}
-            />
-            <IconButton
-              accessibilityLabel={`Aumentar aporte para ${allocation.goal.title}`}
-              icon={<Plus color={colors.primary} size={18} strokeWidth={2.6} />}
-              onPress={onIncrease}
-            />
-            <Pressable
-              accessibilityRole="button"
-              onPress={onPause}
-              style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
-            >
-              <Text style={styles.smallActionText}>Pausar</Text>
-            </Pressable>
-            {allocation.contributionMode === "manual" ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={onReset}
-                style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
-              >
-                <RotateCcw color={colors.primary} size={15} strokeWidth={2.4} />
-                <Text style={styles.smallActionText}>Recomendada</Text>
-              </Pressable>
-            ) : null}
-            {allocation.goal.status === "paused" ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={onActivate}
-                style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
-              >
-                <Text style={styles.smallActionText}>Activar</Text>
-              </Pressable>
+          <View style={styles.contributionBox}>
+            <View style={styles.contributionHeader}>
+              <View>
+                <Text style={styles.contributionLabel}>Aporte mensual asignado</Text>
+                <Text style={styles.contributionValue}>
+                  {formatGoalContribution(allocation.monthlyContribution)}
+                </Text>
+              </View>
+              <Chip
+                label={allocation.contributionMode === "manual" ? "Manual" : "Recomendado"}
+                tone={allocation.contributionMode === "manual" ? "warning" : "support"}
+              />
+            </View>
+
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  styles.contributionProgressFill,
+                  { width: toPercentWidth(contributionPaceProgress) }
+                ]}
+              />
+            </View>
+            <Text style={styles.helperText}>{contributionPaceLabel}</Text>
+
+            {!isCompletedGoal ? (
+              <View style={styles.adjustRow}>
+                <IconButton
+                  accessibilityLabel={`Reducir aporte para ${allocation.goal.title}`}
+                  disabled={allocation.monthlyContribution <= 0}
+                  icon={<Minus color={colors.primary} size={18} strokeWidth={2.6} />}
+                  onPress={onDecrease}
+                />
+                <IconButton
+                  accessibilityLabel={`Aumentar aporte para ${allocation.goal.title}`}
+                  icon={<Plus color={colors.primary} size={18} strokeWidth={2.6} />}
+                  onPress={onIncrease}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={onPause}
+                  style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
+                >
+                  <Text style={styles.smallActionText}>Pausar</Text>
+                </Pressable>
+                {allocation.contributionMode === "manual" ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={onReset}
+                    style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
+                  >
+                    <RotateCcw color={colors.primary} size={15} strokeWidth={2.4} />
+                    <Text style={styles.smallActionText}>Recomendada</Text>
+                  </Pressable>
+                ) : null}
+                {allocation.goal.status === "paused" ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={onActivate}
+                    style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.smallActionText}>Activar</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
           </View>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
 
       <View style={styles.secondaryActions}>
         <Pressable
@@ -1356,6 +1380,7 @@ export default function GoalsOverviewScreen() {
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const goals = useMemo(() => getOnboardingGoals(onboarding), [onboarding]);
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
+  const [showBudgetSettings, setShowBudgetSettings] = useState(false);
   const [budgetInput, setBudgetInput] = useState(
     getCurrencyInputValue(onboarding.goalMonthlyBudget)
   );
@@ -1675,29 +1700,17 @@ export default function GoalsOverviewScreen() {
               value={activeGoalsCount.toString()}
             />
             <StatCard
-              icon={<CheckCircle2 color={colors.support} size={20} strokeWidth={2.4} />}
-              label="Completadas"
-              tone="support"
-              value={completedGoalsCount.toString()}
-            />
-            <StatCard
-              icon={<Calendar color="#B45309" size={20} strokeWidth={2.4} />}
-              label="Pausadas"
-              tone="warning"
-              value={pausedGoalsCount.toString()}
-            />
-            <StatCard
               icon={<ChartColumnIncreasing color="#7C3AED" size={20} strokeWidth={2.4} />}
               label="Invertido en metas"
               tone="purple"
               value={investedInGoalsLabel}
             />
-            <StatCard
-              icon={<PiggyBank color={colors.support} size={20} strokeWidth={2.4} />}
-              label="Registrado este mes"
-              tone="support"
-              value={primaryGoalPlanContribution > 0 ? formatCOP(primaryGoalPlanContribution) : "$0"}
-            />
+          </View>
+
+          <View style={styles.compactStatsLine}>
+            <Text style={styles.compactStatsText}>
+              {completedGoalsCount} completadas - {pausedGoalsCount} pausadas - {primaryGoalPlanContribution > 0 ? formatCOP(primaryGoalPlanContribution) : "$0"} registrado este mes
+            </Text>
           </View>
 
           {primaryGoalIsCompleted ? (
@@ -1770,6 +1783,22 @@ export default function GoalsOverviewScreen() {
                     : "La bolsa se calcula desde tu margen mensual sugerido. Puedes ajustar aportes sin cambiar tus respuestas financieras."}
                 </Text>
               </View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setShowBudgetSettings((current) => !current)}
+                style={({ pressed }) => [styles.detailsToggle, styles.budgetToggle, pressed && styles.pressed]}
+              >
+                <Text style={styles.detailsToggleText}>
+                  {showBudgetSettings ? "Ocultar ajuste de bolsa" : "Ajustar bolsa"}
+                </Text>
+                {showBudgetSettings ? (
+                  <ChevronUp color={colors.primary} size={18} strokeWidth={2.5} />
+                ) : (
+                  <ChevronDown color={colors.primary} size={18} strokeWidth={2.5} />
+                )}
+              </Pressable>
+              {showBudgetSettings ? (
+                <>
               <View style={styles.budgetSettings}>
                 <View style={styles.budgetSettingCopy}>
                   <Text style={styles.inputLabel}>Bolsa mensual manual</Text>
@@ -1829,6 +1858,8 @@ export default function GoalsOverviewScreen() {
                   <RotateCcw color={colors.primary} size={17} strokeWidth={2.4} />
                   <Text style={styles.resetButtonText}>Usar recomendada</Text>
                 </Pressable>
+              ) : null}
+                </>
               ) : null}
             </View>
           </View>
@@ -1996,6 +2027,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
+  },
+  compactStatsLine: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  compactStatsText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
   },
   statCard: {
     alignItems: "center",
@@ -2192,6 +2237,9 @@ const styles = StyleSheet.create({
   },
   budgetFooter: {
     gap: spacing.sm
+  },
+  budgetToggle: {
+    alignSelf: "flex-start"
   },
   budgetSettings: {
     backgroundColor: "#F8FAFC",
@@ -2423,6 +2471,27 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.small
+  },
+  detailsToggle: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.primarySoft,
+    borderColor: "#CFE0FF",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 38,
+    paddingHorizontal: spacing.md
+  },
+  detailsToggleText: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  detailsPanel: {
+    gap: spacing.md
   },
   goalMetaGrid: {
     flexDirection: "row",
