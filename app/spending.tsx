@@ -702,7 +702,15 @@ function ComparisonMetric({
   const toneColors = getToneColors(tone);
 
   return (
-    <View style={[styles.comparisonMetric, { borderColor: toneColors.border }]}>
+    <View
+      style={[
+        styles.comparisonMetric,
+        {
+          backgroundColor: toneColors.background,
+          borderColor: toneColors.border
+        }
+      ]}
+    >
       <View style={styles.comparisonMetricHeader}>
         <View style={[styles.comparisonMetricDot, { backgroundColor: toneColors.text }]} />
         <Text style={styles.comparisonMetricLabel}>{label}</Text>
@@ -949,13 +957,19 @@ export default function SpendingScreen() {
     categoryAmountsFromInputs
   );
   const expenseBarWidth = metrics.expensePercentage ?? 0;
-  const smallExpensesBarWidth = getSmallExpensesToIncomePercentage(metrics) ?? 0;
+  const smallExpensesBarWidth = Math.min(
+    getSmallExpensesToIncomePercentage(metrics) ?? 0,
+    expenseBarWidth,
+    100
+  );
   const expensesMayExceedIncome =
     metrics.expensePercentage !== null && metrics.expensePercentage >= 100;
   const expensesAreHigh =
     metrics.expensePercentage !== null && metrics.expensePercentage >= 85;
   const cashflowTone: Tone =
-    metrics.estimatedMargin === null ? "neutral" : metrics.estimatedMargin < 0 ? "warning" : "support";
+    metrics.estimatedMargin === null ? "neutral" : metrics.estimatedMargin <= 0 ? "warning" : "support";
+  const hasPositiveMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin > 0;
+  const hasNoMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0;
   const navigate = (route: Route) => router.push(route);
 
   useEffect(() => {
@@ -1044,7 +1058,13 @@ export default function SpendingScreen() {
                 </Text>
               </View>
             </View>
-            <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressTrack,
+                hasPositiveMargin && styles.progressTrackMargin,
+                hasNoMargin && styles.progressTrackWarning
+              ]}
+            >
               <View
                 style={[
                   styles.expenseFill,
@@ -1056,6 +1076,7 @@ export default function SpendingScreen() {
                 <View
                   style={[
                     styles.smallExpenseFill,
+                    expensesAreHigh && styles.smallExpenseFillWarning,
                     { width: toPercentWidth(smallExpensesBarWidth) }
                   ]}
                 />
@@ -1380,6 +1401,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     position: "relative"
   },
+  progressTrackMargin: {
+    backgroundColor: colors.support
+  },
+  progressTrackWarning: {
+    backgroundColor: "#FED7AA"
+  },
   expenseFill: {
     backgroundColor: colors.primary,
     borderRadius: radius.pill,
@@ -1393,11 +1420,15 @@ const styles = StyleSheet.create({
   },
   smallExpenseFill: {
     backgroundColor: "#F59E0B",
-    borderRadius: radius.pill,
+    borderBottomLeftRadius: radius.pill,
+    borderTopLeftRadius: radius.pill,
     height: "100%",
     left: 0,
     position: "absolute",
     top: 0
+  },
+  smallExpenseFillWarning: {
+    backgroundColor: "#B45309"
   },
   comparisonMetrics: {
     flexDirection: "row",
