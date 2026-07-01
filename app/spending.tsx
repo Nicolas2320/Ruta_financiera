@@ -252,13 +252,61 @@ function getCategorySharePercentage(amount: number | null, totalExpenses: number
   return Math.round((amount / totalExpenses) * 100);
 }
 
-function getCategoryShareLabel(amount: number | null, totalExpenses: number | null) {
+function getCategoryShareLabel(
+  amount: number | null,
+  totalExpenses: number | null,
+  isExactMonthlyExpense: boolean
+) {
   const share = getCategorySharePercentage(amount, totalExpenses);
-  if (share === null) {
-    return "-";
+
+  if (amount === null) {
+    return "Sin monto";
   }
 
-  return share > 100 ? "100%+" : `${share}%`;
+  if (share === null) {
+    return "Agrega tu gasto mensual";
+  }
+
+  if (share > 100) {
+    return "Supera el gasto mensual";
+  }
+
+  return `${share}% del gasto mensual ${isExactMonthlyExpense ? "ingresado" : "estimado"}`;
+}
+
+function getCategoryAmountsTotal(amounts: Record<string, number>) {
+  return Object.values(amounts).reduce((total, amount) => total + Math.max(0, amount), 0);
+}
+
+function getCategoryCoverageText({
+  categorizedAmount,
+  isExactMonthlyExpense,
+  totalExpenses
+}: {
+  categorizedAmount: number;
+  isExactMonthlyExpense: boolean;
+  totalExpenses: number | null;
+}) {
+  if (totalExpenses === null || totalExpenses <= 0) {
+    return "Agrega un gasto mensual para comparar tus categorias contra el total.";
+  }
+
+  if (categorizedAmount > totalExpenses) {
+    return "La suma de categorias supera tu gasto mensual. Revisa montos o actualiza tu gasto mensual.";
+  }
+
+  if (categorizedAmount === 0) {
+    return "Ingresa montos aproximados para encontrar que categoria revisar primero.";
+  }
+
+  const unclassifiedAmount = totalExpenses - categorizedAmount;
+  if (unclassifiedAmount > 0) {
+    return `Quedan ${formatCOP(unclassifiedAmount)} sin clasificar del gasto mensual ${
+      isExactMonthlyExpense ? "ingresado" : "estimado"
+    }.`;
+  }
+
+  return "Tus categorias cubren el gasto mensual registrado.";
 }
 
 function getPrioritizedCategoryLabels(categories: string[], amounts: Record<string, number>) {
@@ -627,12 +675,89 @@ function SectionCard({
   );
 }
 
+function CategorySummaryMetric({
+  label,
+  value,
+  tone = "neutral"
+}: {
+  label: string;
+  value: string;
+  tone?: Tone;
+}) {
+  const toneColors = getToneColors(tone);
+
+  return (
+    <View style={[styles.categorySummaryMetric, { borderColor: toneColors.border }]}>
+      <Text style={styles.categorySummaryMetricLabel}>{label}</Text>
+      <Text style={[styles.categorySummaryMetricValue, { color: toneColors.text }]}>{value}</Text>
+    </View>
+  );
+}
+
+function CategoryCoverageSummary({
+  categorizedAmount,
+  isExactMonthlyExpense,
+  totalExpenses
+}: {
+  categorizedAmount: number;
+  isExactMonthlyExpense: boolean;
+  totalExpenses: number | null;
+}) {
+  const hasTotalExpenses = totalExpenses !== null && totalExpenses > 0;
+  const unclassifiedAmount = hasTotalExpenses ? Math.max(totalExpenses - categorizedAmount, 0) : null;
+  const excessAmount = hasTotalExpenses ? Math.max(categorizedAmount - totalExpenses, 0) : 0;
+  const coverageText = getCategoryCoverageText({
+    categorizedAmount,
+    isExactMonthlyExpense,
+    totalExpenses
+  });
+
+  return (
+    <View style={[styles.categorySummaryCard, excessAmount > 0 && styles.categorySummaryCardWarning]}>
+      <View style={styles.categorySummaryHeader}>
+        <Text style={styles.categorySummaryTitle}>Montos por categoria</Text>
+        <Text style={styles.categorySummaryText}>
+          Estos montos son aproximados. No tienen que cuadrar perfecto; sirven para encontrar que categoria revisar primero.
+        </Text>
+      </View>
+      <View style={styles.categorySummaryGrid}>
+        <CategorySummaryMetric
+          label="Categorizado"
+          tone={categorizedAmount > 0 ? "support" : "neutral"}
+          value={categorizedAmount > 0 ? formatCOP(categorizedAmount) : "$0"}
+        />
+        <CategorySummaryMetric
+          label={isExactMonthlyExpense ? "Gasto mensual ingresado" : "Gasto mensual estimado"}
+          tone={hasTotalExpenses ? "primary" : "neutral"}
+          value={hasTotalExpenses && totalExpenses !== null ? formatCOP(totalExpenses) : "Sin total"}
+        />
+        <CategorySummaryMetric
+          label={excessAmount > 0 ? "Exceso" : "Sin clasificar"}
+          tone={excessAmount > 0 ? "warning" : "neutral"}
+          value={
+            excessAmount > 0
+              ? formatCOP(excessAmount)
+              : unclassifiedAmount !== null
+                ? formatCOP(unclassifiedAmount)
+                : "Por calcular"
+          }
+        />
+      </View>
+      <Text style={[styles.categorySummaryText, excessAmount > 0 && styles.categorySummaryWarningText]}>
+        {coverageText}
+      </Text>
+    </View>
+  );
+}
+
 function CategoryAmountRow({
+  isExactMonthlyExpense,
   inputValue,
   label,
   onChangeText,
   totalExpenses
 }: {
+  isExactMonthlyExpense: boolean;
   inputValue: string;
   label: string;
   onChangeText: (value: string) => void;
@@ -642,6 +767,7 @@ function CategoryAmountRow({
   const Icon = visual.icon;
   const amount = parseCOPInput(inputValue);
   const sharePercentage = getCategorySharePercentage(amount, totalExpenses);
+  const shareIsOverTotal = sharePercentage !== null && sharePercentage > 100;
 
   return (
     <View style={styles.categoryAmountRow}>
@@ -662,10 +788,10 @@ function CategoryAmountRow({
           style={styles.categoryAmountInput}
           value={inputValue}
         />
-        <Text style={[styles.categoryShareText, { color: visual.color }]}>
-          {getCategoryShareLabel(amount, totalExpenses)}
-        </Text>
       </View>
+      <Text style={[styles.categoryShareText, { color: shareIsOverTotal ? "#C2410C" : visual.color }]}>
+        {getCategoryShareLabel(amount, totalExpenses, isExactMonthlyExpense)}
+      </Text>
       <View style={styles.categoryShareTrack}>
         {sharePercentage !== null ? (
           <View
@@ -786,6 +912,10 @@ export default function SpendingScreen() {
   const categoryAmountsFromInputs = useMemo(
     () => getCategoryAmountsFromInputs(expenseCategories, categoryAmountInputs),
     [categoryAmountInputs, expenseCategories]
+  );
+  const categorizedAmountTotal = useMemo(
+    () => getCategoryAmountsTotal(categoryAmountsFromInputs),
+    [categoryAmountsFromInputs]
   );
   const prioritizedExpenseCategories = useMemo(
     () => getPrioritizedCategoryLabels(expenseCategories, savedCategoryAmounts),
@@ -976,10 +1106,16 @@ export default function SpendingScreen() {
           >
             {expenseCategories.length > 0 ? (
               <View style={styles.categoryAmountSection}>
+                <CategoryCoverageSummary
+                  categorizedAmount={categorizedAmountTotal}
+                  isExactMonthlyExpense={hasExactMonthlyExpenses}
+                  totalExpenses={metrics.expenseMidpoint}
+                />
                 <View style={styles.categoryAmountList}>
                   {prioritizedExpenseCategories.map((category) => (
                     <CategoryAmountRow
                       key={category}
+                      isExactMonthlyExpense={hasExactMonthlyExpenses}
                       inputValue={categoryAmountInputs[category] ?? ""}
                       label={category}
                       onChangeText={(value) => updateCategoryAmountInput(category, value)}
@@ -1361,7 +1497,64 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.body
   },
   categoryAmountSection: {
+    gap: spacing.md
+  },
+  categorySummaryCard: {
+    backgroundColor: "#F8FBFF",
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  categorySummaryCardWarning: {
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA"
+  },
+  categorySummaryHeader: {
+    gap: spacing.xs
+  },
+  categorySummaryTitle: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  categorySummaryText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  categorySummaryWarningText: {
+    color: "#92400E"
+  },
+  categorySummaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.sm
+  },
+  categorySummaryMetric: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexBasis: 150,
+    flexGrow: 1,
+    gap: 2,
+    minHeight: 64,
+    padding: spacing.sm
+  },
+  categorySummaryMetricLabel: {
+    color: colors.textSubtle,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.small
+  },
+  categorySummaryMetricValue: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
   },
   categoryAmountList: {
     flexDirection: "row",
@@ -1375,8 +1568,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexBasis: 210,
     flexGrow: 1,
-    gap: spacing.md,
-    minHeight: 142,
+    gap: spacing.sm,
+    minHeight: 152,
     padding: spacing.md
   },
   categoryMainRow: {
@@ -1420,9 +1613,9 @@ const styles = StyleSheet.create({
   },
   categoryShareText: {
     color: colors.primary,
-    fontSize: typography.body,
+    fontSize: typography.caption,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.caption
   },
   categoryInputRow: {
     alignItems: "center",

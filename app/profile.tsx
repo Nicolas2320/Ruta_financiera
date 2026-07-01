@@ -6,6 +6,7 @@ import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
+import { ContextHeader } from "../components/ui/ContextHeader";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
@@ -52,6 +53,13 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
+          {isProfileEditMode ? (
+            <ContextHeader
+              onBack={() => router.push({ pathname: "/summary", params: { mode: "edit" } })}
+              subtitle="Volveras al perfil financiero."
+              title="Editar perfil"
+            />
+          ) : null}
           {!isProfileEditMode ? (
             <StepHeader
               currentStep={3}

@@ -20,6 +20,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
+import { ContextHeader } from "../components/ui/ContextHeader";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
@@ -279,6 +280,13 @@ export default function SavingsDebtsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
+          {isProfileEditMode ? (
+            <ContextHeader
+              onBack={() => router.push({ pathname: "/summary", params: { mode: "edit" } })}
+              subtitle="Volveras al perfil financiero."
+              title="Editar ahorros y deudas"
+            />
+          ) : null}
           {!isProfileEditMode ? (
             <StepHeader
               currentStep={7}

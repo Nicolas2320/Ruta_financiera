@@ -37,6 +37,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNavigation } from "../components/BottomNavigation";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { CategoryChip } from "../components/ui/CategoryChip";
+import { ContextHeader } from "../components/ui/ContextHeader";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
@@ -270,6 +271,19 @@ export default function ExpensesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
+          {isEditMode ? (
+            <ContextHeader
+              onBack={() =>
+                router.push(
+                  isSpendingEditMode
+                    ? "/spending"
+                    : { pathname: "/summary", params: { mode: "edit" } }
+                )
+              }
+              subtitle={isSpendingEditMode ? "Volveras a Gastos." : "Volveras al perfil financiero."}
+              title="Editar gastos"
+            />
+          ) : null}
           {!isEditMode ? (
           <StepHeader
             currentStep={5}
