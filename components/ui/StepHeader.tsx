@@ -1,5 +1,5 @@
 import type { DimensionValue } from "react-native";
-import { ChevronLeft } from "lucide-react-native";
+import { ArrowRight, ChevronLeft } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radius, spacing, typography } from "../../constants/theme";
@@ -9,10 +9,22 @@ type StepHeaderProps = {
   totalSteps: number;
   title: string;
   onBack: () => void;
+  onNext?: () => void;
+  nextDisabled?: boolean;
+  nextAccessibilityLabel?: string;
 };
 
-export function StepHeader({ currentStep, totalSteps, title, onBack }: StepHeaderProps) {
+export function StepHeader({
+  currentStep,
+  totalSteps,
+  title,
+  onBack,
+  onNext,
+  nextDisabled = false,
+  nextAccessibilityLabel = "Continuar"
+}: StepHeaderProps) {
   const progress = `${((currentStep - 1) / (totalSteps - 1)) * 100}%` as DimensionValue;
+  const nextIconColor = nextDisabled ? colors.textSubtle : colors.primary;
 
   return (
     <View
@@ -34,7 +46,24 @@ export function StepHeader({ currentStep, totalSteps, title, onBack }: StepHeade
           <Text style={styles.stepPillText}>Paso {currentStep} de {totalSteps}</Text>
         </View>
 
-        <Text style={styles.title}>{title}</Text>
+        {onNext ? (
+          <Pressable
+            accessibilityLabel={nextAccessibilityLabel}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: nextDisabled }}
+            disabled={nextDisabled}
+            onPress={onNext}
+            style={({ pressed }) => [
+              styles.nextButton,
+              nextDisabled && styles.nextButtonDisabled,
+              pressed && !nextDisabled && styles.pressed
+            ]}
+          >
+            <ArrowRight color={nextIconColor} size={21} strokeWidth={2.5} />
+          </Pressable>
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
       </View>
 
       <View style={styles.progressWrap}>
@@ -83,6 +112,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 38
   },
+  nextButton: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: "#D6E4F7",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: "center",
+    width: 38
+  },
+  nextButtonDisabled: {
+    backgroundColor: "#E2E8F0",
+    opacity: 0.86
+  },
+  headerSpacer: {
+    height: 38,
+    width: 38
+  },
   pressed: {
     opacity: 0.76,
     transform: [{ scale: 0.98 }]
@@ -98,15 +145,6 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
-  },
-  title: {
-    color: colors.textSubtle,
-    flexBasis: 92,
-    flexShrink: 1,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption,
-    textAlign: "right"
   },
   progressWrap: {
     height: 20,

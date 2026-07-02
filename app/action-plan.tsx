@@ -3,13 +3,13 @@ import type { ComponentType, ReactNode } from "react";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
+  ArrowRight,
   BookOpen,
   CalendarCheck,
   ChartColumnIncreasing,
   Check,
   ClipboardCheck,
   HandCoins,
-  PenLine,
   PiggyBank,
   Search,
   ShieldCheck,
@@ -33,7 +33,7 @@ import {
   type ActionProgressValue,
   type FinancialGoal
 } from "../types/financial";
-import { formatCOP, getFinancialDataSourceLabel } from "../utils/financialRanges";
+import { formatCOP } from "../utils/financialRanges";
 import { formatGoalContribution, getGoalPlanFromOnboarding } from "../utils/goalPlanning";
 import {
   applyGoalContribution,
@@ -130,6 +130,7 @@ type EvidenceConfig = {
   prompt: string;
   placeholder: string;
   resultLabel: string;
+  options?: string[];
 };
 
 const amountEvidenceByActionId: Record<string, Omit<EvidenceConfig, "type">> = {
@@ -226,10 +227,12 @@ const detailEvidenceByActionId: Record<string, Omit<EvidenceConfig, "type"> & { 
     type: "decision"
   },
   "compare-goal-contribution": {
-    title: "Registra el escenario",
-    prompt: "Anota qué aporte comparaste y qué aprendiste.",
-    placeholder: "Ej. Comparé 100k vs 180k al mes",
-    resultLabel: "Escenario comparado"
+    title: "Elige un escenario",
+    prompt: "¿Qué escenario prefieres?",
+    placeholder: "Selecciona una opción",
+    resultLabel: "Escenario preferido",
+    type: "decision",
+    options: ["Actual", "Equilibrado", "Intensivo", "Ninguno"]
   },
   "learn-risk-time": {
     title: "Registra el concepto",
@@ -372,6 +375,10 @@ function getEvidenceInputLabel(config: EvidenceConfig) {
     return "Monto en COP";
   }
 
+  if (config.options && config.options.length > 0) {
+    return "Escenario";
+  }
+
   if (config.type === "decision") {
     return "Decisión";
   }
@@ -384,15 +391,11 @@ function getEvidenceInputLabel(config: EvidenceConfig) {
 }
 
 function getEvidenceInputPlaceholder(config: EvidenceConfig) {
-  return config.type === "amount" ? "$0" : "Escribe un registro corto";
+  return config.placeholder || (config.type === "amount" ? "$0" : "Escribe un registro corto");
 }
 
 function getEvidencePrompt(config: EvidenceConfig) {
-  if (config.type === "amount") {
-    return "Ingresa un monto real o aproximado.";
-  }
-
-  return "Una frase corta es suficiente.";
+  return config.prompt || (config.type === "amount" ? "Ingresa un monto real o aproximado." : "Una frase corta es suficiente.");
 }
 
 function Chip({ label, tone = "primary" }: { label: string; tone?: ChipTone }) {
@@ -457,6 +460,7 @@ function ActionCard({
   actionNumber,
   expanded,
   impactItem,
+  onOpenSimulation,
   onProgressChange,
   onToggleExpanded,
   progress
@@ -465,6 +469,7 @@ function ActionCard({
   actionNumber: number;
   expanded: boolean;
   impactItem: MonthlyActionImpactItem | null;
+  onOpenSimulation: () => void;
   onProgressChange: (patch: ActionProgressPatch) => void;
   onToggleExpanded: () => void;
   progress: ActionProgressValue | undefined;
@@ -489,10 +494,16 @@ function ActionCard({
   const evidencePrompt = getEvidencePrompt(evidenceConfig);
   const inputValue = evidenceConfig.type === "amount" ? formatCOPInputValue(amountText) : detailText;
   const impactMessage = getActionImpactMessage(impactItem);
+  const hasOptions = Boolean(evidenceConfig.options && evidenceConfig.options.length > 0);
+  const isScenarioComparisonAction = action.id === "compare-goal-contribution";
   const hasSavedProgress = Boolean(
     progressRecord && (progressRecord.status !== "pending" || progressRecord.evidence)
   );
-  const registrationButtonLabel = evidenceText ? "Editar registro" : "Registrar avance";
+  const registrationButtonLabel = evidenceText
+    ? "Editar registro"
+    : isScenarioComparisonAction
+      ? "Registrar acción"
+      : "Registrar avance";
   const handleEvidenceChange = (value: string) => {
     if (evidenceConfig.type === "amount") {
       setAmountText(sanitizeCOPInput(value));
@@ -594,6 +605,20 @@ function ActionCard({
             ) : null}
           </View>
         ) : null}
+        {isScenarioComparisonAction ? (
+          <Pressable
+            accessibilityLabel="Ver simulación"
+            accessibilityRole="button"
+            onPress={onOpenSimulation}
+            style={({ pressed }) => [
+              styles.cardSecondaryActionButton,
+              pressed && styles.checkboxPressed
+            ]}
+          >
+            <Text style={styles.cardSecondaryActionButtonText}>Ver simulación</Text>
+            <ArrowRight color={colors.primary} size={17} strokeWidth={2.6} />
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityLabel={`${registrationButtonLabel} de ${action.title}`}
           accessibilityRole="button"
@@ -628,7 +653,6 @@ function ActionCard({
             <View style={styles.modalCard}>
               <View style={styles.modalHeader}>
                 <View style={styles.modalHeaderText}>
-                  <Text style={styles.modalKicker}>Acción {actionNumber}</Text>
                   <Text style={styles.modalTitle}>Registro de avance</Text>
                   <Text style={styles.modalSubtitle}>{action.title}</Text>
                 </View>
@@ -651,18 +675,50 @@ function ActionCard({
 
               <View style={styles.microActionField}>
                 <Text style={styles.microActionLabel}>{inputLabel}</Text>
-                <TextInput
-                  autoCorrect={evidenceConfig.type !== "amount"}
-                  inputMode={evidenceConfig.type === "amount" ? "numeric" : "text"}
-                  keyboardType={evidenceConfig.type === "amount" ? "numeric" : "default"}
-                  maxLength={evidenceConfig.type === "amount" ? 16 : 90}
-                  onChangeText={handleEvidenceChange}
-                  placeholder={inputPlaceholder}
-                  placeholderTextColor={colors.textSubtle}
-                  returnKeyType="done"
-                  style={styles.microActionInput}
-                  value={inputValue}
-                />
+                {hasOptions ? (
+                  <View style={styles.optionGrid}>
+                    {evidenceConfig.options?.map((option) => {
+                      const selected = detailValue === option;
+
+                      return (
+                        <Pressable
+                          accessibilityLabel={`Seleccionar escenario ${option}`}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          key={option}
+                          onPress={() => setDetailText(option)}
+                          style={({ pressed }) => [
+                            styles.optionButton,
+                            selected && styles.optionButtonSelected,
+                            pressed && styles.checkboxPressed
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.optionButtonText,
+                              selected && styles.optionButtonTextSelected
+                            ]}
+                          >
+                            {option}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <TextInput
+                    autoCorrect={evidenceConfig.type !== "amount"}
+                    inputMode={evidenceConfig.type === "amount" ? "numeric" : "text"}
+                    keyboardType={evidenceConfig.type === "amount" ? "numeric" : "default"}
+                    maxLength={evidenceConfig.type === "amount" ? 16 : 90}
+                    onChangeText={handleEvidenceChange}
+                    placeholder={inputPlaceholder}
+                    placeholderTextColor={colors.textSubtle}
+                    returnKeyType="done"
+                    style={styles.microActionInput}
+                    value={inputValue}
+                  />
+                )}
               </View>
 
               {evidenceText ? (
@@ -897,23 +953,28 @@ export default function ActionPlanScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <View style={styles.header}>
-            <View style={styles.headerText}>
+          <View style={styles.screenHeroCard}>
+            <View style={styles.screenHeroIcon}>
+              <CalendarCheck color={colors.primary} size={28} strokeWidth={2.4} />
+            </View>
+            <View style={styles.screenHeroTextGroup}>
               <Text style={styles.title}>Plan mensual</Text>
-              <Text style={styles.subtitle}>
-                Convierte tu diagnóstico en pasos concretos para este mes.
-              </Text>
             </View>
           </View>
 
           <View style={styles.planHeroCard}>
-            <View style={styles.planHeroIcon}>
-              <ClipboardCheck color={colors.primary} size={34} strokeWidth={2.4} />
+            <View style={styles.planHeroHeading}>
+              <View style={styles.planHeroIcon}>
+                <ClipboardCheck color={colors.primary} size={24} strokeWidth={2.4} />
+              </View>
+
+              <View style={styles.planHeroTitleGroup}>
+                <Text style={styles.kickerPrimary}>Enfoque del mes</Text>
+                <Text style={styles.planHeroTitle}>{focus.title}</Text>
+              </View>
             </View>
 
             <View style={styles.planHeroBody}>
-              <Text style={styles.kickerPrimary}>Enfoque del mes</Text>
-              <Text style={styles.planHeroTitle}>{focus.title}</Text>
               <Text style={styles.text}>{focus.text}</Text>
 
               {primaryGoalTitle ? (
@@ -933,9 +994,6 @@ export default function ActionPlanScreen() {
                 <View style={styles.progressTrack}>
                   <View style={[styles.progressFill, { width: toPercentWidth(progressPercentage) }]} />
                 </View>
-                <Text style={styles.progressHelper}>
-                  El avance queda guardado para este mes y ayuda a ajustar tus próximas acciones.
-                </Text>
                 {planSyncStatus === "saving" ? (
                   <Text style={styles.syncText}>Guardando avance...</Text>
                 ) : null}
@@ -952,8 +1010,8 @@ export default function ActionPlanScreen() {
               <View style={styles.trustPill}>
                 <ShieldCheck color={colors.support} size={17} strokeWidth={2.4} />
                 <Text style={styles.supportText}>
-                  Puedes ajustar este plan a tu realidad. La idea es avanzar con pasos pequeños y
-                  sostenibles.
+                  Puedes ajustar este plan a tu realidad. Prueba acciones pequeñas, revisa qué funcionó
+                  y ajusta el próximo mes.
                 </Text>
               </View>
             </View>
@@ -1015,14 +1073,9 @@ export default function ActionPlanScreen() {
             <Text style={styles.impactSummaryHint}>{nextPlanHint}</Text>
           </View>
 
-          <Text style={styles.helperText}>{getFinancialDataSourceLabel({ onboarding, exactValues })}</Text>
-
           <View style={styles.sectionIntro}>
             <View style={styles.sectionIntroTextGroup}>
               <Text style={styles.sectionTitleStandalone}>Acciones del mes</Text>
-              <Text style={styles.sectionIntroText}>
-                Una señal concreta por acción es suficiente.
-              </Text>
             </View>
             <View style={styles.sectionIntroIcon}>
               <ChartColumnIncreasing color={colors.primary} size={22} strokeWidth={2.4} />
@@ -1042,6 +1095,7 @@ export default function ActionPlanScreen() {
                   actionNumber={index + 1}
                   expanded={expandedActionId === actionProgressId}
                   impactItem={impactItem}
+                  onOpenSimulation={() => router.push("/simulation")}
                   onProgressChange={(patch) => {
                     updateActionProgress(actionProgressId, patch);
                     syncGoalContributionFromPlan(action, actionProgressId, patch);
@@ -1057,19 +1111,6 @@ export default function ActionPlanScreen() {
             })}
           </View>
 
-          <View style={styles.guidanceCard}>
-            <View style={styles.guidanceIcon}>
-              <PenLine color="#B77900" size={26} strokeWidth={2.4} />
-            </View>
-            <View style={styles.guidanceTextGroup}>
-              <Text style={styles.guidanceTitle}>Cómo usar este plan</Text>
-              <Text style={styles.text}>
-                No tienes que hacerlo perfecto. Prueba acciones pequeñas, revisa qué funcionó y
-                ajusta el próximo mes.
-              </Text>
-            </View>
-          </View>
-
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel="Ir a mi inicio"
@@ -1078,10 +1119,11 @@ export default function ActionPlanScreen() {
               title="Ir a mi inicio"
             />
             <PrimaryButton
-              accessibilityLabel="Volver a simulación"
+              accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() => router.push("/simulation")}
-              title="Volver a simulación"
+              onPress={() => router.back()}
+              style={styles.secondaryButton}
+              title="Volver"
               variant="secondary"
             />
           </View>
@@ -1108,24 +1150,7 @@ const styles = StyleSheet.create({
     maxWidth: 760,
     width: "100%"
   },
-  header: {
-    paddingBottom: spacing.xs
-  },
-  headerText: {
-    gap: spacing.xs
-  },
-  title: {
-    color: colors.text,
-    fontSize: typography.display,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.display
-  },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: typography.subtitle,
-    lineHeight: typography.lineHeight.subtitle
-  },
-  planHeroCard: {
+  screenHeroCard: {
     ...shadows.card,
     alignItems: "center",
     backgroundColor: colors.surface,
@@ -1134,20 +1159,61 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacing.lg,
+    gap: spacing.md,
     padding: spacing.lg
+  },
+  screenHeroIcon: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    height: 64,
+    justifyContent: "center",
+    width: 64
+  },
+  screenHeroTextGroup: {
+    flex: 1,
+    minWidth: 0
+  },
+  title: {
+    color: colors.text,
+    fontSize: typography.title,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.title
+  },
+  subtitle: {
+    color: colors.textMuted,
+    fontSize: typography.subtitle,
+    lineHeight: typography.lineHeight.subtitle
+  },
+  planHeroCard: {
+    ...shadows.card,
+    alignItems: "stretch",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  planHeroHeading: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.md
   },
   planHeroIcon: {
     alignItems: "center",
     backgroundColor: colors.primarySoft,
     borderRadius: radius.pill,
-    height: 118,
+    height: 54,
     justifyContent: "center",
-    width: 118
+    width: 54
+  },
+  planHeroTitleGroup: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 0
   },
   planHeroBody: {
-    flexBasis: 320,
-    flex: 1,
     gap: spacing.sm,
     minWidth: 0
   },
@@ -1230,11 +1296,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.lg,
     borderWidth: 1,
-    flexBasis: 220,
+    flexBasis: "45%",
     flexGrow: 1,
+    flexShrink: 1,
     flexDirection: "row",
     gap: spacing.md,
     minHeight: 96,
+    minWidth: 0,
     padding: spacing.md
   },
   summaryMetricIcon: {
@@ -1495,6 +1563,25 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
   },
+  cardSecondaryActionButton: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  cardSecondaryActionButtonText: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
   modalOverlay: {
     backgroundColor: "rgba(15, 23, 42, 0.38)",
     flex: 1
@@ -1598,6 +1685,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
   },
+  optionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  optionButton: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexGrow: 1,
+    justifyContent: "center",
+    minHeight: 46,
+    minWidth: 130,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  optionButtonSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary
+  },
+  optionButtonText: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  optionButtonTextSelected: {
+    color: colors.surface
+  },
   savedEvidenceBox: {
     backgroundColor: colors.supportSoft,
     borderColor: "#B9E9CD",
@@ -1656,16 +1774,24 @@ const styles = StyleSheet.create({
     color: colors.textSubtle
   },
   deleteArea: {
-    alignItems: "flex-start",
+    alignItems: "stretch",
     borderTopColor: colors.border,
     borderTopWidth: 1,
     paddingTop: spacing.sm
   },
   deleteTextButton: {
-    paddingVertical: spacing.xs
+    alignItems: "center",
+    backgroundColor: "#B42318",
+    borderColor: "#B42318",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
   },
   deleteTextButtonText: {
-    color: "#B42318",
+    color: colors.surface,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
@@ -1917,5 +2043,9 @@ const styles = StyleSheet.create({
   actions: {
     gap: spacing.sm,
     paddingBottom: spacing.md
+  },
+  secondaryButton: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border
   }
 });

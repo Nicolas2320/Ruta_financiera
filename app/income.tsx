@@ -122,7 +122,10 @@ export default function IncomeScreen() {
           {!isProfileEditMode ? (
             <StepHeader
               currentStep={4}
+              nextAccessibilityLabel="Continuar hacia preguntas de gastos"
+              nextDisabled={!canContinue}
               onBack={() => router.push("/profile")}
+              onNext={handleContinue}
               title="Ingresos"
               totalSteps={8}
             />
@@ -214,13 +217,11 @@ export default function IncomeScreen() {
               title={isProfileEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
-              accessibilityLabel={isProfileEditMode ? "Volver al perfil financiero" : "Volver al perfil básico"}
+              accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() =>
-                router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/profile")
-              }
+              onPress={() => router.back()}
               style={styles.secondaryButton}
-              title={isProfileEditMode ? "Volver al perfil" : "Volver"}
+              title="Volver"
               variant="secondary"
             />
           </View>

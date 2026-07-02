@@ -433,24 +433,6 @@ function getExpenseSourceLabel(source: string) {
   return "Por completar";
 }
 
-function getExpenseSourceText({
-  expensesRange,
-  source
-}: {
-  expensesRange: string | null;
-  source: string;
-}) {
-  if (source === "exact") {
-    return "Dato mensual ingresado por ti.";
-  }
-
-  if (source === "estimated" && expensesRange) {
-    return `Basado en tu rango seleccionado: ${expensesRange}.`;
-  }
-
-  return "Agrega un rango o un dato manual para estimar mejor tus gastos.";
-}
-
 function getSmallExpensesValue(metrics: MonthlyPlanMetrics) {
   const { amount } = metrics.snapshot.smallExpenses;
   const source = metrics.snapshot.sourceMap.smallExpenses;
@@ -991,7 +973,7 @@ export default function SpendingScreen() {
         expenseCategories
       )
     });
-    setCategoryAmountFeedback("Montos guardados.");
+    setCategoryAmountFeedback("saved");
   };
 
   return (
@@ -1003,12 +985,12 @@ export default function SpendingScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <View style={styles.header}>
+          <View style={styles.headerCard}>
+            <View style={styles.headerIcon}>
+              <ReceiptText color={colors.primary} size={24} strokeWidth={2.4} />
+            </View>
             <View style={styles.headerText}>
-              <Text style={styles.title}>Gastos</Text>
-              <Text style={styles.subtitle}>
-                Entiende cuánto se va al mes y dónde podrías revisar.
-              </Text>
+              <Text style={styles.title}>Tus gastos</Text>
             </View>
           </View>
 
@@ -1020,12 +1002,6 @@ export default function SpendingScreen() {
               <Text style={styles.heroKicker}>Gasto mensual</Text>
               <Text style={styles.heroAmount}>
                 {getAmountLabel(metrics.expenseMidpoint, hasExactMonthlyExpenses)}
-              </Text>
-              <Text style={styles.heroText}>
-                {getExpenseSourceText({
-                  expensesRange: onboarding.expensesRange,
-                  source: snapshot.sourceMap.monthlyExpenses
-                })}
               </Text>
               <Text style={styles.heroInsight}>{getQuickReadText(metrics)}</Text>
             </View>
@@ -1111,7 +1087,9 @@ export default function SpendingScreen() {
               <Text style={styles.sectionTitle}>Tu mayor oportunidad este mes</Text>
             </View>
             <Text style={styles.opportunityLabel}>{opportunityInsight.label}</Text>
-            <Text style={styles.text}>{opportunityInsight.text}</Text>
+            <View style={styles.opportunityNote}>
+              <Text style={styles.opportunityNoteText}>{opportunityInsight.text}</Text>
+            </View>
             <View style={styles.impactBlock}>
               <Text style={styles.impactLabel}>Impacto de un ajuste pequeño</Text>
               <Text style={styles.impactText}>{opportunityInsight.impact}</Text>
@@ -1174,13 +1152,6 @@ export default function SpendingScreen() {
                   ))}
                 </View>
                 <View style={styles.categorySaveRow}>
-                  {categoryAmountFeedback ? (
-                    <Text style={styles.categoryFeedbackText}>{categoryAmountFeedback}</Text>
-                  ) : (
-                    <Text style={styles.helperText}>
-                      Puedes dejar vacías las categorías que no tengas claras.
-                    </Text>
-                  )}
                   <Pressable
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !hasCategoryAmountChanges }}
@@ -1198,7 +1169,7 @@ export default function SpendingScreen() {
                         !hasCategoryAmountChanges && styles.categorySaveButtonTextDisabled
                       ]}
                     >
-                      Guardar montos
+                      {categoryAmountFeedback ? "Guardado" : "Guardar montos"}
                     </Text>
                   </Pressable>
                 </View>
@@ -1266,12 +1237,24 @@ const styles = StyleSheet.create({
     maxWidth: 760,
     width: "100%"
   },
-  header: {
-    alignItems: "flex-start",
+  headerCard: {
+    ...shadows.card,
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
     flexDirection: "row",
     gap: spacing.md,
-    justifyContent: "space-between",
-    paddingBottom: spacing.xs
+    padding: spacing.lg
+  },
+  headerIcon: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    height: 54,
+    justifyContent: "center",
+    width: 54
   },
   headerText: {
     flex: 1,
@@ -1282,11 +1265,6 @@ const styles = StyleSheet.create({
     fontSize: typography.title,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.title
-  },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: typography.subtitle,
-    lineHeight: typography.lineHeight.subtitle
   },
   heroCard: {
     ...shadows.card,
@@ -1486,6 +1464,19 @@ const styles = StyleSheet.create({
     fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.sectionTitle
+  },
+  opportunityNote: {
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing.md
+  },
+  opportunityNoteText: {
+    color: "#92400E",
+    fontSize: typography.body,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.body
   },
   impactBlock: {
     borderTopColor: colors.border,
@@ -1732,15 +1723,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm,
-    justifyContent: "space-between"
-  },
-  categoryFeedbackText: {
-    color: colors.support,
-    flex: 1,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption,
-    minWidth: 180
+    justifyContent: "flex-start"
   },
   categorySaveButton: {
     alignItems: "center",

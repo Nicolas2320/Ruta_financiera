@@ -554,7 +554,7 @@ function getPriority(
       key: "advance_goal",
       title: "Avanzar hacia tu meta",
       description:
-        "Tu plan puede enfocarse en separar un monto mensual realista para tu objetivo."
+        "Tu plan puede enfocarse en separar un monto mensual adecuado para tu objetivo."
     };
   }
 
@@ -867,7 +867,7 @@ export function generateMonthlyActions(
       {
         id: "set-goal-contribution",
         title: "Separar el aporte mensual sugerido si es posible",
-        description: "Úsalo como referencia educativa, no como obligación.",
+        description: "Úsalo como referencia. Puedes ajustarlo.",
         why: "Un aporte realista ayuda a avanzar sin desordenar el mes.",
         estimatedImpact: getImpactLabel(contribution),
         difficulty: "Media",

@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   Sparkles
 } from "lucide-react-native";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
@@ -17,11 +17,10 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 import { useOnboarding } from "../context/OnboardingContext";
 import {
   calculateFinancialSnapshot,
-  generateMonthlyActions,
   type FinancialSnapshot
 } from "../utils/financialCalculations";
 import { formatCOP, type FinancialRangeEstimate } from "../utils/financialRanges";
-import { getPrimaryFinancialGoal, type ExactFinancialValues } from "../types/financial";
+import type { ExactFinancialValues } from "../types/financial";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
 
@@ -94,7 +93,7 @@ function wantsInvestmentEducation(investmentSituation: string | null) {
 }
 
 function toPercentWidth(value: number): `${number}%` {
-  return `${value}%`;
+  return `${Math.max(0, Math.min(value, 100))}%`;
 }
 
 function getExpenseRatioInterpretation(expensePercentage: number | null) {
@@ -558,86 +557,6 @@ function getMeaningMessage(priority: MainPriority) {
   return "En tu caso, ya puedes empezar a traducir tu meta en una acción concreta y pequeña para esta semana, usando tus rangos como una primera referencia.";
 }
 
-function goalNeedsConcreteAmount(onboarding: OnboardingSnapshot) {
-  const goalsWithAmount = [
-    "Crear un fondo de emergencia",
-    "Pagar deudas",
-    "Ahorrar para vivienda",
-    "Ahorrar para estudiar",
-    "Ahorrar para viajar",
-    "Ahorrar para un negocio",
-    "Prepararme para el futuro"
-  ];
-
-  const primaryGoal = getPrimaryFinancialGoal(onboarding);
-
-  return (
-    onboarding.financialGoal !== null &&
-    goalsWithAmount.includes(onboarding.financialGoal) &&
-    primaryGoal?.targetAmount === null &&
-    (!onboarding.goalAmountRange ||
-      onboarding.goalAmountRange === "No tengo una cifra todavía" ||
-      onboarding.goalAmountRange === "Prefiero definirla después")
-  );
-}
-
-function getRecommendedActions(
-  onboarding: OnboardingSnapshot,
-  metrics: FinancialMetrics,
-  exactValues: ExactFinancialValues
-) {
-  return generateMonthlyActions(metrics.snapshot).map((action) => action.title);
-
-  const actions: string[] = [];
-  const addAction = (action: string) => {
-    if (!actions.includes(action)) {
-      actions.push(action);
-    }
-  };
-
-  if (hasDebtConcern(onboarding.debtSituation) || hasHighDebtPaymentShare(onboarding.debtPaymentShare)) {
-    addAction("Revisa qué deuda tiene mayor impacto en tu presupuesto.");
-  }
-
-  if (isLowEmergencyCoverage(onboarding.emergencyCoverage)) {
-    addAction("Separa una cantidad fija para tu fondo de emergencia.");
-  }
-
-  if (
-    (metrics.expensePercentage ?? 0) >= 85 ||
-    onboarding.expensesFeeling === "Me preocupa no poder ahorrar" ||
-    onboarding.expensesFeeling === "No sé en qué se va mi dinero"
-  ) {
-    addAction("Revisa tus gastos variables esta semana.");
-  }
-
-  if (hasSmallExpensePlan(onboarding)) {
-    addAction("Define un límite mensual para tus gastos pequeños frecuentes.");
-  }
-
-  if (onboarding.debtPaymentShare === "No estoy seguro") {
-    addAction("Estima qué porcentaje de tus ingresos se va en deudas.");
-  }
-
-  if (wantsInvestmentEducation(onboarding.investmentSituation)) {
-    addAction("Aprende la diferencia entre ahorrar e invertir.");
-  }
-
-  if (goalNeedsConcreteAmount(onboarding)) {
-    addAction("Define una cifra más concreta para tu meta.");
-  }
-
-  if (onboarding.emergencyCoverage === "No estoy seguro") {
-    addAction("Calcula tus gastos esenciales de un mes.");
-  }
-
-  addAction("Elige una acción pequeña para avanzar esta semana.");
-  addAction("Calcula tus gastos esenciales de un mes.");
-  addAction("Revisa tus gastos variables esta semana.");
-
-  return actions.slice(0, 3);
-}
-
 function getMetricTone(label: string, metrics: FinancialMetrics, onboarding: OnboardingSnapshot) {
   if (label === "Margen mensual") {
     if (metrics.estimatedMargin === null) {
@@ -703,12 +622,10 @@ function InfoCard({
 function MetricCard({
   label,
   value,
-  detail,
   tone
 }: {
   label: string;
   value: string;
-  detail: string;
   tone: "neutral" | "positive" | "warning";
 }) {
   return (
@@ -721,7 +638,6 @@ function MetricCard({
     >
       <Text style={styles.metricLabel}>{label}</Text>
       <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.metricDetail}>{detail}</Text>
     </View>
   );
 }
@@ -743,19 +659,19 @@ export default function DiagnosisScreen() {
     [exactValues, onboarding]
   );
   const priority = useMemo(() => getMainPriority(onboarding, metrics), [onboarding, metrics]);
-  const recommendedActions = useMemo(
-    () => getRecommendedActions(onboarding, metrics, exactValues),
-    [exactValues, onboarding, metrics]
-  );
   const smallExpensesMessages = useMemo(
     () => getSmallExpensesMessages(onboarding, metrics),
     [onboarding, metrics]
   );
-  const expenseBarWidth = Math.min(Math.max(metrics.expensePercentage ?? 0, 0), 100);
-  const marginBarWidth =
-    metrics.estimatedMargin !== null && metrics.estimatedMargin > 0
-      ? Math.max(0, 100 - expenseBarWidth)
-      : 0;
+  const expenseBarWidth = metrics.expensePercentage ?? 0;
+  const smallExpensesBarWidth = Math.min(
+    metrics.smallExpensePercentage ?? 0,
+    expenseBarWidth,
+    100
+  );
+  const expensesAreHigh = metrics.expensePercentage !== null && metrics.expensePercentage >= 85;
+  const hasPositiveMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin > 0;
+  const hasNoMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0;
   const indicators = [
     {
       label: "Margen mensual",
@@ -810,15 +726,10 @@ export default function DiagnosisScreen() {
 
             <Text style={styles.title}>Tu diagnóstico financiero</Text>
 
-            <Text style={styles.subtitle}>
-              Esta es una primera orientación basada en la información que compartiste.
-            </Text>
-
             <View style={styles.trustMessage}>
               <ShieldCheck color={colors.support} size={18} strokeWidth={2.4} />
               <Text style={styles.supportText}>
-                Este diagnóstico es educativo. No es asesoría financiera profesional ni una promesa
-                de resultados.
+                Esta es una primera orientación basada en la información que compartiste.
               </Text>
             </View>
           </View>
@@ -839,16 +750,12 @@ export default function DiagnosisScreen() {
               {indicators.map((indicator) => (
                 <MetricCard
                   key={indicator.label}
-                  detail={indicator.detail}
                   label={indicator.label}
                   tone={getMetricTone(indicator.label, metrics, onboarding)}
                   value={indicator.value}
                 />
               ))}
             </View>
-            <Text style={styles.helperText}>
-              {metrics.snapshot.precision.message}
-            </Text>
           </InfoCard>
 
           <InfoCard
@@ -864,10 +771,28 @@ export default function DiagnosisScreen() {
                   <ValueRow label="Gastos frente a ingresos" value={metrics.expensePercentageLabel} />
                 </View>
 
-                <View style={styles.flowBarTrack}>
-                  <View style={[styles.flowBarExpenses, { width: toPercentWidth(expenseBarWidth) }]} />
-                  {marginBarWidth > 0 ? (
-                    <View style={[styles.flowBarMargin, { width: toPercentWidth(marginBarWidth) }]} />
+                <View
+                  style={[
+                    styles.flowBarTrack,
+                    hasPositiveMargin && styles.flowBarTrackMargin,
+                    hasNoMargin && styles.flowBarTrackWarning
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.flowBarExpenses,
+                      expensesAreHigh && styles.flowBarExpensesWarning,
+                      { width: toPercentWidth(expenseBarWidth) }
+                    ]}
+                  />
+                  {smallExpensesBarWidth > 0 ? (
+                    <View
+                      style={[
+                        styles.flowBarSmallExpenses,
+                        expensesAreHigh && styles.flowBarSmallExpensesWarning,
+                        { width: toPercentWidth(smallExpensesBarWidth) }
+                      ]}
+                    />
                   ) : null}
                 </View>
 
@@ -877,8 +802,12 @@ export default function DiagnosisScreen() {
                     <Text style={styles.legendText}>Gastos</Text>
                   </View>
                   <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, styles.legendDotSmallExpenses]} />
+                    <Text style={styles.legendText}>Gastos hormiga</Text>
+                  </View>
+                  <View style={styles.legendItem}>
                     <View style={[styles.legendDot, styles.legendDotMargin]} />
-                    <Text style={styles.legendText}>Margen</Text>
+                    <Text style={styles.legendText}>Margen disponible</Text>
                   </View>
                 </View>
               </>
@@ -929,44 +858,21 @@ export default function DiagnosisScreen() {
             <Text style={styles.text}>{getMeaningMessage(priority)}</Text>
           </InfoCard>
 
-          <InfoCard
-            icon={<ClipboardCheck color={colors.primary} size={18} strokeWidth={2.4} />}
-            title="Primeras acciones recomendadas"
-          >
-            <View style={styles.actionsList}>
-              {recommendedActions.map((action, index) => (
-                <View key={action} style={styles.actionItem}>
-                  <View style={styles.actionNumber}>
-                    <Text style={styles.actionNumberText}>{index + 1}</Text>
-                  </View>
-                  <Text style={styles.actionText}>{action}</Text>
-                </View>
-              ))}
-            </View>
-          </InfoCard>
-
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel="Ver simulación educativa"
-              icon={null}
+              accessibilityLabel="Ver simulación"
+              iconPosition="right"
               onPress={() => router.push({ pathname: "/simulation", params: { source: "flow" } })}
               title="Ver simulación"
             />
             <PrimaryButton
-              accessibilityLabel="Editar respuestas del diagnóstico"
+              accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() => router.push("/summary")}
-              title="Editar respuestas"
+              onPress={() => router.back()}
+              style={styles.secondaryButton}
+              title="Volver"
               variant="secondary"
             />
-            <Pressable
-              accessibilityLabel="Volver al inicio de Ruta Financiera"
-              accessibilityRole="button"
-              onPress={() => router.push("/")}
-              style={({ pressed }) => [styles.tertiaryButton, pressed && styles.tertiaryPressed]}
-            >
-              <Text style={styles.tertiaryText}>Volver al inicio</Text>
-            </Pressable>
           </View>
         </View>
       </ScrollView>
@@ -1077,12 +983,6 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     lineHeight: typography.lineHeight.body
   },
-  helperText: {
-    color: colors.textSubtle,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.caption
-  },
   metricsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1120,11 +1020,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.question
   },
-  metricDetail: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    lineHeight: typography.lineHeight.caption
-  },
   valueRows: {
     borderColor: colors.border,
     borderRadius: radius.md,
@@ -1152,19 +1047,40 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.body
   },
   flowBarTrack: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: "#E4EAF2",
     borderRadius: radius.pill,
-    flexDirection: "row",
-    height: 18,
-    overflow: "hidden"
+    height: 12,
+    overflow: "hidden",
+    position: "relative"
+  },
+  flowBarTrackMargin: {
+    backgroundColor: colors.support
+  },
+  flowBarTrackWarning: {
+    backgroundColor: "#FED7AA"
   },
   flowBarExpenses: {
     backgroundColor: colors.primary,
-    height: "100%"
+    borderRadius: radius.pill,
+    height: "100%",
+    left: 0,
+    position: "absolute",
+    top: 0
   },
-  flowBarMargin: {
-    backgroundColor: colors.support,
-    height: "100%"
+  flowBarExpensesWarning: {
+    backgroundColor: "#F97316"
+  },
+  flowBarSmallExpenses: {
+    backgroundColor: "#F59E0B",
+    borderBottomLeftRadius: radius.pill,
+    borderTopLeftRadius: radius.pill,
+    height: "100%",
+    left: 0,
+    position: "absolute",
+    top: 0
+  },
+  flowBarSmallExpensesWarning: {
+    backgroundColor: "#B45309"
   },
   legendRow: {
     flexDirection: "row",
@@ -1186,6 +1102,9 @@ const styles = StyleSheet.create({
   },
   legendDotMargin: {
     backgroundColor: colors.support
+  },
+  legendDotSmallExpenses: {
+    backgroundColor: "#F59E0B"
   },
   legendText: {
     color: colors.textMuted,
@@ -1240,19 +1159,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingBottom: spacing.md
   },
-  tertiaryButton: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    paddingHorizontal: spacing.lg
+  secondaryButton: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border
   },
-  tertiaryPressed: {
-    opacity: 0.7
-  },
-  tertiaryText: {
-    color: colors.textSubtle,
-    fontSize: typography.body,
-    fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.body
-  }
 });

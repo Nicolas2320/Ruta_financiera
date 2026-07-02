@@ -2,7 +2,6 @@ import type { ComponentType } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
-  ChevronRight,
   ClipboardList,
   Coffee,
   PencilLine,
@@ -213,9 +212,7 @@ export default function SummaryScreen() {
               </View>
 
               <View style={styles.heroCopy}>
-                <Text style={styles.kicker}>
-                  {isEditMode ? "Perfil financiero" : "Revisión final"}
-                </Text>
+                {isEditMode ? <Text style={styles.kicker}>Perfil financiero</Text> : null}
                 <Text style={styles.title}>
                   {isEditMode ? "Editar tus respuestas" : "Resumen antes del diagnóstico"}
                 </Text>
@@ -250,6 +247,8 @@ export default function SummaryScreen() {
             description="Datos básicos para contextualizar tus recomendaciones."
             editAccessibilityLabel="Editar perfil básico"
             fields={[
+              { label: "Nombre", value: onboarding.firstName },
+              { label: "Apellido/s", value: onboarding.lastName, optional: true },
               { label: "Rango de edad", value: onboarding.ageRange },
               { label: "País", value: onboarding.country },
               { label: "Ciudad", value: onboarding.city, optional: true }
@@ -345,48 +344,62 @@ export default function SummaryScreen() {
             title="Ahorros, deudas e inversiones"
           />
 
-          <SummarySection
-            description="La dirección principal que guiará el diagnóstico."
-            editAccessibilityLabel="Editar meta financiera"
-            fields={[
-              { label: "Meta principal", value: onboarding.financialGoal },
-              {
-                label: "Metas creadas",
-                value: goals.length > 0 ? goals.length.toString() : null,
-                optional: true
-              },
-              { label: "Horizonte", value: onboarding.goalHorizon },
-              { label: "Importancia", value: onboarding.goalPriority },
-              {
-                label:
-                  goalAmountDisplay.source === "exact"
-                    ? goalAmountDisplay.label
-                    : getGoalDetailLabel(onboarding.financialGoal),
-                value: goalAmountDisplay.source === "empty" ? null : goalAmountDisplay.value,
-                optional: true
-              }
-            ]}
-            icon={Target}
-            onEdit={() => router.push("/goals-overview")}
-            title="Meta financiera"
-          />
+          {!isEditMode ? (
+            <SummarySection
+              description="La dirección principal que guiará el diagnóstico."
+              editAccessibilityLabel="Editar meta financiera"
+              fields={[
+                { label: "Meta principal", value: onboarding.financialGoal },
+                {
+                  label: "Metas creadas",
+                  value: goals.length > 0 ? goals.length.toString() : null,
+                  optional: true
+                },
+                { label: "Horizonte", value: onboarding.goalHorizon },
+                { label: "Importancia", value: onboarding.goalPriority },
+                {
+                  label:
+                    goalAmountDisplay.source === "exact"
+                      ? goalAmountDisplay.label
+                      : getGoalDetailLabel(onboarding.financialGoal),
+                  value: goalAmountDisplay.source === "empty" ? null : goalAmountDisplay.value,
+                  optional: true
+                }
+              ]}
+              icon={Target}
+              onEdit={() => router.push("/goals-overview")}
+              title="Meta financiera"
+            />
+          ) : null}
 
           <View style={styles.actions}>
-            <PrimaryButton
-              accessibilityLabel={isEditMode ? "Volver a configuración" : "Generar diagnóstico financiero"}
-              icon={ChevronRight}
-              iconPosition="right"
-              onPress={() => router.push(isEditMode ? "/settings" : "/diagnosis")}
-              title={isEditMode ? "Volver a configuración" : "Generar diagnóstico"}
-            />
-            <PrimaryButton
-              accessibilityLabel={isEditMode ? "Ir al Dashboard" : "Volver a meta financiera"}
-              icon={null}
-              onPress={() => router.push(isEditMode ? "/dashboard" : "/goals")}
-              style={styles.backButton}
-              title={isEditMode ? "Ir al Dashboard" : "Volver"}
-              variant="secondary"
-            />
+            {isEditMode ? (
+              <PrimaryButton
+                accessibilityLabel="Volver a configuración"
+                icon={null}
+                onPress={() => router.replace("/settings")}
+                style={styles.backButton}
+                title="Volver"
+                variant="secondary"
+              />
+            ) : (
+              <>
+                <PrimaryButton
+                  accessibilityLabel="Generar diagnóstico financiero"
+                  iconPosition="right"
+                  onPress={() => router.push("/diagnosis")}
+                  title="Generar diagnóstico"
+                />
+                <PrimaryButton
+                  accessibilityLabel="Volver a la pantalla anterior"
+                  icon={null}
+                  onPress={() => router.back()}
+                  style={styles.backButton}
+                  title="Volver"
+                  variant="secondary"
+                />
+              </>
+            )}
           </View>
         </View>
       </ScrollView>

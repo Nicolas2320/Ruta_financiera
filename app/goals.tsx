@@ -436,7 +436,10 @@ export default function GoalsScreen() {
           ) : (
             <StepHeader
               currentStep={8}
+              nextAccessibilityLabel="Continuar hacia revisión de respuestas"
+              nextDisabled={!canContinue}
               onBack={() => router.push("/savings-debts")}
+              onNext={handleContinue}
               title="Meta financiera"
               totalSteps={8}
             />
@@ -602,17 +605,17 @@ export default function GoalsScreen() {
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel={isAddMode ? "Guardar nueva meta" : "Revisar mis respuestas antes del diagnóstico"}
+              accessibilityLabel={isAddMode ? "Guardar nueva meta" : "Continuar hacia revisión de respuestas"}
               disabled={!canContinue}
               iconPosition="right"
               onPress={handleContinue}
               style={styles.primaryButton}
-              title={isAddMode ? "Guardar meta" : "Revisar mis respuestas"}
+              title={isAddMode ? "Guardar meta" : "Continuar"}
             />
             <PrimaryButton
-              accessibilityLabel={isAddMode ? "Volver a mis metas" : "Volver a ahorros y deudas"}
+              accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() => router.push(isAddMode ? "/goals-overview" : "/savings-debts")}
+              onPress={() => router.back()}
               style={styles.secondaryButton}
               title="Volver"
               variant="secondary"

@@ -41,6 +41,8 @@ function normalizeOnboarding(onboarding: Partial<OnboardingData> | null | undefi
   const normalizedBase: OnboardingData = {
     ...initialOnboarding,
     ...(onboarding ?? {}),
+    firstName: typeof onboarding?.firstName === "string" ? onboarding.firstName : "",
+    lastName: typeof onboarding?.lastName === "string" ? onboarding.lastName : "",
     expenseCategories: Array.isArray(onboarding?.expenseCategories)
       ? onboarding.expenseCategories
       : [],

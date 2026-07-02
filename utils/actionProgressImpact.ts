@@ -293,7 +293,7 @@ export function getActionImpactMessage(item: MonthlyActionImpactItem | null) {
   }
 
   if (item.kind === "real_contribution") {
-    return "Cuenta como avance real de este mes. No cambia tus datos base automaticamente.";
+    return null;
   }
 
   if (item.kind === "limit_commitment") {
@@ -304,7 +304,7 @@ export function getActionImpactMessage(item: MonthlyActionImpactItem | null) {
     return "Sirve como senal para actualizar datos con confirmacion, no como cambio automatico.";
   }
 
-  return "Ayuda a orientar tus proximas acciones sin cambiar metricas de dinero.";
+  return null;
 }
 
 export function getMonthlyImpactHeadline(summary: MonthlyActionImpactSummary) {

@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
-  ArrowLeft,
   Banknote,
   CheckCircle2,
   Coffee,
@@ -11,7 +10,7 @@ import {
   ReceiptText,
   ShieldCheck
 } from "lucide-react-native";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
@@ -189,16 +188,6 @@ export default function ImprovePlanScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <Pressable
-            accessibilityLabel="Volver al Dashboard"
-            accessibilityRole="button"
-            onPress={() => router.push("/dashboard")}
-            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-          >
-            <ArrowLeft color={colors.primary} size={20} strokeWidth={2.4} />
-            <Text style={styles.backButtonText}>Volver</Text>
-          </Pressable>
-
           <View style={styles.heroCard}>
             <View style={styles.heroIcon}>
               <ShieldCheck color={colors.primary} size={30} strokeWidth={2.4} />
@@ -217,7 +206,6 @@ export default function ImprovePlanScreen() {
               </View>
               <Text style={styles.progressText}>{savedPrecisionStatus.count} de 4 datos guardados</Text>
             </View>
-            <Text style={styles.helperText}>{savedPrecisionStatus.message}</Text>
             {hasUnsavedChanges ? (
               <View style={styles.unsavedNotice}>
                 <Text style={styles.unsavedNoticeText}>
@@ -263,10 +251,11 @@ export default function ImprovePlanScreen() {
               title={isSaving ? "Guardando..." : "Guardar datos"}
             />
             <PrimaryButton
-              accessibilityLabel="Omitir y volver al Dashboard"
+              accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() => router.push("/dashboard")}
-              title="Omitir"
+              onPress={() => router.back()}
+              style={styles.secondaryButton}
+              title="Volver"
               variant="secondary"
             />
           </View>
@@ -332,20 +321,6 @@ const styles = StyleSheet.create({
     maxWidth: 560,
     width: "100%"
   },
-  backButton: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    gap: spacing.xs,
-    minHeight: 42,
-    paddingRight: spacing.sm
-  },
-  backButtonText: {
-    color: colors.primary,
-    fontSize: typography.body,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
-  },
   heroCard: {
     ...shadows.card,
     backgroundColor: colors.surface,
@@ -401,12 +376,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  helperText: {
-    color: colors.textSubtle,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
   },
   unsavedNotice: {
@@ -521,6 +490,10 @@ const styles = StyleSheet.create({
   actions: {
     gap: spacing.sm,
     paddingBottom: spacing.md
+  },
+  secondaryButton: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border
   },
   pressed: {
     opacity: 0.78,

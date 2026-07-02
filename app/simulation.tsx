@@ -4,7 +4,6 @@ import { StatusBar } from "expo-status-bar";
 import {
   AlertCircle,
   Bot,
-  CalendarCheck,
   ChartColumnIncreasing,
   ChevronDown,
   ChevronUp,
@@ -235,6 +234,40 @@ function sumAvailableParts(parts: Array<number | null>) {
   return availableParts.reduce((total, part) => total + part, 0);
 }
 
+function getSharePercentLabel(amount: number | null, base: number | null) {
+  if (amount === null || amount <= 0 || base === null || base <= 0) {
+    return null;
+  }
+
+  return `${Math.max(1, Math.round((amount / base) * 100))}%`;
+}
+
+function getScenarioDescription(parts: Array<string | null>, fallback: string) {
+  const availableParts = parts.filter((part): part is string => part !== null);
+
+  return availableParts.length > 0 ? `${availableParts.join(" + ")}.` : fallback;
+}
+
+function getMarginShareDescription(label: string, amount: number | null, metrics: SimulationBase) {
+  const percentLabel = getSharePercentLabel(amount, metrics.estimatedMargin);
+
+  return percentLabel !== null
+    ? `${label} (cerca del ${percentLabel} de tu margen mensual)`
+    : null;
+}
+
+function getSmallExpensesShareDescription(
+  label: string,
+  amount: number | null,
+  metrics: SimulationBase
+) {
+  const percentLabel = getSharePercentLabel(amount, metrics.smallExpenseValue);
+
+  return percentLabel !== null
+    ? `${label} (cerca del ${percentLabel} de tus gastos pequeños)`
+    : null;
+}
+
 function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scenario[] {
   const suggestedContribution =
     metrics.snapshot.cashflow.suggestedMonthlyContribution > 0
@@ -248,6 +281,8 @@ function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scen
     suggestedContribution !== null
       ? suggestedContribution * 1.25
       : contributionFromPositiveValue(metrics.estimatedMargin, 0.35);
+  const balancedSmallExpensePart = metrics.snapshot.smallExpenses.opportunityAmount;
+  const intensiveSmallExpensePart = contributionFromPositiveValue(metrics.smallExpenseValue, 0.3);
   return [
     ...(registeredContribution > 0
       ? [
@@ -255,7 +290,10 @@ function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scen
             key: "registered",
             name: "Aporte registrado",
             monthlyContribution: registeredContribution,
-            assumption: "Monto que registraste en el plan mensual.",
+            assumption: getScenarioDescription(
+              [getMarginShareDescription("Aporte registrado", registeredContribution, metrics)],
+              "Monto que registraste en el plan mensual."
+            ),
             tags: ["Real del mes", "No reemplaza"],
             tone: "purple" as Tone
           }
@@ -263,9 +301,12 @@ function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scen
       : []),
     {
       key: "current",
-      name: "Ritmo actual",
+      name: "Aporte mínimo",
       monthlyContribution: suggestedContribution,
-      assumption: "Aporte mensual sugerido por el plan.",
+      assumption: getScenarioDescription(
+        [getMarginShareDescription("Aporte sugerido", suggestedContribution, metrics)],
+        "Necesitamos un margen mensual positivo para calcular este aporte."
+      ),
       tags: ["Bajo esfuerzo", "Gradual"],
       tone: "primary",
       unavailableContributionLabel: "No disponible",
@@ -273,24 +314,34 @@ function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scen
     },
     {
       key: "balanced",
-      name: "Ajuste equilibrado",
-      monthlyContribution: sumAvailableParts([
-        balancedBase,
-        metrics.snapshot.smallExpenses.opportunityAmount
-      ]),
-      assumption: "Aporte sugerido + parte de gastos pequeños.",
+      name: "Aporte equilibrado",
+      monthlyContribution: sumAvailableParts([balancedBase, balancedSmallExpensePart]),
+      assumption: getScenarioDescription(
+        [
+          getMarginShareDescription("Aporte sugerido", balancedBase, metrics),
+          getSmallExpensesShareDescription("Parte de gastos pequeños", balancedSmallExpensePart, metrics)
+        ],
+        "Combina un aporte base con una parte de tus gastos pequeños."
+      ),
       tags: ["Recomendado", "Sostenible"],
       tone: "support",
       recommended: true
     },
     {
       key: "intensive",
-      name: "Ajuste intensivo",
-      monthlyContribution: sumAvailableParts([
-        intensiveBase,
-        contributionFromPositiveValue(metrics.smallExpenseValue, 0.3)
-      ]),
-      assumption: "Aporte ampliado + ajuste mayor en gastos pequeños.",
+      name: "Aporte intensivo",
+      monthlyContribution: sumAvailableParts([intensiveBase, intensiveSmallExpensePart]),
+      assumption: getScenarioDescription(
+        [
+          getMarginShareDescription("Aporte ampliado", intensiveBase, metrics),
+          getSmallExpensesShareDescription(
+            "Ajuste mayor en gastos pequeños",
+            intensiveSmallExpensePart,
+            metrics
+          )
+        ],
+        "Combina un aporte ampliado con un ajuste mayor en gastos pequeños."
+      ),
       tags: ["Más exigente", "Revisar"],
       tone: "warning"
     }
@@ -687,13 +738,6 @@ export default function SimulationScreen() {
             </View>
             <View style={styles.heroTextGroup}>
               <Text style={styles.title}>Simulación</Text>
-              <Text style={styles.subtitle}>
-                Compara tres ritmos posibles para avanzar este mes.
-              </Text>
-            </View>
-            <View style={styles.heroChips}>
-              <Chip label={snapshot.precision.label} tone={snapshot.precision.status === "clearer" ? "support" : "primary"} />
-              <Chip label="Educativo" tone="support" />
             </View>
           </View>
 
@@ -780,18 +824,22 @@ export default function SimulationScreen() {
 
           <View style={styles.insightsGrid}>
             <View style={styles.insightCard}>
-              <IconBubble
-                icon={<AlertCircle color={colors.primary} size={22} strokeWidth={2.4} />}
-              />
-              <Text style={styles.insightTitle}>{snapshot.priority.title}</Text>
+              <View style={styles.insightHeader}>
+                <IconBubble
+                  icon={<AlertCircle color={colors.primary} size={22} strokeWidth={2.4} />}
+                />
+                <Text style={styles.insightTitle}>{snapshot.priority.title}</Text>
+              </View>
               <Text style={styles.text}>{snapshot.priority.description}</Text>
             </View>
             <View style={styles.insightCard}>
-              <IconBubble
-                icon={<ShieldCheck color={colors.support} size={22} strokeWidth={2.4} />}
-                tone="support"
-              />
-              <Text style={styles.insightTitle}>Antes de invertir</Text>
+              <View style={styles.insightHeader}>
+                <IconBubble
+                  icon={<ShieldCheck color={colors.support} size={22} strokeWidth={2.4} />}
+                  tone="support"
+                />
+                <Text style={styles.insightTitle}>Antes de invertir</Text>
+              </View>
               <Text style={styles.text}>{getInvestmentEducationMessage(onboarding)}</Text>
             </View>
           </View>
@@ -831,17 +879,16 @@ export default function SimulationScreen() {
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel="Ir al plan mensual"
-              icon={CalendarCheck}
               iconPosition="right"
               onPress={() => router.push("/action-plan")}
               title="Plan mensual"
             />
             <PrimaryButton
-              accessibilityLabel="Volver al diagnóstico financiero"
+              accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() => router.push("/diagnosis")}
-              title="Volver al diagnóstico"
-              style={!isFlowMode && styles.hidden}
+              onPress={() => router.back()}
+              title="Volver"
+              style={[styles.secondaryButton, !isFlowMode && styles.hidden]}
               variant="secondary"
             />
           </View>
@@ -907,11 +954,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     minWidth: 0
   },
-  heroChips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
   title: {
     color: colors.text,
     fontSize: typography.title,
@@ -945,9 +987,9 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     color: colors.text,
-    fontSize: typography.caption,
+    fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
+    lineHeight: typography.lineHeight.sectionTitle
   },
   metricValue: {
     fontSize: typography.sectionTitle,
@@ -1173,8 +1215,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.lg
   },
+  insightHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.md
+  },
   insightTitle: {
     color: colors.text,
+    flex: 1,
     fontSize: typography.question,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.question
@@ -1193,6 +1241,10 @@ const styles = StyleSheet.create({
   actions: {
     gap: spacing.sm,
     paddingBottom: spacing.md
+  },
+  secondaryButton: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border
   },
   hidden: {
     display: "none"

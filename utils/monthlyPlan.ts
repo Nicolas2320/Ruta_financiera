@@ -103,7 +103,7 @@ const monthlyFocusByPriority: Record<PriorityKey, MonthlyFocus> = {
   },
   advance_goal: {
     title: "Avanzar hacia tu meta",
-    text: "Tu plan puede enfocarse en separar un monto mensual realista para tu objetivo."
+    text: "Tu plan puede enfocarse en separar un monto mensual adecuado para tu objetivo."
   },
   learn_investing: {
     title: "Aprender antes de invertir",
@@ -168,7 +168,7 @@ function getGoalAwareActions(
       return {
         ...action,
         title: `Separar aporte para ${goalTitle}`,
-        description: "Usa el aporte asignado como referencia educativa, no como obligacion.",
+        description: "Usa el aporte asignado como referencia. Puedes ajustarlo.",
         estimatedImpact: getGoalContributionImpact(goalContext)
       };
     }
@@ -185,12 +185,13 @@ function getGoalAwareActions(
     if (action.id === "compare-goal-contribution") {
       return {
         ...action,
-        title: `Comparar escenarios para ${goalTitle}`,
+        title: "Comparar escenarios en Simulación",
+        description: "Revisa el aporte actual, equilibrado e intensivo antes de elegir uno.",
         estimatedImpact:
           goalContext?.estimatedMonthsToGoal !== null &&
           goalContext?.estimatedMonthsToGoal !== undefined
-            ? `Con el aporte asignado, podria tomar cerca de ${goalContext.estimatedMonthsToGoal} meses.`
-            : getGoalContributionImpact(goalContext)
+            ? `Elige un escenario para ${goalTitle}. Con el aporte asignado, podria tomar cerca de ${goalContext.estimatedMonthsToGoal} meses.`
+            : `Elige un escenario para ${goalTitle} sin cambiar tu aporte automaticamente.`
       };
     }
 

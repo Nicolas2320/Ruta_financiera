@@ -1,4 +1,6 @@
 export type OnboardingData = {
+  firstName: string;
+  lastName: string;
   ageRange: string | null;
   country: string | null;
   city: string;
@@ -193,6 +195,8 @@ export type ExactFinancialValueKey = (typeof exactFinancialValueKeys)[number];
 export type ExactFinancialValues = Partial<Record<ExactFinancialValueKey, number>>;
 
 export const initialOnboarding: OnboardingData = {
+  firstName: "",
+  lastName: "",
   ageRange: null,
   country: null,
   city: "",
@@ -550,7 +554,8 @@ export function hasCompletedOnboarding(onboarding: OnboardingData) {
   const primaryGoal = getPrimaryFinancialGoal(onboarding);
 
   return Boolean(
-    onboarding.ageRange &&
+    onboarding.firstName.trim() &&
+      onboarding.ageRange &&
       onboarding.country &&
       onboarding.incomeRange &&
       onboarding.incomeType &&

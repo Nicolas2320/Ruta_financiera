@@ -25,10 +25,12 @@ export default function AssistantScreen() {
             </Text>
           </View>
           <PrimaryButton
-            accessibilityLabel="Volver al inicio"
+            accessibilityLabel="Volver a la pantalla anterior"
             icon={null}
-            onPress={() => router.push("/dashboard")}
-            title="Volver al inicio"
+            onPress={() => router.back()}
+            style={styles.secondaryButton}
+            title="Volver"
+            variant="secondary"
           />
         </View>
       </ScrollView>
@@ -53,6 +55,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     maxWidth: 520,
     width: "100%"
+  },
+  secondaryButton: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border
   },
   card: {
     ...shadows.card,

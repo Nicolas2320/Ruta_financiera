@@ -235,7 +235,7 @@ function getImprovePlanDashboardText(count: number) {
     return "Ya estamos usando algunos datos más claros en tus cálculos.";
   }
 
-  return "Tu Dashboard ya usa estos valores para mostrar cálculos más útiles.";
+  return null;
 }
 
 function getImprovePlanActionLabel(count: number) {
@@ -421,7 +421,6 @@ function MonthlyPlanCard({
   primaryGoalTitle,
   progressPercentage,
   realContribution,
-  text,
   title
 }: {
   actionCount: number;
@@ -432,15 +431,12 @@ function MonthlyPlanCard({
   primaryGoalTitle?: string | null;
   progressPercentage: number;
   realContribution: string;
-  text: string;
   title: string;
 }) {
   return (
     <View style={styles.monthlyPlanCard}>
       <View style={styles.monthlyPlanBody}>
-        <Text style={styles.kickerPrimary}>Plan del mes</Text>
         <Text style={styles.heroTitle}>{title}</Text>
-        <Text style={styles.heroText}>{text}</Text>
         {primaryGoalTitle ? (
           <View style={styles.heroGoalPill}>
             <Flag color={colors.primary} size={16} strokeWidth={2.4} />
@@ -614,6 +610,7 @@ function ImprovePlanSummaryCard({
 }) {
   const isComplete = count === 4;
   const tone: Tone = count === 0 ? "neutral" : isComplete ? "support" : "primary";
+  const improveText = getImprovePlanDashboardText(count);
 
   return (
     <View style={styles.improveSummary}>
@@ -626,7 +623,7 @@ function ImprovePlanSummaryCard({
         <Chip label={state} tone={tone} />
       </View>
 
-      <Text style={styles.improveText}>{getImprovePlanDashboardText(count)}</Text>
+      {improveText ? <Text style={styles.improveText}>{improveText}</Text> : null}
 
       <View style={styles.precisionProgressBlock}>
         <View style={styles.comparisonHeader}>
@@ -872,10 +869,6 @@ export default function DashboardScreen() {
   const expensesMayExceedIncome =
     metrics.expensePercentage !== null && metrics.expensePercentage > 100;
   const categoryLabels = data.smallExpenseCategories.slice(0, 4);
-  const summarySubtitle =
-    precisionStatus.exactValuesCount > 0
-      ? "Usa tus datos ingresados y completa con rangos cuando hace falta."
-      : "Basado en los rangos que seleccionaste.";
   const primaryGoalTargetAmount = primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount;
   const goalDetailText =
     primaryGoalAllocation && isCompletedGoalAllocation(primaryGoalAllocation)
@@ -925,6 +918,8 @@ export default function DashboardScreen() {
       : snapshot.sourceMap.smallExpenses === "unknown"
         ? "Por estimar"
         : `Rango: ${getDefinedLabel(data.smallExpensesRange)}`;
+  const firstName = onboarding.firstName.trim();
+  const greetingTitle = firstName ? `Bienvenido ${firstName}!` : "Bienvenido!";
   const navigate = (route: Route) => router.push(route);
 
   return (
@@ -938,10 +933,7 @@ export default function DashboardScreen() {
         <View style={styles.container}>
           <View style={styles.header}>
             <View style={styles.headerText}>
-              <Text style={styles.title}>Inicio</Text>
-              <Text style={styles.subtitle}>
-                Hola, este es tu panorama financiero de este mes.
-              </Text>
+              <Text style={styles.title}>{greetingTitle}</Text>
             </View>
             <CircleButton onPress={() => router.push("/settings")} />
           </View>
@@ -955,15 +947,11 @@ export default function DashboardScreen() {
             primaryGoalTitle={primaryGoalTitle}
             progressPercentage={progressPercentage}
             realContribution={realContributionLabel}
-            text={focus.text}
             title={focus.title}
           />
 
           <View style={styles.twoColumnGrid}>
-            <PanelCard
-              subtitle={summarySubtitle}
-              title="Resumen financiero estimado"
-            >
+            <PanelCard title="Resumen financiero estimado">
               <View style={styles.metricsGrid}>
                 <MetricCard
                   icon={<PiggyBank color={colors.support} size={23} strokeWidth={2.4} />}
@@ -1007,13 +995,6 @@ export default function DashboardScreen() {
                     ]}
                   />
                 </View>
-                <Text style={styles.helperText}>
-                  {expensesMayExceedIncome
-                    ? "Tus gastos podrían superar tus ingresos mensuales según los datos disponibles."
-                    : hasExactMonthlyAmounts
-                      ? "Tus datos ingresados muestran esta relación entre gastos e ingresos."
-                      : "Tus gastos representan aproximadamente esta parte de tus ingresos."}
-                </Text>
               </View>
             </PanelCard>
 
