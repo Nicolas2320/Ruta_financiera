@@ -40,7 +40,6 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
-import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
@@ -408,12 +407,16 @@ function getContributionPaceLabel(allocation: GoalAllocation) {
   const pacePercentage = Math.round(
     (allocation.monthlyContribution / allocation.requiredMonthlyContribution) * 100
   );
+  const estimatedTimeDetail =
+    allocation.estimatedMonthsToGoal !== null
+      ? ` Con este aporte mensual tomaría ${allocation.estimatedMonthsToGoal} meses aprox.`
+      : "";
 
   if (pacePercentage >= 100) {
-    return "Cubre el aporte mensual necesario para este horizonte.";
+    return `Cubre el aporte mensual necesario para cumplirlo en el tiempo deseado.${estimatedTimeDetail}`;
   }
 
-  return `Cubre cerca del ${pacePercentage}% del aporte mensual necesario.`;
+  return `Cubre cerca del ${pacePercentage}% del aporte mensual necesario para cumplirlo en el tiempo deseado.${estimatedTimeDetail}`;
 }
 
 function getToneColors(tone: Tone) {
@@ -1043,19 +1046,19 @@ function GoalCard({
         <View style={styles.detailsPanel}>
           <View style={styles.goalMetaGrid}>
             <View style={styles.metaBox}>
-              <Text style={styles.metaLabel}>Objetivo</Text>
+              <Text style={styles.metaLabel}>Monto objetivo</Text>
               <Text style={styles.metaValue}>{targetLabel}</Text>
             </View>
             <View style={styles.metaBox}>
-              <Text style={styles.metaLabel}>Horizonte</Text>
+              <Text style={styles.metaLabel}>Tiempo deseado</Text>
               <Text style={styles.metaValue}>{allocation.goal.horizon ?? "No definido"}</Text>
             </View>
             <View style={styles.metaBox}>
-              <Text style={styles.metaLabel}>Necesario</Text>
+              <Text style={styles.metaLabel}>Aporte necesario</Text>
               <Text style={styles.metaValue}>{requiredLabel}</Text>
             </View>
             <View style={styles.metaBox}>
-              <Text style={styles.metaLabel}>Tiempo</Text>
+              <Text style={styles.metaLabel}>Tiempo con aporte actual</Text>
               <Text style={styles.metaValue}>{estimatedTime}</Text>
             </View>
           </View>
@@ -1068,10 +1071,12 @@ function GoalCard({
                   {formatGoalContribution(allocation.monthlyContribution)}
                 </Text>
               </View>
-              <Chip
-                label={allocation.contributionMode === "manual" ? "Manual" : "Recomendado"}
-                tone={allocation.contributionMode === "manual" ? "warning" : "support"}
-              />
+              {!isPausedGoal ? (
+                <Chip
+                  label={allocation.contributionMode === "manual" ? "Manual" : "Recomendado"}
+                  tone={allocation.contributionMode === "manual" ? "warning" : "support"}
+                />
+              ) : null}
             </View>
 
             <View style={styles.contributionAdjustInline}>
@@ -1196,9 +1201,6 @@ function GoalCard({
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Editar meta</Text>
-                <Text style={styles.modalSubtitle}>
-                  Ajusta el tipo, icono y datos principales de esta meta.
-                </Text>
               </View>
               <IconButton
                 accessibilityLabel="Cerrar edición"
@@ -1718,9 +1720,6 @@ export default function GoalsOverviewScreen() {
             </View>
             <View style={styles.heroCopy}>
               <Text style={styles.title}>Mis metas</Text>
-              <Text style={styles.subtitle}>
-                Reparte tu bolsa mensual entre metas con distinta importancia, horizonte y viabilidad.
-              </Text>
             </View>
           </View>
 
@@ -1919,16 +1918,18 @@ export default function GoalsOverviewScreen() {
             <View style={styles.quickCreateCopy}>
               <Text style={styles.quickCreateTitle}>Agregar otra meta</Text>
               <Text style={styles.quickCreateText}>
-                Suma un objetivo nuevo y la bolsa mensual se repartira con tus prioridades actuales.
+                Crea otro objetivo y la app ajustará la bolsa mensual según su prioridad, horizonte y avance actual.
               </Text>
             </View>
-            <PrimaryButton
+            <Pressable
               accessibilityLabel="Crear nueva meta"
-              icon={Plus}
+              accessibilityRole="button"
               onPress={navigateToNewGoal}
-              style={styles.quickCreateButton}
-              title="Nueva meta"
-            />
+              style={({ pressed }) => [styles.quickCreateButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.quickCreateButtonText}>Nueva meta</Text>
+              <Plus color={colors.surface} size={21} strokeWidth={2.6} />
+            </Pressable>
           </View>
 
           {goalPlan.allocations.length > 0 ? (
@@ -2356,36 +2357,49 @@ const styles = StyleSheet.create({
   },
   quickCreateCard: {
     ...shadows.card,
-    alignItems: "center",
+    alignItems: "flex-start",
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radius.lg,
     borderWidth: 1,
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacing.md,
+    gap: spacing.lg,
     justifyContent: "space-between",
-    padding: spacing.md
+    padding: spacing.lg
   },
   quickCreateCopy: {
     flex: 1,
-    gap: spacing.xs,
-    minWidth: 220
+    gap: spacing.sm,
+    minWidth: 230
   },
   quickCreateTitle: {
     color: colors.text,
-    fontSize: typography.body,
+    fontSize: typography.question,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.question
   },
   quickCreateText: {
     color: colors.textMuted,
-    fontSize: typography.caption,
-    lineHeight: typography.lineHeight.caption
+    fontSize: typography.body,
+    lineHeight: typography.lineHeight.body
   },
   quickCreateButton: {
-    flexGrow: 1,
-    minWidth: 170
+    alignItems: "center",
+    alignSelf: "center",
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "center",
+    minHeight: 48,
+    paddingHorizontal: spacing.lg
+  },
+  quickCreateButtonText: {
+    color: colors.surface,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
   },
   goalsList: {
     gap: spacing.md

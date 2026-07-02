@@ -87,17 +87,19 @@ export default function SettingsScreen() {
             <View style={styles.settingsLinkBody}>
               <Text style={styles.settingsLinkTitle}>Editar perfil financiero</Text>
               <Text style={styles.settingsLinkText}>
-                Actualiza edad, país, tipo de ingreso, hábitos, deudas, inversiones y respuestas iniciales.
+                Actualiza nombre, edad, país, tipo de ingreso, hábitos, deudas, inversiones y respuestas iniciales.
               </Text>
             </View>
             <ChevronRight color={colors.primary} size={22} strokeWidth={2.5} />
           </Pressable>
 
           <PrimaryButton
-            accessibilityLabel="Volver al inicio"
+            accessibilityLabel="Volver al dashboard"
             icon={null}
-            onPress={() => router.push("/dashboard")}
-            title="Volver al inicio"
+            onPress={() => router.replace("/dashboard")}
+            style={styles.secondaryButton}
+            title="Volver"
+            variant="secondary"
           />
 
           {user ? (
@@ -274,6 +276,10 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.medium,
     lineHeight: typography.lineHeight.caption
+  },
+  secondaryButton: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border
   },
   pressed: {
     opacity: 0.78,

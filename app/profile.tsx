@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { Globe, MapPin } from "lucide-react-native";
+import { Globe, MapPin, UserRound } from "lucide-react-native";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -24,11 +24,13 @@ export default function ProfileScreen() {
   const { onboarding, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isProfileEditMode = source === "profile";
+  const [firstName, setFirstName] = useState(onboarding.firstName);
+  const [lastName, setLastName] = useState(onboarding.lastName);
   const [selectedAgeRange, setSelectedAgeRange] = useState<string | null>(onboarding.ageRange);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(onboarding.country);
   const [city, setCity] = useState(onboarding.city);
 
-  const canContinue = Boolean(selectedAgeRange && selectedCountry);
+  const canContinue = Boolean(firstName.trim() && selectedAgeRange && selectedCountry);
 
   const handleContinue = () => {
     if (!selectedAgeRange || !selectedCountry) {
@@ -36,6 +38,8 @@ export default function ProfileScreen() {
     }
 
     updateOnboarding({
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
       ageRange: selectedAgeRange,
       country: selectedCountry,
       city: city.trim()
@@ -63,7 +67,10 @@ export default function ProfileScreen() {
           {!isProfileEditMode ? (
             <StepHeader
               currentStep={3}
+              nextAccessibilityLabel="Continuar hacia preguntas de ingresos"
+              nextDisabled={!canContinue}
               onBack={() => router.push("/privacy")}
+              onNext={handleContinue}
               title="Perfil básico"
               totalSteps={8}
             />
@@ -76,6 +83,38 @@ export default function ProfileScreen() {
             text="Usaremos esta información para adaptar tu diagnóstico. No necesitas dar datos exactos."
             title={"Cuéntanos un poco\nsobre ti"}
           />
+
+          <View style={styles.card}>
+            <Text style={styles.questionTitle}>¿Cómo te llamas?</Text>
+            <View style={styles.nameGrid}>
+              <View style={styles.inputWrap}>
+                <UserRound color="#4E6285" size={20} strokeWidth={2.3} />
+                <TextInput
+                  accessibilityLabel="Nombre"
+                  autoCapitalize="words"
+                  onChangeText={setFirstName}
+                  placeholder="Nombre"
+                  placeholderTextColor="#6A7892"
+                  returnKeyType="next"
+                  style={styles.cityInput}
+                  value={firstName}
+                />
+              </View>
+              <View style={styles.inputWrap}>
+                <UserRound color="#4E6285" size={20} strokeWidth={2.3} />
+                <TextInput
+                  accessibilityLabel="Apellidos"
+                  autoCapitalize="words"
+                  onChangeText={setLastName}
+                  placeholder="Apellido/s"
+                  placeholderTextColor="#6A7892"
+                  returnKeyType="done"
+                  style={styles.cityInput}
+                  value={lastName}
+                />
+              </View>
+            </View>
+          </View>
 
           <View style={styles.card}>
             <Text style={styles.questionTitle}>¿Cuál es tu rango de edad?</Text>
@@ -141,13 +180,11 @@ export default function ProfileScreen() {
               title={isProfileEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
-              accessibilityLabel={isProfileEditMode ? "Volver al perfil financiero" : "Volver a privacidad y confianza"}
+              accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() =>
-                router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/privacy")
-              }
+              onPress={() => router.back()}
               style={styles.secondaryButton}
-              title={isProfileEditMode ? "Volver al perfil" : "Volver"}
+              title="Volver"
               variant="secondary"
             />
           </View>
@@ -212,6 +249,9 @@ const styles = StyleSheet.create({
     fontSize: typography.question,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.question
+  },
+  nameGrid: {
+    gap: spacing.sm
   },
   ageGrid: {
     flexDirection: "row",

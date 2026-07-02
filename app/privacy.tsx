@@ -3,6 +3,7 @@ import type { DimensionValue } from "react-native";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
+  ArrowRight,
   ArrowLeftRight,
   Ban,
   ChevronLeft,
@@ -64,9 +65,9 @@ export default function PrivacyScreen() {
         <View style={styles.container}>
           <View style={styles.stepHeader}>
             <Pressable
-              accessibilityLabel="Volver al inicio"
+              accessibilityLabel="Volver a la pantalla anterior"
               accessibilityRole="button"
-              onPress={() => router.push("/")}
+              onPress={() => router.back()}
               style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
             >
               <ChevronLeft color="#0B1B3F" size={22} strokeWidth={2.4} />
@@ -76,7 +77,14 @@ export default function PrivacyScreen() {
               <Text style={styles.stepPillText}>Paso 2 de 8</Text>
             </View>
 
-            <Text style={styles.headerTitle}>Privacidad</Text>
+            <Pressable
+              accessibilityLabel="Continuar hacia el perfil financiero"
+              accessibilityRole="button"
+              onPress={() => router.push("/profile")}
+              style={({ pressed }) => [styles.nextButton, pressed && styles.pressed]}
+            >
+              <ArrowRight color={colors.primary} size={21} strokeWidth={2.5} />
+            </Pressable>
           </View>
 
           <StepProgress currentStep={2} totalSteps={8} />
@@ -142,9 +150,9 @@ export default function PrivacyScreen() {
               title="Continuar"
             />
             <PrimaryButton
-              accessibilityLabel="Volver al inicio de Ruta Financiera"
+              accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() => router.push("/")}
+              onPress={() => router.back()}
               style={styles.secondaryButton}
               title="Volver"
               variant="secondary"
@@ -259,11 +267,15 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
   },
-  headerTitle: {
-    color: colors.textSubtle,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
+  nextButton: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: "#D6E4F7",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: "center",
+    width: 38
   },
   progressWrap: {
     height: 18,

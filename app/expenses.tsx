@@ -287,7 +287,10 @@ export default function ExpensesScreen() {
           {!isEditMode ? (
           <StepHeader
             currentStep={5}
+            nextAccessibilityLabel="Continuar hacia gastos hormiga"
+            nextDisabled={!canContinue}
             onBack={() => router.push("/income")}
+            onNext={handleContinue}
             title="Gastos"
             totalSteps={8}
           />
@@ -362,19 +365,11 @@ export default function ExpensesScreen() {
               title={isEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
-              accessibilityLabel={isEditMode ? "Volver al perfil financiero" : "Volver a ingresos"}
+              accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() =>
-                router.push(
-                  isSpendingEditMode
-                    ? "/spending"
-                    : isProfileEditMode
-                      ? { pathname: "/summary", params: { mode: "edit" } }
-                      : "/income"
-                )
-              }
+              onPress={() => router.back()}
               style={styles.secondaryButton}
-              title={isEditMode ? "Volver" : "Volver"}
+              title="Volver"
               variant="secondary"
             />
           </View>

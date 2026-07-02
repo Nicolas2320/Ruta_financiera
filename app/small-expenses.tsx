@@ -342,7 +342,10 @@ export default function SmallExpensesScreen() {
           {!isEditMode ? (
           <StepHeader
             currentStep={6}
+            nextAccessibilityLabel="Continuar hacia ahorros y deudas"
+            nextDisabled={!canContinue}
             onBack={() => router.push("/expenses")}
+            onNext={handleContinue}
             title="Gastos hormiga"
             totalSteps={8}
           />
@@ -475,27 +478,11 @@ export default function SmallExpensesScreen() {
               title={isEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
-              accessibilityLabel={
-                isDashboardEditMode
-                  ? "Volver al Dashboard"
-                  : isEditMode
-                    ? "Volver al perfil financiero"
-                    : "Volver a gastos mensuales"
-              }
+              accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() =>
-                router.push(
-                  isSpendingEditMode
-                    ? "/spending"
-                    : isDashboardEditMode
-                      ? "/dashboard"
-                    : isProfileEditMode
-                      ? { pathname: "/summary", params: { mode: "edit" } }
-                    : "/expenses"
-                )
-              }
+              onPress={() => router.back()}
               style={styles.secondaryButton}
-              title={isEditMode ? "Volver" : "Volver"}
+              title="Volver"
               variant="secondary"
             />
           </View>

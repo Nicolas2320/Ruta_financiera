@@ -173,9 +173,10 @@ export default function AuthScreen() {
             />
 
             <PrimaryButton
-              accessibilityLabel="Volver al inicio"
+              accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() => router.push("/")}
+              onPress={() => router.back()}
+              style={styles.secondaryButton}
               title="Volver"
               variant="secondary"
             />
@@ -360,6 +361,10 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
+  },
+  secondaryButton: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border
   },
   pressed: {
     opacity: 0.78,

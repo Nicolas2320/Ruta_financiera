@@ -290,7 +290,10 @@ export default function SavingsDebtsScreen() {
           {!isProfileEditMode ? (
             <StepHeader
               currentStep={7}
+              nextAccessibilityLabel="Continuar hacia meta financiera"
+              nextDisabled={!canContinue}
               onBack={() => router.push("/small-expenses")}
+              onNext={handleContinue}
               title="Ahorros y deudas"
               totalSteps={8}
             />
@@ -439,13 +442,11 @@ export default function SavingsDebtsScreen() {
               title={isProfileEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
-              accessibilityLabel={isProfileEditMode ? "Volver al perfil financiero" : "Volver a gastos hormiga"}
+              accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() =>
-                router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/small-expenses")
-              }
+              onPress={() => router.back()}
               style={styles.secondaryButton}
-              title={isProfileEditMode ? "Volver al perfil" : "Volver"}
+              title="Volver"
               variant="secondary"
             />
           </View>
