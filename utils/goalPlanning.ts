@@ -83,6 +83,12 @@ export function getGoalTypeLabel(type: string | null | undefined) {
   return goalTypeLabels[type ?? ""] ?? "Meta";
 }
 
+export function isEmergencyGoal(goal: Pick<FinancialGoal, "title" | "type"> | null | undefined) {
+  const normalizedTitle = normalizeText(goal?.title);
+
+  return goal?.type === "security" || normalizedTitle.includes("emergencia");
+}
+
 export function getGoalHorizonMonths(horizon: string | null | undefined) {
   const normalizedHorizon = normalizeText(horizon);
 

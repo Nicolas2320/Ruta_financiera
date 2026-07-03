@@ -34,7 +34,11 @@ import {
   type FinancialGoal
 } from "../types/financial";
 import { formatCOP } from "../utils/financialRanges";
-import { formatGoalContribution, getGoalPlanFromOnboarding } from "../utils/goalPlanning";
+import {
+  formatGoalContribution,
+  getGoalPlanFromOnboarding,
+  isEmergencyGoal
+} from "../utils/goalPlanning";
 import {
   applyGoalContribution,
   removeGoalContributionBySource
@@ -48,6 +52,7 @@ import {
 } from "../utils/actionProgressImpact";
 import {
   getEffectiveMonthlyPlanProgress,
+  isGoalContributionActionId,
   removeStoredGoalContributionActionsForPeriod
 } from "../utils/monthlyPlanProgress";
 import {
@@ -918,7 +923,14 @@ export default function ActionPlanScreen() {
     actionProgressId: string,
     patch: ActionProgressPatch
   ) => {
-    if (action.id !== "set-goal-contribution" && action.id !== "redirect-small-expenses") {
+    if (!isGoalContributionActionId(action.id)) {
+      return;
+    }
+
+    if (
+      action.id === "initial-emergency-contribution" &&
+      !isEmergencyGoal(primaryGoalAllocation?.goal)
+    ) {
       return;
     }
 

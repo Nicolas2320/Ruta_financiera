@@ -12,6 +12,7 @@ export type AssistantFinancialContext = {
     monthlyMargin: number | null;
     expensesToIncomeRatio: number | null;
     suggestedMonthlyContribution: number;
+    suggestedMonthlyContributionMeaning?: string;
   };
   debt: {
     label: string;
@@ -33,6 +34,22 @@ export type AssistantFinancialContext = {
     remainingAmount: number | null;
     targetAmount: number | null;
   };
+  goalsPlan?: {
+    activeGoals: number;
+    allocations: Array<{
+      isPrimary: boolean;
+      monthlyContribution: number;
+      progressPercentage: number | null;
+      remainingAmount: number | null;
+      status: string | null | undefined;
+      title: string;
+    }>;
+    monthlyGoalBudget: number;
+    monthlyGoalBudgetMode: "recommended" | "manual";
+    monthlyContributionTotal: number;
+    primaryGoalMonthlyContribution: number | null;
+    remainingBudget: number;
+  };
   investment: {
     situation: string | null;
   };
@@ -49,6 +66,7 @@ export type AssistantFinancialContext = {
     focusText: string;
     focusTitle: string;
     progressPercentage: number;
+    realContributionThisMonth?: number;
   };
   precision: {
     label: string;
