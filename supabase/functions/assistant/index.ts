@@ -19,7 +19,6 @@ type AssistantChatMessage = {
 };
 
 type AssistantRequest = {
-  accessPin?: unknown;
   action?: unknown;
   conversation?: AssistantChatMessage[];
   financialContext?: unknown;
@@ -382,17 +381,7 @@ Deno.serve(async (request) => {
 
   try {
     const body = (await request.json()) as AssistantRequest;
-    const configuredAccessPin = Deno.env.get("ASSISTANT_ACCESS_PIN");
-    const accessPin = cleanText(body.accessPin, 20);
     const action = cleanText(body.action, 20) || "message";
-
-    if (!configuredAccessPin) {
-      return jsonResponse({ error: "ASSISTANT_ACCESS_PIN no esta configurado." }, 500);
-    }
-
-    if (accessPin !== configuredAccessPin) {
-      return jsonResponse({ error: "PIN de asistente invalido." }, 401);
-    }
 
     const userId = await getAuthenticatedUserId(request);
     const dailyLimit = getDailyLimit();

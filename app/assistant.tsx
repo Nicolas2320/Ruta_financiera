@@ -7,7 +7,6 @@ import {
   CalendarCheck,
   ClipboardCheck,
   Lightbulb,
-  Lock,
   PiggyBank,
   Send,
   ShieldCheck,
@@ -70,7 +69,6 @@ type AssistantTextBlock = {
   type: "bullet" | "heading" | "paragraph";
 };
 
-const assistantPin = process.env.EXPO_PUBLIC_ASSISTANT_PIN ?? "";
 const defaultDailyQuestionLimit = 5;
 const defaultUsageTimeZone = "America/Bogota";
 
@@ -421,12 +419,8 @@ export default function AssistantScreen() {
   const { exactValues, hasCompletedOnboarding, onboarding } = useOnboarding();
   const [isChatNoteVisible, setIsChatNoteVisible] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [assistantAccessPin, setAssistantAccessPin] = useState("");
-  const [isPinUnlocked, setIsPinUnlocked] = useState(false);
   const [isResponding, setIsResponding] = useState(false);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
-  const [pinError, setPinError] = useState<string | null>(null);
-  const [pinValue, setPinValue] = useState("");
   const [dailyQuestionLimit, setDailyQuestionLimit] = useState(defaultDailyQuestionLimit);
   const [isUsageLoading, setIsUsageLoading] = useState(false);
   const [limitClockTick, setLimitClockTick] = useState(() => Date.now());
@@ -478,16 +472,12 @@ export default function AssistantScreen() {
   );
 
   useEffect(() => {
-    if (!isPinUnlocked || !assistantAccessPin) {
-      return;
-    }
-
     let isMounted = true;
 
     setIsUsageLoading(true);
     setUsageStatusError(null);
 
-    getAssistantUsageStatus({ accessPin: assistantAccessPin })
+    getAssistantUsageStatus()
       .then((result) => {
         if (!isMounted) {
           return;
@@ -523,17 +513,13 @@ export default function AssistantScreen() {
     return () => {
       isMounted = false;
     };
-  }, [assistantAccessPin, isPinUnlocked]);
+  }, []);
 
   useEffect(() => {
-    if (!isPinUnlocked) {
-      return;
-    }
-
     const timer = setInterval(() => setLimitClockTick(Date.now()), 60 * 1000);
 
     return () => clearInterval(timer);
-  }, [isPinUnlocked]);
+  }, []);
 
   const remainingQuestions = Math.max(dailyQuestionLimit - questionCount, 0);
   const hasReachedLimit = remainingQuestions === 0;
@@ -544,25 +530,6 @@ export default function AssistantScreen() {
     new Date(limitClockTick)
   );
   const visibleMessages = [initialMessage, ...messages];
-
-  const unlockAssistant = () => {
-    const cleanPin = pinValue.trim();
-
-    if (!assistantPin) {
-      setPinError("Configura EXPO_PUBLIC_ASSISTANT_PIN en .env antes de usar el asistente.");
-      return;
-    }
-
-    if (cleanPin === assistantPin) {
-      setAssistantAccessPin(cleanPin);
-      setIsPinUnlocked(true);
-      setPinError(null);
-      setPinValue("");
-      return;
-    }
-
-    setPinError("PIN incorrecto. Revisa la clave e intenta de nuevo.");
-  };
 
   const askAssistant = async (question: string) => {
     const cleanQuestion = question.trim();
@@ -595,7 +562,6 @@ export default function AssistantScreen() {
 
     try {
       const result = await generateAssistantResponse({
-        accessPin: assistantAccessPin,
         conversation: conversationForApi,
         financialContext: runtimeContext.financialContext,
         userMessage: cleanQuestion
@@ -644,65 +610,6 @@ export default function AssistantScreen() {
       setIsResponding(false);
     }
   };
-
-  if (!isPinUnlocked) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="dark" />
-        <ScrollView contentContainerStyle={styles.lockScrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.lockContainer}>
-            <View style={styles.lockCard}>
-              <View style={styles.lockIcon}>
-                <Lock color={colors.primary} size={34} strokeWidth={2.4} />
-              </View>
-              <View style={styles.lockText}>
-                <Text style={styles.kicker}>Acceso temporal</Text>
-                <Text style={styles.title}>Asistente AI</Text>
-                <Text style={styles.subtitle}>
-                  Por ahora esta pantalla está protegida mientras terminamos la integración con OpenAI.
-                </Text>
-              </View>
-              <View style={styles.pinForm}>
-                <Text style={styles.inputLabel}>PIN de acceso</Text>
-                <TextInput
-                  accessibilityLabel="PIN de acceso al asistente"
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  onChangeText={(value) => {
-                    setPinValue(value.replace(/\D/g, ""));
-                    setPinError(null);
-                  }}
-                  onSubmitEditing={unlockAssistant}
-                  placeholder="0000"
-                  placeholderTextColor={colors.textSubtle}
-                  secureTextEntry
-                  style={styles.pinInput}
-                  value={pinValue}
-                />
-                {pinError ? <Text style={styles.errorText}>{pinError}</Text> : null}
-              </View>
-              <PrimaryButton
-                accessibilityLabel="Ingresar al asistente"
-                disabled={pinValue.length < 4}
-                iconPosition="right"
-                onPress={unlockAssistant}
-                title="Ingresar"
-              />
-              <PrimaryButton
-                accessibilityLabel="Volver a la pantalla anterior"
-                icon={null}
-                onPress={() => router.back()}
-                style={styles.secondaryPrimaryButton}
-                title="Volver"
-                variant="secondary"
-              />
-            </View>
-          </View>
-        </ScrollView>
-        <BottomNavigation activeRoute="/assistant" />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -889,76 +796,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md
   },
-  lockScrollContent: {
-    flexGrow: 1,
-    paddingBottom: spacing.lg,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md
-  },
   container: {
     alignSelf: "center",
     gap: spacing.md,
     maxWidth: 760,
     width: "100%"
-  },
-  lockContainer: {
-    alignSelf: "center",
-    flex: 1,
-    justifyContent: "center",
-    maxWidth: 520,
-    width: "100%"
-  },
-  lockCard: {
-    ...shadows.card,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    gap: spacing.md,
-    padding: spacing.lg
-  },
-  lockIcon: {
-    alignItems: "center",
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    height: 70,
-    justifyContent: "center",
-    width: 70
-  },
-  lockText: {
-    gap: spacing.xs
-  },
-  pinForm: {
-    gap: spacing.xs
-  },
-  inputLabel: {
-    color: colors.text,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  pinInput: {
-    backgroundColor: colors.background,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    color: colors.text,
-    fontSize: typography.sectionTitle,
-    fontWeight: typography.weight.black,
-    letterSpacing: 0,
-    minHeight: 54,
-    paddingHorizontal: spacing.md,
-    textAlign: "center"
-  },
-  errorText: {
-    color: "#B42318",
-    fontSize: typography.caption,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.caption
-  },
-  secondaryPrimaryButton: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border
   },
   header: {
     ...shadows.card,
@@ -985,12 +827,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.xs,
     minWidth: 0
-  },
-  kicker: {
-    color: colors.primary,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
   },
   title: {
     color: colors.text,

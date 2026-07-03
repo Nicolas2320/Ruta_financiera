@@ -65,7 +65,6 @@ export type AssistantFinancialContext = {
 };
 
 export type GenerateAssistantResponseInput = {
-  accessPin: string;
   conversation: AssistantChatMessage[];
   financialContext: AssistantFinancialContext;
   userMessage: string;
@@ -179,11 +178,7 @@ async function getFunctionErrorPayload(error: unknown) {
   return { message: getFriendlyAssistantErrorMessage(message) };
 }
 
-export async function getAssistantUsageStatus({
-  accessPin
-}: {
-  accessPin: string;
-}): Promise<GetAssistantUsageStatusResult> {
+export async function getAssistantUsageStatus(): Promise<GetAssistantUsageStatusResult> {
   if (!supabase) {
     throw new Error("Supabase no esta configurado para consultar el limite del asistente.");
   }
@@ -192,7 +187,6 @@ export async function getAssistantUsageStatus({
     "assistant",
     {
       body: {
-        accessPin,
         action: "status"
       }
     }
@@ -211,7 +205,6 @@ export async function getAssistantUsageStatus({
 }
 
 export async function generateAssistantResponse({
-  accessPin,
   conversation,
   financialContext,
   userMessage
@@ -224,7 +217,6 @@ export async function generateAssistantResponse({
     "assistant",
     {
       body: {
-        accessPin,
         conversation,
         financialContext,
         userMessage
