@@ -160,22 +160,22 @@ Dashboard:
 - La simulación no permite editar variables desde esa pantalla en el flujo probado.
 - La pantalla de educación financiera completa no existe como sección dedicada, aunque sí hay microeducación integrada en textos.
 - La experiencia pide más datos que el mapa base, por ejemplo nombre, percepción de gastos, cobertura de emergencia, peso de deuda y monto de meta. Esto puede mejorar el cálculo, pero amenaza el objetivo de completar el flujo en menos de 10 minutos.
-- Las pantallas de metas, plan mensual, simulación y asistente no comparten una única fuente clara para el aporte mensual recomendado.
-- Los aportes registrados en `Mis metas` no se reflejan en `Plan mensual`; los avances del plan sí se reflejan en dashboard y simulación.
+- ~~Las pantallas de metas, plan mensual, simulación y asistente no comparten una única fuente clara para el aporte mensual recomendado.~~
+- ~~Los aportes registrados en `Mis metas` no se reflejan en `Plan mensual`; los avances del plan sí se reflejan en dashboard y simulación.~~
 - La simulación no muestra una vista agregada de varias metas. Después de agregar `Ahorrar para viajar`, sigue simulando sólo la meta principal.
-- El asistente puede responder con cifras distintas a las visibles en simulación/plan. En la prueba usó `$580.000` mensuales, mientras la UI mostraba `$320.000`, `$380.000` y una bolsa manual de `$500.000`.
-- Hay textos con problema de codificación visible: `pequeÃ±os` en `/improve-plan`.
+- ~~El asistente puede responder con cifras distintas a las visibles en simulación/plan. En la prueba usó `$580.000` mensuales, mientras la UI mostraba `$320.000`, `$380.000` y una bolsa manual de `$500.000`.~~
+- ~~Hay textos con problema de codificación visible: `pequeÃ±os` en `/improve-plan`.~~
 
 ## Posibles problemas o errores detectados
 
-- Posible desalineación de progreso de meta: el diagnóstico reconoce ahorros estimados por `$1.250.000`, pero la simulación y el dashboard muestran la meta de emergencia con restante completo de `$3.000.000` y avance `0%`. Para una meta de fondo de emergencia esto puede confundir, porque el usuario sí declaró ahorros actuales.
+- ~~Posible desalineación de progreso de meta: el diagnóstico reconoce ahorros estimados por `$1.250.000`, pero la simulación y el dashboard muestran la meta de emergencia con restante completo de `$3.000.000` y avance `0%`. Para una meta de fondo de emergencia esto puede confundir, porque el usuario sí declaró ahorros actuales.~~
 - La lectura de deuda es correcta pero algo genérica. En el caso probado, el usuario marcó que a veces le cuesta pagar deudas y que usa 10%-20% de ingresos; el diagnóstico dice que las deudas deben considerarse dentro del plan, pero podría sugerir una acción más concreta.
-- Hay código inalcanzable después de retornos tempranos en funciones como `getMainPriority`, `getMonthlyFocus` y `getMonthlyActions`. No rompió la prueba, pero puede ocultar lógica anterior o ramas esperadas.
+- ~~Hay código inalcanzable después de retornos tempranos en funciones como `getMainPriority`, `getMonthlyFocus` y `getMonthlyActions`. No rompió la prueba, pero puede ocultar lógica anterior o ramas esperadas.~~
 - La simulación habla de aporte mínimo/equilibrado/intensivo, lo cual es útil, pero cambia la promesa del Product Brief. Hay que decidir si se actualiza el producto o el brief.
 - El uso de sesión/Supabase parece guardar datos durante el onboarding si hay usuario activo. Para pruebas de UX sin cuenta, esto debe separarse mejor.
-- Inconsistencia de avance real: se registró `$100.000` en `Mis metas` y luego `$50.000` en `Plan mensual`. Dashboard y simulación reconocieron sólo el avance del plan mensual, mientras `Mis metas` mantuvo su contador propio. Esto puede confundir al usuario sobre cuánto avanzó realmente.
-- Inconsistencia de aporte sugerido: después de ajustar bolsa a `$500.000`, la meta principal recibió `$320.000` y la segunda meta `$180.000`. Sin embargo, la simulación siguió mostrando escenarios de `$350.000`, `$380.000` y `$490.000`, y el asistente habló de `$580.000`.
-- El botón/ruta de `Plan mensual` no está en la navegación inferior principal. Existe como pantalla, pero se accede por dashboard, simulación o URL directa.
+- ~~Inconsistencia de avance real: se registró `$100.000` en `Mis metas` y luego `$50.000` en `Plan mensual`. Dashboard y simulación reconocieron sólo el avance del plan mensual, mientras `Mis metas` mantuvo su contador propio. Esto puede confundir al usuario sobre cuánto avanzó realmente.~~
+- ~~Inconsistencia de aporte sugerido: después de ajustar bolsa a `$500.000`, la meta principal recibió `$320.000` y la segunda meta `$180.000`. Sin embargo, la simulación siguió mostrando escenarios de `$350.000`, `$380.000` y `$490.000`, y el asistente habló de `$580.000`.~~
+- ~~El botón/ruta de `Plan mensual` no está en la navegación inferior principal. Existe como pantalla, pero se accede por dashboard, simulación o URL directa.~~
 - No se ejecutaron pruebas destructivas de borrado de metas, cuenta o datos. Sólo se observó un icono de eliminar en la segunda meta; no se presionó para evitar una acción destructiva sin confirmación específica.
 
 ## Prueba exploratoria de pantallas recurrentes
@@ -252,7 +252,7 @@ Resultados:
 - El módulo quedó como `4 de 4 datos agregados`.
 - `/spending` y `/simulation` tomaron los nuevos datos.
 
-Problema visual: en el encabezado apareció `gastos pequeÃ±os`, lo que indica un error de codificación.
+Problema visual: en el encabezado apareció `gastos Pequeños`, lo que indica un error de codificación.
 
 ### `/simulation`
 

@@ -77,21 +77,6 @@ function hasHighDebtPaymentShare(debtPaymentShare: string | null) {
   return debtPaymentShare === "Más del 40%" || debtPaymentShare === "20% – 40%";
 }
 
-function hasSmallExpensePlan(onboarding: OnboardingSnapshot) {
-  return (
-    onboarding.hasSmallExpenses === "Sí" &&
-    (onboarding.smallExpensesIntention === "Reducir algunos" ||
-      onboarding.smallExpensesIntention === "Establecer un límite mensual")
-  );
-}
-
-function wantsInvestmentEducation(investmentSituation: string | null) {
-  return (
-    investmentSituation === "No, pero quiero aprender" ||
-    investmentSituation === "Sí, pero no entiendo bien cómo funcionan"
-  );
-}
-
 function toPercentWidth(value: number): `${number}%` {
   return `${Math.max(0, Math.min(value, 100))}%`;
 }
@@ -311,7 +296,7 @@ function getFinancialMetrics(
   };
 }
 
-function getMainPriority(onboarding: OnboardingSnapshot, metrics: FinancialMetrics): MainPriority {
+function getMainPriority(metrics: FinancialMetrics): MainPriority {
   const priorityKeyMap: Record<FinancialSnapshot["priority"]["key"], PriorityKey> = {
     debt_pressure: "debt",
     organize_cashflow: "expenses",
@@ -326,86 +311,6 @@ function getMainPriority(onboarding: OnboardingSnapshot, metrics: FinancialMetri
     key: priorityKeyMap[metrics.snapshot.priority.key],
     title: metrics.snapshot.priority.title,
     text: metrics.snapshot.priority.description
-  };
-
-  if (onboarding.debtSituation === "Son una preocupación importante") {
-    return {
-      key: "debt",
-      title: "Tu prioridad podría ser revisar tus deudas",
-      text:
-        "Con tus respuestas actuales, puede ser útil entender qué deudas pesan más en tu presupuesto antes de avanzar hacia metas más exigentes."
-    };
-  }
-
-  if (onboarding.debtSituation === "A veces me cuesta pagarlas") {
-    return {
-      key: "debt",
-      title: "Tu prioridad podría ser revisar tus deudas",
-      text: "Parece conveniente revisar tus deudas y entender cuáles tienen mayor impacto mensual."
-    };
-  }
-
-  if (onboarding.debtPaymentShare === "Más del 40%") {
-    return {
-      key: "debt",
-      title: "Tu prioridad podría ser reducir el peso de tus deudas",
-      text:
-        "Una parte importante de tus ingresos podría estar comprometida en pagos de deudas. Revisarlas puede ayudarte a recuperar margen mensual."
-    };
-  }
-
-  if (isLowEmergencyCoverage(onboarding.emergencyCoverage)) {
-    return {
-      key: "emergency",
-      title: "Tu prioridad podría ser fortalecer tu fondo de emergencia",
-      text:
-        "Con tus respuestas actuales, construir una base para imprevistos puede darte más tranquilidad antes de asumir metas más grandes."
-    };
-  }
-
-  if ((metrics.expensePercentage ?? 0) >= 85) {
-    return {
-      key: "expenses",
-      title: "Tu prioridad podría ser organizar tus gastos",
-      text:
-        "Tus gastos parecen ocupar una parte alta de tus ingresos. Revisarlos puede ayudarte a encontrar margen para ahorrar."
-    };
-  }
-
-  if (
-    onboarding.expensesFeeling === "Me preocupa no poder ahorrar" ||
-    onboarding.expensesFeeling === "No sé en qué se va mi dinero"
-  ) {
-    return {
-      key: "expenses",
-      title: "Tu prioridad podría ser organizar tus gastos",
-      text: "Parece útil entender mejor tus gastos mensuales para encontrar oportunidades de ahorro."
-    };
-  }
-
-  if (hasSmallExpensePlan(onboarding)) {
-    return {
-      key: "smallExpenses",
-      title: "Tu prioridad podría ser controlar tus gastos pequeños",
-      text:
-        "Tus pequeños gastos frecuentes pueden ser una oportunidad para liberar dinero sin hacer cambios drásticos."
-    };
-  }
-
-  if (wantsInvestmentEducation(onboarding.investmentSituation)) {
-    return {
-      key: "investment",
-      title: "Tu prioridad podría ser aprender sobre inversión",
-      text:
-        "Antes de tomar decisiones de inversión, puede ser útil entender conceptos como riesgo, plazo y liquidez."
-    };
-  }
-
-  return {
-    key: "goal",
-    title: "Tu prioridad podría ser avanzar hacia tu meta financiera",
-    text:
-      "Con tus respuestas actuales, puedes empezar a trabajar en acciones concretas para acercarte a tu meta."
   };
 }
 
@@ -658,7 +563,7 @@ export default function DiagnosisScreen() {
     () => getFinancialMetrics(onboarding, exactValues),
     [exactValues, onboarding]
   );
-  const priority = useMemo(() => getMainPriority(onboarding, metrics), [onboarding, metrics]);
+  const priority = useMemo(() => getMainPriority(metrics), [metrics]);
   const smallExpensesMessages = useMemo(
     () => getSmallExpensesMessages(onboarding, metrics),
     [onboarding, metrics]

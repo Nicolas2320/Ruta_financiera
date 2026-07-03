@@ -197,7 +197,7 @@ export default function ImprovePlanScreen() {
               <Text style={styles.subtitle}>
                 Tus resultados actuales pueden estar basados en rangos. Agrega algunos valores
                 opcionales para calcular mejor tu margen mensual, tu fondo de emergencia y tus
-                oportunidades en gastos pequeÃ±os.
+                oportunidades en gastos pequeños.
               </Text>
             </View>
             <View style={styles.statusRow}>
