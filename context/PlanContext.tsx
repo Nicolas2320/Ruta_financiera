@@ -24,7 +24,7 @@ type PlanContextValue = {
   toggleActionCompleted: (actionId: string) => void;
   setActionCompleted: (actionId: string, completed: boolean) => void;
   updateActionProgress: (actionId: string, patch: ActionProgressPatch) => void;
-  resetPlanProgress: () => void;
+  resetPlanProgress: () => Promise<boolean>;
 };
 
 const PlanContext = createContext<PlanContextValue | null>(null);
@@ -152,10 +152,36 @@ export function PlanProvider({ children }: PropsWithChildren) {
     [savePlanProgress]
   );
 
-  const resetPlanProgress = useCallback(() => {
-    setCompletedActions({});
-    savePlanProgress({});
-  }, [savePlanProgress]);
+  const resetPlanProgress = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setCompletedActions({});
+      setPlanSyncStatus("not-configured");
+      setPlanSyncError(null);
+      return true;
+    }
+
+    if (!user) {
+      setCompletedActions({});
+      setPlanSyncStatus("idle");
+      setPlanSyncError(null);
+      return true;
+    }
+
+    setPlanSyncStatus("saving");
+    setPlanSyncError(null);
+
+    try {
+      await saveCompletedActions(user.id, {});
+      setCompletedActions({});
+      setPlanSyncStatus("saved");
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No pudimos borrar el plan.";
+      setPlanSyncStatus("error");
+      setPlanSyncError(message);
+      return false;
+    }
+  }, [isSupabaseConfigured, user]);
 
   const value = useMemo(
     () => ({

@@ -414,6 +414,38 @@ function getDebtMessage(onboarding: OnboardingSnapshot) {
   return "No tenemos suficiente información sobre tus deudas todavía.";
 }
 
+function getDebtActionMessage(onboarding: OnboardingSnapshot) {
+  if (
+    onboarding.debtSituation === "Prefiero no responder" ||
+    onboarding.debtPaymentShare === "Prefiero no responder" ||
+    onboarding.debtSituation === "No tengo deudas" ||
+    onboarding.debtPaymentShare === "No pago deudas"
+  ) {
+    return null;
+  }
+
+  if (onboarding.debtPaymentShare === "No estoy seguro") {
+    return "Acción sugerida: estima cuánto pagas al mes en deudas y compáralo con tu ingreso mensual antes de asumir nuevos compromisos.";
+  }
+
+  if (
+    onboarding.debtSituation === "A veces me cuesta pagarlas" ||
+    onboarding.debtPaymentShare === "10% – 20%"
+  ) {
+    return "Acción sugerida: este mes lista tus pagos de deuda, fecha límite y pago mínimo. Evita tomar deuda nueva hasta saber cuánto pesa realmente.";
+  }
+
+  if (
+    onboarding.debtSituation === "Son una preocupación importante" ||
+    onboarding.debtPaymentShare === "20% – 40%" ||
+    onboarding.debtPaymentShare === "Más del 40%"
+  ) {
+    return "Acción sugerida: identifica cuál deuda genera más presión por cuota, interés o urgencia y revísala antes de acelerar otras metas.";
+  }
+
+  return null;
+}
+
 function getInvestmentMessage(investmentSituation: string | null) {
   if (investmentSituation === "No tengo inversiones") {
     return "Antes de invertir, puede ser útil fortalecer tu ahorro y entender conceptos básicos.";
@@ -613,7 +645,8 @@ export default function DiagnosisScreen() {
     metrics.snapshot.emergencyFund.coverageMonths !== null
       ? `${metrics.snapshot.emergencyFund.label}. Con estos datos, tu ahorro cubre cerca de ${metrics.snapshot.emergencyFund.coverageMonths.toFixed(1).replace(".0", "")} meses de gasto mensual.`
       : metrics.snapshot.emergencyFund.label;
-  const debtMessage = metrics.snapshot.debt.label;
+  const debtMessage = getDebtMessage(onboarding);
+  const debtActionMessage = getDebtActionMessage(onboarding);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -749,6 +782,7 @@ export default function DiagnosisScreen() {
             <View style={styles.subsection}>
               <Text style={styles.subsectionTitle}>Deudas</Text>
               <Text style={styles.text}>{debtMessage}</Text>
+              {debtActionMessage ? <Text style={styles.text}>{debtActionMessage}</Text> : null}
             </View>
             <View style={styles.subsection}>
               <Text style={styles.subsectionTitle}>Inversiones</Text>

@@ -891,7 +891,7 @@ export default function ActionPlanScreen() {
       ? formatGoalContribution(primaryGoalAllocation.monthlyContribution)
       : fallbackContributionLabel;
   const contributionMetricLabel =
-    activePlanPriorityKey === "advance_goal" ? "Aporte a meta" : "Aporte posible";
+    activePlanPriorityKey === "advance_goal" ? "Aporte a meta" : "Referencia mensual";
   const shouldShowGoalContributionSummary =
     activePlanPriorityKey !== "advance_goal" && primaryGoalAllocation !== null;
   const goalContributionSummaryLabel =

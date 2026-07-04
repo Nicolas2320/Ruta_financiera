@@ -7,6 +7,7 @@ import {
   ChartColumnIncreasing,
   ChevronDown,
   ChevronUp,
+  CircleQuestionMark,
   ClipboardCheck,
   Flag,
   Home,
@@ -304,7 +305,7 @@ function getScenarios(
       : []),
     {
       key: "assigned",
-      name: "Aporte mínimo",
+      name: "Aporte meta",
       monthlyContribution: assignedContribution,
       assumption: getScenarioDescription(
         assignedGoalContribution !== null && assignedGoalContribution > 0
@@ -457,10 +458,12 @@ function Chip({ label, tone = "primary" }: { label: string; tone?: Tone }) {
 function SectionCard({
   title,
   icon,
+  headerAction,
   children
 }: {
   title: string;
   icon: ReactNode;
+  headerAction?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -468,6 +471,7 @@ function SectionCard({
       <View style={styles.sectionHeader}>
         <IconBubble icon={icon} />
         <Text style={styles.sectionTitle}>{title}</Text>
+        {headerAction}
       </View>
       {children}
     </View>
@@ -573,7 +577,7 @@ function ScenarioCard({
     scenario.monthlyContribution !== null && maxMonthlyContribution > 0
       ? Math.max(10, Math.round((scenario.monthlyContribution / maxMonthlyContribution) * 100))
       : 0;
-  const scenarioName = scenario.key === "assigned" ? "Aporte asignado" : scenario.name;
+  const scenarioName = scenario.key === "assigned" ? "Aporte meta" : scenario.name;
   const scenarioTags =
     scenario.key === "with-small-expenses" ? ["Mas exigente", "Revisar"] : scenario.tags;
 
@@ -658,6 +662,7 @@ export default function SimulationScreen() {
   const isFlowMode = source === "flow";
   const [expandedScenarioKey, setExpandedScenarioKey] = useState<string | null | undefined>(undefined);
   const [showCalculationDetails, setShowCalculationDetails] = useState(false);
+  const [showScenarioGuide, setShowScenarioGuide] = useState(false);
   const navigate = (route: Route) => router.push(route);
   const { exactValues, onboarding } = useOnboarding();
   const { completedActions } = usePlan();
@@ -822,13 +827,43 @@ export default function SimulationScreen() {
           </SectionCard>
 
           <SectionCard
+            headerAction={
+              <Pressable
+                accessibilityLabel="Explicar escenarios"
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showScenarioGuide }}
+                onPress={() => setShowScenarioGuide((current) => !current)}
+                style={({ pressed }) => [styles.infoButton, pressed && styles.pressed]}
+              >
+                <CircleQuestionMark color={colors.primary} size={20} strokeWidth={2.5} />
+              </Pressable>
+            }
             icon={<ClipboardCheck color={colors.primary} size={22} strokeWidth={2.4} />}
             title="Escenarios"
           >
-            <Text style={styles.helperText}>
-              El aporte asignado viene de tu bolsa de metas. La capacidad sugerida es una referencia
-              calculada desde tu margen y no cambia tu plan por si sola.
-            </Text>
+            {showScenarioGuide ? (
+              <View style={styles.scenarioGuideBox}>
+                <Text style={styles.scenarioGuideTitle}>Cómo leer estos montos</Text>
+                <View style={styles.scenarioGuideList}>
+                  <Text style={styles.scenarioGuideText}>
+                    <Text style={styles.scenarioGuideTerm}>Aporte meta: </Text>
+                    lo asignado a la meta principal.
+                  </Text>
+                  <Text style={styles.scenarioGuideText}>
+                    <Text style={styles.scenarioGuideTerm}>Bolsa manual o recomendada: </Text>
+                    presupuesto total repartido entre metas.
+                  </Text>
+                  <Text style={styles.scenarioGuideText}>
+                    <Text style={styles.scenarioGuideTerm}>Capacidad sugerida: </Text>
+                    referencia desde tu margen; no cambia tu plan.
+                  </Text>
+                  <Text style={styles.scenarioGuideText}>
+                    <Text style={styles.scenarioGuideTerm}>Capacidad + ajuste: </Text>
+                    escenario más exigente que suma parte de gastos pequeños.
+                  </Text>
+                </View>
+              </View>
+            ) : null}
             <View style={styles.scenariosList}>
               {scenarios.map((scenario) => (
                 <ScenarioCard
@@ -1052,6 +1087,16 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.sectionTitle
   },
+  infoButton: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderColor: "#CFE0FF",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: "center",
+    width: 38
+  },
   iconBubble: {
     alignItems: "center",
     borderRadius: radius.pill,
@@ -1099,6 +1144,33 @@ const styles = StyleSheet.create({
   },
   scenariosList: {
     gap: spacing.md
+  },
+  scenarioGuideBox: {
+    backgroundColor: colors.surface,
+    borderColor: "#CFE0FF",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  scenarioGuideTitle: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  scenarioGuideList: {
+    gap: spacing.xs
+  },
+  scenarioGuideText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.regular,
+    lineHeight: typography.lineHeight.caption
+  },
+  scenarioGuideTerm: {
+    color: colors.text,
+    fontWeight: typography.weight.black,
   },
   scenarioCard: {
     backgroundColor: colors.surface,

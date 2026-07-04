@@ -150,16 +150,7 @@ Dashboard:
 
 ## Cosas que no se cumplen o están pendientes
 
-- El diagnóstico sin cuenta no está soportado si no hay sesión activa. El flujo actual manda a `/auth` antes de `/privacy`.
-- Falta pedir registro solo al final para guardar el plan, como recomienda el mapa de pantallas.
-- No existe una opción real de meta tipo `No sé todavía, ayúdame a elegir`. La app ofrece `Otro`, pero eso no equivale a descubrir una meta sugerida.
-- No se observa una pregunta de perfil de riesgo simple como la descrita en el mapa.
-- La simulación no replica los tres escenarios del brief: `Solo ahorro`, `Ahorro + inversión conservadora`, `Ahorro + inversión moderada`.
-- La simulación actual no muestra nivel de riesgo por escenario.
-- No se observó el mensaje obligatorio en simulación: `Estas simulaciones son estimaciones educativas. No garantizan resultados futuros.`
-- La simulación no permite editar variables desde esa pantalla en el flujo probado.
 - La pantalla de educación financiera completa no existe como sección dedicada, aunque sí hay microeducación integrada en textos.
-- La experiencia pide más datos que el mapa base, por ejemplo nombre, percepción de gastos, cobertura de emergencia, peso de deuda y monto de meta. Esto puede mejorar el cálculo, pero amenaza el objetivo de completar el flujo en menos de 10 minutos.
 - ~~Las pantallas de metas, plan mensual, simulación y asistente no comparten una única fuente clara para el aporte mensual recomendado.~~
 - ~~Los aportes registrados en `Mis metas` no se reflejan en `Plan mensual`; los avances del plan sí se reflejan en dashboard y simulación.~~
 - La simulación no muestra una vista agregada de varias metas. Después de agregar `Ahorrar para viajar`, sigue simulando sólo la meta principal.
@@ -172,7 +163,6 @@ Dashboard:
 - La lectura de deuda es correcta pero algo genérica. En el caso probado, el usuario marcó que a veces le cuesta pagar deudas y que usa 10%-20% de ingresos; el diagnóstico dice que las deudas deben considerarse dentro del plan, pero podría sugerir una acción más concreta.
 - ~~Hay código inalcanzable después de retornos tempranos en funciones como `getMainPriority`, `getMonthlyFocus` y `getMonthlyActions`. No rompió la prueba, pero puede ocultar lógica anterior o ramas esperadas.~~
 - La simulación habla de aporte mínimo/equilibrado/intensivo, lo cual es útil, pero cambia la promesa del Product Brief. Hay que decidir si se actualiza el producto o el brief.
-- El uso de sesión/Supabase parece guardar datos durante el onboarding si hay usuario activo. Para pruebas de UX sin cuenta, esto debe separarse mejor.
 - ~~Inconsistencia de avance real: se registró `$100.000` en `Mis metas` y luego `$50.000` en `Plan mensual`. Dashboard y simulación reconocieron sólo el avance del plan mensual, mientras `Mis metas` mantuvo su contador propio. Esto puede confundir al usuario sobre cuánto avanzó realmente.~~
 - ~~Inconsistencia de aporte sugerido: después de ajustar bolsa a `$500.000`, la meta principal recibió `$320.000` y la segunda meta `$180.000`. Sin embargo, la simulación siguió mostrando escenarios de `$350.000`, `$380.000` y `$490.000`, y el asistente habló de `$580.000`.~~
 - ~~El botón/ruta de `Plan mensual` no está en la navegación inferior principal. Existe como pantalla, pero se accede por dashboard, simulación o URL directa.~~
@@ -196,7 +186,7 @@ Resultados:
 - Antes de mejorar el plan, comparó contra gasto mensual estimado de `$3.000.000` y avisó exceso de `$50.000`.
 - Después de guardar datos exactos en `/improve-plan`, actualizó gasto mensual a `$2.900.000` y el exceso pasó a `$150.000`.
 - Cambió la mayor oportunidad del mes a `Revisar Vivienda`, con impacto de `$60.000` al mes y `$720.000` al año.
-- Los campos funcionan, pero inicialmente los montos en `$0` pueden parecer métricas de sólo lectura. Conviene reforzar el affordance de edición.
+- ~~Los campos funcionan, pero inicialmente los montos en `$0` pueden parecer métricas de sólo lectura. Conviene reforzar el affordance de edición.~~
 
 ### `/goals-overview`
 
@@ -216,7 +206,7 @@ Resultados:
 - `Invertido en metas` y `Registrado este mes` subieron a `$100.000`.
 - La segunda meta quedó en 0%, con `$12.500.000 restantes` y aporte sugerido de `$180.000`.
 
-Observación: esta pantalla funciona bien de forma aislada, pero su aporte real no se sincronizó con `Plan mensual`.
+Observación: ~~esta pantalla funciona bien de forma aislada, pero su aporte real no se sincronizó con `Plan mensual`.~~
 
 ### `/action-plan`
 
@@ -233,7 +223,7 @@ Resultados:
 - La acción quedó como `Completada`.
 - Dashboard reflejó el avance del plan: 33% y `$50.000`.
 
-Problema: los aportes de metas y los avances del plan mensual parecen ser estados distintos, aunque para el usuario representan avances hacia la misma meta.
+Problema: ~~los aportes de metas y los avances del plan mensual parecen ser estados distintos, aunque para el usuario representan avances hacia la misma meta.~~
 
 ### `/improve-plan`
 
@@ -252,8 +242,6 @@ Resultados:
 - El módulo quedó como `4 de 4 datos agregados`.
 - `/spending` y `/simulation` tomaron los nuevos datos.
 
-Problema visual: en el encabezado apareció `gastos Pequeños`, lo que indica un error de codificación.
-
 ### `/simulation`
 
 Resultados después de datos exactos y avances:
@@ -269,8 +257,7 @@ Resultados después de datos exactos y avances:
 Problemas:
 
 - La simulación no incluye la segunda meta en la vista principal.
-- Los escenarios siguen usando referencias que no se explican bien frente a la bolsa manual de `$500.000`.
-- No aparece el disclaimer obligatorio de estimaciones educativas y no garantía de resultados.
+- ~~Los escenarios siguen usando referencias que no se explican bien frente a la bolsa manual de `$500.000`.~~
 
 ### `/assistant`
 
@@ -289,7 +276,7 @@ Resultados:
 
 Problema:
 
-- El asistente dijo que la app sugiere `$580.000` mensuales y que la meta tomaría cerca de 6 meses. Esta cifra no coincidía con la simulación visible ni con la bolsa/manual distribuida entre metas.
+- ~~El asistente dijo que la app sugiere `$580.000` mensuales y que la meta tomaría cerca de 6 meses. Esta cifra no coincidía con la simulación visible ni con la bolsa/manual distribuida entre metas.~~
 
 ### `/settings` y edición de perfil
 
@@ -300,7 +287,7 @@ Resultados:
 - Permite ir a `Mejorar mi plan financiero`.
 - Permite ir a `Editar perfil financiero`, que abre `/summary?mode=edit`.
 - En edición de perfil se muestran bloques editables y una advertencia clara de que diagnóstico, simulación y plan mensual pueden recalcularse.
-- No se observó opción visible de borrar cuenta o datos en esta pantalla.
+- ~~No se observó opción visible de borrar cuenta o datos en esta pantalla.~~
 
 ## Evaluación por pantalla prioritaria
 
@@ -334,16 +321,12 @@ No pasaría todavía a una siguiente etapa grande sin ajustar primero algunas pa
 
 Recomiendo un ciclo corto de ajuste antes de avanzar:
 
-1. Unificar la fuente de cálculo de aporte recomendado entre metas, plan mensual, simulación y asistente.
-2. Sincronizar aportes de `Mis metas` con `Plan mensual`, o explicar claramente que son registros diferentes.
-3. Permitir diagnóstico sin cuenta y pedir registro sólo al guardar.
-4. Agregar opción `No sé todavía, ayúdame a elegir` y una regla simple de meta sugerida.
-5. Agregar perfil de riesgo simple.
-6. Ajustar simulación para cumplir el brief o actualizar formalmente el brief.
-7. Incluir disclaimer obligatorio de simulación.
-8. Aclarar avance de meta frente a ahorros existentes.
-9. Corregir textos con codificación rota.
-10. Reducir fricción del onboarding o volver opcionales algunos campos extendidos.
-11. Limpiar código inalcanzable en cálculo/priorización/plan mensual.
+1. ~~Unificar la fuente de cálculo de aporte recomendado entre metas, plan mensual, simulación y asistente.~~
+2. ~~Sincronizar aportes de `Mis metas` con `Plan mensual`, o explicar claramente que son registros diferentes.~~
+5. Ajustar simulación para cumplir el brief o actualizar formalmente el brief.
+6. ~~Aclarar avance de meta frente a ahorros existentes.~~
+7. ~~Corregir textos con codificación rota.~~
+8. ~~Reducir fricción del onboarding o volver opcionales algunos campos extendidos.~~
+9. ~~Limpiar código inalcanzable en cálculo/priorización/plan mensual.~~
 
 Conclusión: la base del MVP está lista para iterar, pero no recomendaría cerrar esta fase aún. La app ya demuestra el valor central, aunque necesita alinear autenticación, descubrimiento de meta, riesgo y simulaciones antes de pasar a construir funcionalidades más avanzadas.
