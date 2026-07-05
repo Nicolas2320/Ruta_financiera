@@ -28,6 +28,7 @@ import {
   type AssistantChatMessage,
   type AssistantFinancialContext
 } from "../lib/assistantApi";
+import { normalizeActionProgressRecord, type CompletedActionsState } from "../types/financial";
 import { type FinancialSnapshot } from "../utils/financialCalculations";
 import { getGoalPlanFromOnboarding } from "../utils/goalPlanning";
 import {
@@ -36,6 +37,8 @@ import {
 } from "../utils/monthlyPlanProgress";
 import {
   getActiveMonthlyPlanProgressKey,
+  getMonthlyActionProgressId,
+  getMonthlyActionProgressStatus,
   getMonthlyActions,
   getMonthlyFocus,
   getMonthlyPlanData,
@@ -312,28 +315,63 @@ function AssistantRichText({
 function buildAssistantFinancialContext({
   actions,
   completedCount,
+  effectiveCompletedActions,
   focusText,
   focusTitle,
   goalPlan,
   onboarding,
+  planProgressKey,
   progressPercentage,
   realContributionThisMonth,
+  referenceMonthlyContribution,
   snapshot
 }: {
   actions: MonthlyAction[];
   completedCount: number;
+  effectiveCompletedActions: CompletedActionsState;
   focusText: string;
   focusTitle: string;
   goalPlan: ReturnType<typeof getGoalPlanFromOnboarding>;
   onboarding: ReturnType<typeof useOnboarding>["onboarding"];
+  planProgressKey: string;
   progressPercentage: number;
   realContributionThisMonth: number;
+  referenceMonthlyContribution: number;
   snapshot: FinancialSnapshot;
 }): AssistantFinancialContext {
   const primaryGoalAllocation =
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
     null;
+  const actionContexts = actions.map((action, index) => {
+    const progressId = getMonthlyActionProgressId(planProgressKey, action.id);
+    const progressRecord = normalizeActionProgressRecord(effectiveCompletedActions[progressId]);
+    const status = getMonthlyActionProgressStatus({
+      actionId: action.id,
+      completedActions: effectiveCompletedActions,
+      planProgressKey
+    });
+
+    return {
+      category: action.category,
+      completedAt: progressRecord?.completedAt ?? null,
+      description: action.description,
+      difficulty: action.difficulty,
+      estimatedImpact: action.estimatedImpact,
+      evidence: progressRecord?.evidence ?? null,
+      id: action.id,
+      isCompleted: status === "completed",
+      order: index + 1,
+      progressId,
+      status,
+      title: action.title,
+      why: action.why
+    };
+  });
+  const nextPendingAction =
+    actionContexts.find(
+      (action) => action.status === "pending" || action.status === "in_progress"
+    ) ?? null;
 
   return {
     cashflow: {
@@ -390,19 +428,22 @@ function buildAssistantFinancialContext({
       situation: onboarding.investmentSituation
     },
     monthlyPlan: {
-      actions: actions.map((action) => ({
-        category: action.category,
-        description: action.description,
-        difficulty: action.difficulty,
-        estimatedImpact: action.estimatedImpact,
-        title: action.title,
-        why: action.why
-      })),
+      actions: actionContexts,
       completedActions: completedCount,
       focusText,
       focusTitle,
+      nextPendingAction,
+      primaryGoalMonthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
+      primaryGoalMonthlyContributionLabel: "Aporte meta",
+      primaryGoalMonthlyContributionMeaning:
+        "Aporte asignado a la meta principal dentro de la bolsa de metas. En la UI aparece como Aporte meta.",
       progressPercentage,
-      realContributionThisMonth
+      realContributionThisMonth,
+      referenceMonthlyContribution,
+      referenceMonthlyContributionLabel: "Referencia mensual",
+      referenceMonthlyContributionMeaning:
+        "Monto de referencia del plan mensual. Puede incluir capacidad sugerida y ajuste de gastos pequenos; no es lo mismo que Aporte meta.",
+      totalActions: actions.length
     },
     precision: {
       label: snapshot.precision.label,
@@ -527,12 +568,15 @@ export default function AssistantScreen() {
     const financialContext = buildAssistantFinancialContext({
       actions,
       completedCount,
+      effectiveCompletedActions: monthlyPlanProgress.effectiveCompletedActions,
       focusText: focus.text,
       focusTitle: focus.title,
       goalPlan,
       onboarding,
+      planProgressKey: activePlanProgressKey,
       progressPercentage,
       realContributionThisMonth: monthlyPlanProgress.impactSummary.realContributionTotal,
+      referenceMonthlyContribution: metrics.balancedScenarioAmount,
       snapshot: metrics.snapshot
     });
 
