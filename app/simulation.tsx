@@ -7,6 +7,7 @@ import {
   ChartColumnIncreasing,
   ChevronDown,
   ChevronUp,
+  CircleQuestionMark,
   ClipboardCheck,
   Flag,
   Home,
@@ -268,21 +269,24 @@ function getSmallExpensesShareDescription(
     : null;
 }
 
-function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scenario[] {
-  const suggestedContribution =
+function getScenarios(
+  metrics: SimulationBase,
+  registeredContribution = 0,
+  assignedGoalContribution: number | null = null
+): Scenario[] {
+  const capacityContribution =
     metrics.snapshot.cashflow.suggestedMonthlyContribution > 0
       ? metrics.snapshot.cashflow.suggestedMonthlyContribution
       : null;
-  const balancedBase =
-    suggestedContribution !== null
-      ? suggestedContribution
+  const assignedContribution =
+    assignedGoalContribution !== null && assignedGoalContribution > 0
+      ? assignedGoalContribution
+      : capacityContribution;
+  const scenarioWithSmallExpenses =
+    capacityContribution !== null
+      ? capacityContribution
       : contributionFromPositiveValue(metrics.estimatedMargin, 0.2);
-  const intensiveBase =
-    suggestedContribution !== null
-      ? suggestedContribution * 1.25
-      : contributionFromPositiveValue(metrics.estimatedMargin, 0.35);
   const balancedSmallExpensePart = metrics.snapshot.smallExpenses.opportunityAmount;
-  const intensiveSmallExpensePart = contributionFromPositiveValue(metrics.smallExpenseValue, 0.3);
   return [
     ...(registeredContribution > 0
       ? [
@@ -300,47 +304,44 @@ function getScenarios(metrics: SimulationBase, registeredContribution = 0): Scen
         ]
       : []),
     {
-      key: "current",
-      name: "Aporte mínimo",
-      monthlyContribution: suggestedContribution,
+      key: "assigned",
+      name: "Aporte meta",
+      monthlyContribution: assignedContribution,
       assumption: getScenarioDescription(
-        [getMarginShareDescription("Aporte sugerido", suggestedContribution, metrics)],
-        "Necesitamos un margen mensual positivo para calcular este aporte."
+        assignedGoalContribution !== null && assignedGoalContribution > 0
+          ? [getMarginShareDescription("Aporte asignado a esta meta", assignedContribution, metrics)]
+          : [getMarginShareDescription("Capacidad sugerida", assignedContribution, metrics)],
+        "Necesitamos una meta con aporte asignado o un margen mensual positivo para calcular este aporte."
       ),
-      tags: ["Bajo esfuerzo", "Gradual"],
+      tags: ["Actual", "Meta"],
       tone: "primary",
       unavailableContributionLabel: "No disponible",
       unavailableAdvanceLabel: "No calculado"
     },
     {
-      key: "balanced",
-      name: "Aporte equilibrado",
-      monthlyContribution: sumAvailableParts([balancedBase, balancedSmallExpensePart]),
+      key: "capacity",
+      name: "Capacidad sugerida",
+      monthlyContribution: capacityContribution,
       assumption: getScenarioDescription(
         [
-          getMarginShareDescription("Aporte sugerido", balancedBase, metrics),
-          getSmallExpensesShareDescription("Parte de gastos pequeños", balancedSmallExpensePart, metrics)
+          getMarginShareDescription("Referencia calculada desde tu margen", capacityContribution, metrics)
         ],
-        "Combina un aporte base con una parte de tus gastos pequeños."
+        "Referencia de capacidad calculada desde tu margen mensual."
       ),
-      tags: ["Recomendado", "Sostenible"],
+      tags: ["Referencia", "No asigna solo"],
       tone: "support",
-      recommended: true
+      recommended: assignedGoalContribution === null || assignedGoalContribution <= 0
     },
     {
-      key: "intensive",
-      name: "Aporte intensivo",
-      monthlyContribution: sumAvailableParts([intensiveBase, intensiveSmallExpensePart]),
+      key: "with-small-expenses",
+      name: "Capacidad + ajuste",
+      monthlyContribution: sumAvailableParts([scenarioWithSmallExpenses, balancedSmallExpensePart]),
       assumption: getScenarioDescription(
         [
-          getMarginShareDescription("Aporte ampliado", intensiveBase, metrics),
-          getSmallExpensesShareDescription(
-            "Ajuste mayor en gastos pequeños",
-            intensiveSmallExpensePart,
-            metrics
-          )
+          getMarginShareDescription("Capacidad sugerida", scenarioWithSmallExpenses, metrics),
+          getSmallExpensesShareDescription("Parte de gastos pequeños", balancedSmallExpensePart, metrics)
         ],
-        "Combina un aporte ampliado con un ajuste mayor en gastos pequeños."
+        "Combina la capacidad sugerida con una parte de tus gastos pequeños."
       ),
       tags: ["Más exigente", "Revisar"],
       tone: "warning"
@@ -457,10 +458,12 @@ function Chip({ label, tone = "primary" }: { label: string; tone?: Tone }) {
 function SectionCard({
   title,
   icon,
+  headerAction,
   children
 }: {
   title: string;
   icon: ReactNode;
+  headerAction?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -468,6 +471,7 @@ function SectionCard({
       <View style={styles.sectionHeader}>
         <IconBubble icon={icon} />
         <Text style={styles.sectionTitle}>{title}</Text>
+        {headerAction}
       </View>
       {children}
     </View>
@@ -573,6 +577,9 @@ function ScenarioCard({
     scenario.monthlyContribution !== null && maxMonthlyContribution > 0
       ? Math.max(10, Math.round((scenario.monthlyContribution / maxMonthlyContribution) * 100))
       : 0;
+  const scenarioName = scenario.key === "assigned" ? "Aporte meta" : scenario.name;
+  const scenarioTags =
+    scenario.key === "with-small-expenses" ? ["Mas exigente", "Revisar"] : scenario.tags;
 
   return (
     <View
@@ -583,7 +590,7 @@ function ScenarioCard({
     >
       <View style={styles.scenarioTopRow}>
         <View style={styles.scenarioTitleGroup}>
-          <Text style={styles.scenarioTitle}>{scenario.name}</Text>
+          <Text style={styles.scenarioTitle}>{scenarioName}</Text>
           <Text style={styles.scenarioAssumption}>{scenario.assumption}</Text>
         </View>
         {scenario.recommended ? <Chip label="Recomendado" tone="support" /> : null}
@@ -599,7 +606,7 @@ function ScenarioCard({
           </Text>
         </View>
         <View style={styles.scenarioChips}>
-          {scenario.tags.map((tag) => (
+          {scenarioTags.map((tag) => (
             <Chip
               key={tag}
               label={tag}
@@ -655,6 +662,7 @@ export default function SimulationScreen() {
   const isFlowMode = source === "flow";
   const [expandedScenarioKey, setExpandedScenarioKey] = useState<string | null | undefined>(undefined);
   const [showCalculationDetails, setShowCalculationDetails] = useState(false);
+  const [showScenarioGuide, setShowScenarioGuide] = useState(false);
   const navigate = (route: Route) => router.push(route);
   const { exactValues, onboarding } = useOnboarding();
   const { completedActions } = usePlan();
@@ -684,8 +692,13 @@ export default function SimulationScreen() {
     goalPlan.allocations[0] ??
     null;
   const scenarios = useMemo(
-    () => getScenarios(metrics, impactSummary.realContributionTotal),
-    [impactSummary.realContributionTotal, metrics]
+    () =>
+      getScenarios(
+        metrics,
+        impactSummary.realContributionTotal,
+        primaryGoalAllocation?.monthlyContribution ?? null
+      ),
+    [impactSummary.realContributionTotal, metrics, primaryGoalAllocation?.monthlyContribution]
   );
   const defaultExpandedScenarioKey =
     scenarios.find((scenario) => scenario.recommended)?.key ?? scenarios[0]?.key ?? null;
@@ -710,6 +723,14 @@ export default function SimulationScreen() {
     : snapshot.cashflow.suggestedMonthlyContribution > 0
       ? `${formatCOP(snapshot.cashflow.suggestedMonthlyContribution)} aprox.`
       : "Por definir";
+  const capacityContributionLabel =
+    snapshot.cashflow.suggestedMonthlyContribution > 0
+      ? `${formatCOP(snapshot.cashflow.suggestedMonthlyContribution)} aprox.`
+      : "Por definir";
+  const goalBudgetLabel =
+    goalPlan.monthlyGoalBudget > 0 ? `${formatCOP(goalPlan.monthlyGoalBudget)} aprox.` : "Por definir";
+  const goalBudgetModeLabel =
+    goalPlan.monthlyGoalBudgetMode === "manual" ? "Bolsa manual" : "Bolsa recomendada";
   const goalMonthsLabel = getGoalMonthsLabel(
     simulatedGoalEstimatedMonths,
     primaryGoalAllocation?.viabilityLabel ?? snapshot.goal.label
@@ -750,9 +771,9 @@ export default function SimulationScreen() {
               value={simulatedGoalTitle}
             />
             <SummaryMetric
-              helper="Aporte asignado"
+              helper="Desde tu bolsa de metas"
               icon={<PiggyBank color={colors.support} size={22} strokeWidth={2.4} />}
-              label="Mes a mes"
+              label="Aporte meta"
               tone="support"
               value={simulatedGoalContributionLabel}
             />
@@ -796,13 +817,53 @@ export default function SimulationScreen() {
                 }
               />
               <ValuePill label="Tiempo" tone={goalTone} value={goalMonthsLabel} />
+              <ValuePill label={goalBudgetModeLabel} tone="support" value={goalBudgetLabel} />
+              <ValuePill
+                label="Capacidad sugerida"
+                tone="warning"
+                value={capacityContributionLabel}
+              />
             </View>
           </SectionCard>
 
           <SectionCard
+            headerAction={
+              <Pressable
+                accessibilityLabel="Explicar escenarios"
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showScenarioGuide }}
+                onPress={() => setShowScenarioGuide((current) => !current)}
+                style={({ pressed }) => [styles.infoButton, pressed && styles.pressed]}
+              >
+                <CircleQuestionMark color={colors.primary} size={20} strokeWidth={2.5} />
+              </Pressable>
+            }
             icon={<ClipboardCheck color={colors.primary} size={22} strokeWidth={2.4} />}
             title="Escenarios"
           >
+            {showScenarioGuide ? (
+              <View style={styles.scenarioGuideBox}>
+                <Text style={styles.scenarioGuideTitle}>Cómo leer estos montos</Text>
+                <View style={styles.scenarioGuideList}>
+                  <Text style={styles.scenarioGuideText}>
+                    <Text style={styles.scenarioGuideTerm}>Aporte meta: </Text>
+                    lo asignado a la meta principal.
+                  </Text>
+                  <Text style={styles.scenarioGuideText}>
+                    <Text style={styles.scenarioGuideTerm}>Bolsa manual o recomendada: </Text>
+                    presupuesto total repartido entre metas.
+                  </Text>
+                  <Text style={styles.scenarioGuideText}>
+                    <Text style={styles.scenarioGuideTerm}>Capacidad sugerida: </Text>
+                    referencia desde tu margen; no cambia tu plan.
+                  </Text>
+                  <Text style={styles.scenarioGuideText}>
+                    <Text style={styles.scenarioGuideTerm}>Capacidad + ajuste: </Text>
+                    escenario más exigente que suma parte de gastos pequeños.
+                  </Text>
+                </View>
+              </View>
+            ) : null}
             <View style={styles.scenariosList}>
               {scenarios.map((scenario) => (
                 <ScenarioCard
@@ -848,6 +909,9 @@ export default function SimulationScreen() {
             icon={<WalletCards color={colors.primary} size={22} strokeWidth={2.4} />}
             title="Como se calculo"
           >
+            <Text style={styles.disclaimerText}>
+              Estas simulaciones son estimaciones educativas. No garantizan resultados futuros.
+            </Text>
             <Text style={styles.helperText}>{snapshot.precision.message}</Text>
             <Pressable
               accessibilityRole="button"
@@ -1023,6 +1087,16 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.sectionTitle
   },
+  infoButton: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderColor: "#CFE0FF",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: "center",
+    width: 38
+  },
   iconBubble: {
     alignItems: "center",
     borderRadius: radius.pill,
@@ -1070,6 +1144,33 @@ const styles = StyleSheet.create({
   },
   scenariosList: {
     gap: spacing.md
+  },
+  scenarioGuideBox: {
+    backgroundColor: colors.surface,
+    borderColor: "#CFE0FF",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  scenarioGuideTitle: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  scenarioGuideList: {
+    gap: spacing.xs
+  },
+  scenarioGuideText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.regular,
+    lineHeight: typography.lineHeight.caption
+  },
+  scenarioGuideTerm: {
+    color: colors.text,
+    fontWeight: typography.weight.black,
   },
   scenarioCard: {
     backgroundColor: colors.surface,
@@ -1237,6 +1338,17 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
+  },
+  disclaimerText: {
+    backgroundColor: colors.supportSoft,
+    borderColor: "#B9E9CD",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    color: colors.support,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption,
+    padding: spacing.md
   },
   actions: {
     gap: spacing.sm,

@@ -57,9 +57,14 @@ import {
   getAllocationProgress,
   getGoalPlanFromOnboarding,
   getGoalTypeLabel,
+  isEmergencyGoal,
   type GoalAllocation,
   type GoalViability
 } from "../utils/goalPlanning";
+import {
+  getGoalContributionLabelForActionId,
+  isGoalContributionActionId
+} from "../utils/monthlyPlanProgress";
 import {
   getActiveMonthlyPlanProgressKey,
   getMonthlyActions,
@@ -714,9 +719,11 @@ function CurrencyInputField({
 
 function GoalCard({
   allocation,
+  assignableSavingsAmount,
   canMarkPrimary,
   canDelete,
   onActivate,
+  onAssignCurrentSavings,
   onComplete,
   onDecrease,
   onDelete,
@@ -728,9 +735,11 @@ function GoalCard({
   onUpdateGoal
 }: {
   allocation: GoalAllocation;
+  assignableSavingsAmount?: number | null;
   canMarkPrimary: boolean;
   canDelete: boolean;
   onActivate: () => void;
+  onAssignCurrentSavings?: () => void;
   onComplete: () => void;
   onDecrease: () => void;
   onDelete: () => void;
@@ -800,6 +809,12 @@ function GoalCard({
   const isCompletedGoal = allocation.goal.status === "completed";
   const remainingContributionAmount =
     allocation.remainingAmount !== null ? Math.max(0, allocation.remainingAmount) : null;
+  const canAssignCurrentSavings =
+    typeof assignableSavingsAmount === "number" &&
+    assignableSavingsAmount > allocation.currentAmount &&
+    !isCompletedGoal &&
+    !isPausedGoal &&
+    Boolean(onAssignCurrentSavings);
 
   useEffect(() => {
     const nextGoalOptionKey = getGoalOptionKey(allocation.goal);
@@ -979,6 +994,24 @@ function GoalCard({
           Guardado: {currentLabel} de {targetLabel}
         </Text>
       </View>
+
+      {canAssignCurrentSavings ? (
+        <View style={styles.assignSavingsBox}>
+          <View style={styles.assignSavingsTextGroup}>
+            <Text style={styles.contributionLabel}>Ahorros actuales sin asignar</Text>
+            <Text style={styles.registerHint}>
+              Puedes contar {formatCOP(assignableSavingsAmount ?? 0)} como avance de esta meta si ese dinero ya hace parte de tu fondo de emergencia.
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onAssignCurrentSavings}
+            style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
+          >
+            <Text style={styles.smallActionText}>Asignar ahorros</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {!isCompletedGoal && !isPausedGoal ? (
         <View style={styles.registerBox}>
@@ -1448,9 +1481,13 @@ export default function GoalsOverviewScreen() {
     [activePlanPriorityKey, monthlyActions, metrics]
   );
   const primaryGoalContributionAction =
-    monthlyActions.find(
-      (action) => action.id === "set-goal-contribution" || action.id === "redirect-small-expenses"
-    ) ?? null;
+    monthlyActions.find((action) => {
+      if (!isGoalContributionActionId(action.id)) {
+        return false;
+      }
+
+      return action.id !== "initial-emergency-contribution" || isEmergencyGoal(primaryGoalAllocation?.goal);
+    }) ?? null;
   const primaryGoalContributionProgressId = primaryGoalContributionAction
     ? getMonthlyActionProgressId(monthlyPlanProgressKey, primaryGoalContributionAction.id)
     : null;
@@ -1490,6 +1527,7 @@ export default function GoalsOverviewScreen() {
   const investedInGoalsLabel =
     totalInvestedInGoals > 0 ? formatCOP(totalInvestedInGoals) : "$0";
   const monthlyMargin = metrics.snapshot.cashflow.monthlyMargin;
+  const currentSavingsForEmergency = metrics.snapshot.values.currentSavings;
   const budgetLabel =
     goalPlan.monthlyGoalBudget > 0
       ? `${formatCOP(goalPlan.monthlyGoalBudget)} aprox.`
@@ -1582,6 +1620,18 @@ export default function GoalsOverviewScreen() {
     );
   };
 
+  const assignCurrentSavingsToGoal = (allocation: GoalAllocation, amount: number) => {
+    const nextStatus =
+      allocation.targetAmount !== null && amount >= allocation.targetAmount
+        ? "completed"
+        : "active";
+
+    updateGoal(allocation.goal.id, {
+      currentAmount: amount,
+      status: nextStatus
+    });
+  };
+
   const registerGoalContribution = (goalId: string, amount: number) => {
     const shouldCompletePlanAction =
       goalId === primaryGoalAllocation?.goal.id &&
@@ -1603,10 +1653,7 @@ export default function GoalsOverviewScreen() {
         status: "completed",
         evidence: {
           type: "amount",
-          label:
-            primaryGoalContributionAction.id === "redirect-small-expenses"
-              ? "Monto redirigido"
-              : "Aporte a meta",
+          label: getGoalContributionLabelForActionId(primaryGoalContributionAction.id),
           amount,
           detail: null
         }
@@ -1938,6 +1985,9 @@ export default function GoalsOverviewScreen() {
                 <GoalCard
                   key={allocation.goal.id}
                   allocation={allocation}
+                  assignableSavingsAmount={
+                    isEmergencyGoal(allocation.goal) ? currentSavingsForEmergency : null
+                  }
                   canMarkPrimary={
                     allocation.goal.isPrimary !== true &&
                     allocation.goal.status !== "completed" &&
@@ -1946,6 +1996,11 @@ export default function GoalsOverviewScreen() {
                   }
                   canDelete={goals.length > 1 && allocation.goal.isPrimary !== true}
                   onActivate={() => activateGoal(allocation)}
+                  onAssignCurrentSavings={
+                    currentSavingsForEmergency !== null
+                      ? () => assignCurrentSavingsToGoal(allocation, currentSavingsForEmergency)
+                      : undefined
+                  }
                   onComplete={() => confirmCompleteGoal(allocation)}
                   onDecrease={() => updateGoalContribution(allocation.goal.id, -contributionStep)}
                   onDelete={() => confirmRemoveGoal(allocation)}
@@ -2551,6 +2606,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.md
+  },
+  assignSavingsBox: {
+    alignItems: "flex-start",
+    backgroundColor: colors.primarySoft,
+    borderColor: "#BFDBFE",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    justifyContent: "space-between",
+    padding: spacing.md
+  },
+  assignSavingsTextGroup: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 190
   },
   registerHint: {
     color: colors.textMuted,

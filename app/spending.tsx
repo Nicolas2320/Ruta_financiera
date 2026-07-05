@@ -20,6 +20,7 @@ import {
   Home,
   House,
   LineChart,
+  PencilLine,
   PieChart,
   ReceiptText,
   ShoppingBag,
@@ -783,16 +784,20 @@ function CategoryAmountRow({
         <Text numberOfLines={1} style={styles.categoryLabel}>{label}</Text>
       </View>
       <View style={styles.categoryInputRow}>
-        <TextInput
-          accessibilityLabel={`Monto mensual en ${label}`}
-          inputMode="numeric"
-          keyboardType="numeric"
-          onChangeText={onChangeText}
-          placeholder="$0"
-          placeholderTextColor={colors.textSubtle}
-          style={styles.categoryAmountInput}
-          value={inputValue}
-        />
+        <Text style={styles.categoryInputLabel}>Monto mensual</Text>
+        <View style={styles.categoryInputShell}>
+          <TextInput
+            accessibilityLabel={`Monto mensual en ${label}`}
+            inputMode="numeric"
+            keyboardType="numeric"
+            onChangeText={onChangeText}
+            placeholder="Ingresa monto"
+            placeholderTextColor={colors.textSubtle}
+            style={styles.categoryAmountInput}
+            value={inputValue}
+          />
+          <PencilLine color={colors.textSubtle} size={16} strokeWidth={2.4} />
+        </View>
       </View>
       <Text style={[styles.categoryShareText, { color: shareIsOverTotal ? "#C2410C" : visual.color }]}>
         {getCategoryShareLabel(amount, totalExpenses, isExactMonthlyExpense)}
@@ -1642,8 +1647,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexBasis: 210,
     flexGrow: 1,
-    gap: spacing.sm,
-    minHeight: 152,
+    gap: spacing.xs,
+    minHeight: 136,
     padding: spacing.md
   },
   categoryMainRow: {
@@ -1692,21 +1697,33 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.caption
   },
   categoryInputRow: {
+    gap: spacing.xs
+  },
+  categoryInputLabel: {
+    color: colors.textSubtle,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.small,
+    textTransform: "uppercase"
+  },
+  categoryInputShell: {
     alignItems: "center",
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
     flexDirection: "row",
-    gap: spacing.sm
+    gap: spacing.xs,
+    minHeight: 38
   },
   categoryAmountInput: {
-    backgroundColor: "transparent",
-    borderWidth: 0,
     color: colors.text,
     flex: 1,
-    fontSize: typography.sectionTitle,
+    fontSize: typography.question,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.sectionTitle,
-    minHeight: 42,
+    lineHeight: typography.lineHeight.question,
+    minHeight: 34,
     minWidth: 0,
-    paddingHorizontal: 0
+    paddingHorizontal: 0,
+    paddingVertical: 0
   },
   categoryShareTrack: {
     backgroundColor: "#E4EAF2",

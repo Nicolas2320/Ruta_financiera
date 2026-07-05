@@ -29,11 +29,22 @@ type OnboardingContextValue = {
   onboarding: OnboardingData;
   onboardingSyncError: string | null;
   onboardingSyncStatus: "idle" | "loading" | "saving" | "saved" | "error" | "not-configured";
+  resetFinancialData: () => Promise<boolean>;
   saveExactValues: (values: ExactFinancialValues) => Promise<boolean>;
   updateOnboarding: (data: Partial<OnboardingData>) => void;
 };
 
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
+
+function getEmptyOnboarding(): OnboardingData {
+  return {
+    ...initialOnboarding,
+    expenseCategories: [],
+    expenseCategoryAmounts: {},
+    smallExpenseCategories: [],
+    goals: []
+  };
+}
 
 export function OnboardingProvider({ children }: PropsWithChildren) {
   const { isAuthReady, isSupabaseConfigured, user } = useAuth();
@@ -158,6 +169,47 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     [isSupabaseConfigured, user]
   );
 
+  const resetFinancialData = useCallback(async () => {
+    const nextOnboarding = getEmptyOnboarding();
+    const nextExactValues: ExactFinancialValues = {};
+
+    if (!isSupabaseConfigured) {
+      setOnboarding(nextOnboarding);
+      setExactValues(nextExactValues);
+      setFinancialProfileExists(false);
+      setOnboardingSyncStatus("not-configured");
+      setOnboardingSyncError(null);
+      return true;
+    }
+
+    if (!user) {
+      setOnboarding(nextOnboarding);
+      setExactValues(nextExactValues);
+      setFinancialProfileExists(false);
+      setOnboardingSyncStatus("idle");
+      setOnboardingSyncError(null);
+      return true;
+    }
+
+    setOnboardingSyncStatus("saving");
+    setOnboardingSyncError(null);
+
+    try {
+      await saveOnboardingData(user.id, nextOnboarding);
+      await persistExactValues(user.id, nextExactValues);
+      setOnboarding(nextOnboarding);
+      setExactValues(nextExactValues);
+      setFinancialProfileExists(true);
+      setOnboardingSyncStatus("saved");
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No pudimos borrar los datos.";
+      setOnboardingSyncStatus("error");
+      setOnboardingSyncError(message);
+      return false;
+    }
+  }, [isSupabaseConfigured, user]);
+
   const value = useMemo(
     () => ({
       exactValues,
@@ -167,6 +219,7 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
       onboarding,
       onboardingSyncError,
       onboardingSyncStatus,
+      resetFinancialData,
       saveExactValues,
       updateOnboarding
     }),
@@ -176,6 +229,7 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
       onboarding,
       onboardingSyncError,
       onboardingSyncStatus,
+      resetFinancialData,
       saveExactValues,
       updateOnboarding
     ]

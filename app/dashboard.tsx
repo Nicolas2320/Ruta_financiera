@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -30,6 +30,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
+import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
 import { getNextPlanAdjustmentHint } from "../utils/actionProgressImpact";
@@ -412,6 +413,20 @@ function CircleButton({ onPress }: { onPress: () => void }) {
   );
 }
 
+function LoadingState({ text, title }: { text: string; title: string }) {
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="dark" />
+      <View style={styles.centeredState}>
+        <View style={styles.loadingCard}>
+          <Text style={styles.loadingTitle}>{title}</Text>
+          <Text style={styles.loadingText}>{text}</Text>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 function MonthlyPlanCard({
   actionCount,
   completed,
@@ -755,8 +770,30 @@ function BottomNavItem({
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { exactValues, onboarding } = useOnboarding();
+  const { isAuthReady, session } = useAuth();
+  const { exactValues, hasCompletedOnboarding, onboarding, onboardingSyncStatus } =
+    useOnboarding();
   const { completedActions } = usePlan();
+
+  useEffect(() => {
+    if (!isAuthReady) {
+      return;
+    }
+
+    if (!session) {
+      router.replace("/auth");
+      return;
+    }
+
+    if (onboardingSyncStatus === "loading") {
+      return;
+    }
+
+    if (!hasCompletedOnboarding) {
+      router.replace("/privacy");
+    }
+  }, [hasCompletedOnboarding, isAuthReady, onboardingSyncStatus, router, session]);
+
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const snapshot = metrics.snapshot;
@@ -921,6 +958,33 @@ export default function DashboardScreen() {
   const firstName = onboarding.firstName.trim();
   const greetingTitle = firstName ? `Bienvenido ${firstName}!` : "Bienvenido!";
   const navigate = (route: Route) => router.push(route);
+
+  if (!isAuthReady || !session) {
+    return (
+      <LoadingState
+        text="Te llevaremos a iniciar sesion para recuperar tus datos."
+        title="Preparando tu inicio"
+      />
+    );
+  }
+
+  if (onboardingSyncStatus === "loading") {
+    return (
+      <LoadingState
+        text="Estamos recuperando tu diagnostico y tu plan guardado."
+        title="Cargando tu informacion"
+      />
+    );
+  }
+
+  if (!hasCompletedOnboarding) {
+    return (
+      <LoadingState
+        text="Te llevaremos al diagnostico inicial para completar los datos faltantes."
+        title="Completa tu diagnostico"
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1683,6 +1747,34 @@ const styles = StyleSheet.create({
   },
   hidden: {
     display: "none"
+  },
+  centeredState: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    padding: spacing.md
+  },
+  loadingCard: {
+    ...shadows.card,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    maxWidth: 460,
+    padding: spacing.lg,
+    width: "100%"
+  },
+  loadingTitle: {
+    color: colors.text,
+    fontSize: typography.sectionTitle,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.sectionTitle
+  },
+  loadingText: {
+    color: colors.textMuted,
+    fontSize: typography.body,
+    lineHeight: typography.lineHeight.body
   },
   bottomNav: {
     alignSelf: "center",

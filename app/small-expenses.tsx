@@ -468,7 +468,7 @@ export default function SmallExpensesScreen() {
             <PrimaryButton
               accessibilityLabel={
                 isEditMode
-                  ? "Guardar cambios de gastos pequeÃ±os"
+                  ? "Guardar cambios de gastos pequeños"
                   : "Continuar hacia ahorros y deudas"
               }
               disabled={!canContinue}

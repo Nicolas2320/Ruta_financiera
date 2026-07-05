@@ -7,7 +7,7 @@ import {
   type MonthlyActionImpactSummary
 } from "./actionProgressImpact";
 import { getGoalContributionPeriodSummary } from "./goalContributions";
-import type { GoalAllocation } from "./goalPlanning";
+import { isEmergencyGoal, type GoalAllocation } from "./goalPlanning";
 import {
   getMonthlyActionProgressId,
   getMonthlyActionProgressStatus,
@@ -17,7 +17,15 @@ import {
   type MonthlyAction
 } from "./monthlyPlan";
 
-const goalContributionActionIds = new Set(["set-goal-contribution", "redirect-small-expenses"]);
+const goalContributionActionIds = new Set([
+  "initial-emergency-contribution",
+  "set-goal-contribution",
+  "redirect-small-expenses"
+]);
+const autoInjectedGoalContributionActionIds = new Set([
+  "set-goal-contribution",
+  "redirect-small-expenses"
+]);
 
 export type EffectiveMonthlyPlanProgress = {
   completedCount: number;
@@ -61,6 +69,22 @@ function getGoalContributionProgressRecord({
   };
 }
 
+export function isGoalContributionActionId(actionId: string) {
+  return goalContributionActionIds.has(actionId);
+}
+
+export function getGoalContributionLabelForActionId(actionId: string) {
+  if (actionId === "initial-emergency-contribution") {
+    return "Aporte a emergencia";
+  }
+
+  if (actionId === "redirect-small-expenses") {
+    return "Monto redirigido";
+  }
+
+  return "Aporte a meta";
+}
+
 export function removeStoredGoalContributionActionsForPeriod(
   completedActions: CompletedActionsState,
   periodKey: string
@@ -76,7 +100,7 @@ export function removeStoredGoalContributionActionsForPeriod(
 
     const actionId = getActionIdFromProgressId(progressId);
 
-    if (actionId && goalContributionActionIds.has(actionId)) {
+    if (actionId && autoInjectedGoalContributionActionIds.has(actionId)) {
       nextActions[progressId] = false;
     }
   });
@@ -98,7 +122,13 @@ export function getEffectiveMonthlyPlanProgress({
   primaryGoalAllocation: GoalAllocation | null;
 }): EffectiveMonthlyPlanProgress {
   const effectiveCompletedActions = { ...completedActions };
-  const goalContributionAction = actions.find((action) => goalContributionActionIds.has(action.id));
+  const goalContributionAction = actions.find((action) => {
+    if (!goalContributionActionIds.has(action.id)) {
+      return false;
+    }
+
+    return action.id !== "initial-emergency-contribution" || isEmergencyGoal(primaryGoalAllocation?.goal);
+  });
   const goalContributionPeriodSummary = getGoalContributionPeriodSummary(
     primaryGoalAllocation?.goal,
     periodKey
@@ -113,10 +143,7 @@ export function getEffectiveMonthlyPlanProgress({
       getGoalContributionProgressRecord({
         amount: goalContributionProgressAmount,
         completedAt: goalContributionPeriodSummary.latestDate,
-        label:
-          goalContributionAction.id === "redirect-small-expenses"
-            ? "Monto redirigido"
-            : "Aporte a meta"
+        label: getGoalContributionLabelForActionId(goalContributionAction.id)
       });
   }
 

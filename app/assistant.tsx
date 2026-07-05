@@ -28,15 +28,25 @@ import {
   type AssistantChatMessage,
   type AssistantFinancialContext
 } from "../lib/assistantApi";
+import { normalizeActionProgressRecord, type CompletedActionsState } from "../types/financial";
 import { type FinancialSnapshot } from "../utils/financialCalculations";
+import { getGoalPlanFromOnboarding } from "../utils/goalPlanning";
+import {
+  getEffectiveMonthlyPlanProgress,
+  removeStoredGoalContributionActionsForPeriod
+} from "../utils/monthlyPlanProgress";
 import {
   getActiveMonthlyPlanProgressKey,
+  getMonthlyActionProgressId,
+  getMonthlyActionProgressStatus,
   getMonthlyActions,
   getMonthlyFocus,
   getMonthlyPlanData,
   getMonthlyPlanMetrics,
+  getMonthlyPlanPeriodKey,
+  getMonthlyPlanPriorityKey,
   getMonthlyPlanProgressKey,
-  isMonthlyActionCompleted,
+  type MonthlyGoalContext,
   type MonthlyAction
 } from "../utils/monthlyPlan";
 
@@ -305,27 +315,73 @@ function AssistantRichText({
 function buildAssistantFinancialContext({
   actions,
   completedCount,
+  effectiveCompletedActions,
   focusText,
   focusTitle,
+  goalPlan,
   onboarding,
+  planProgressKey,
   progressPercentage,
+  realContributionThisMonth,
+  referenceMonthlyContribution,
   snapshot
 }: {
   actions: MonthlyAction[];
   completedCount: number;
+  effectiveCompletedActions: CompletedActionsState;
   focusText: string;
   focusTitle: string;
+  goalPlan: ReturnType<typeof getGoalPlanFromOnboarding>;
   onboarding: ReturnType<typeof useOnboarding>["onboarding"];
+  planProgressKey: string;
   progressPercentage: number;
+  realContributionThisMonth: number;
+  referenceMonthlyContribution: number;
   snapshot: FinancialSnapshot;
 }): AssistantFinancialContext {
+  const primaryGoalAllocation =
+    goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
+    goalPlan.allocations[0] ??
+    null;
+  const actionContexts = actions.map((action, index) => {
+    const progressId = getMonthlyActionProgressId(planProgressKey, action.id);
+    const progressRecord = normalizeActionProgressRecord(effectiveCompletedActions[progressId]);
+    const status = getMonthlyActionProgressStatus({
+      actionId: action.id,
+      completedActions: effectiveCompletedActions,
+      planProgressKey
+    });
+
+    return {
+      category: action.category,
+      completedAt: progressRecord?.completedAt ?? null,
+      description: action.description,
+      difficulty: action.difficulty,
+      estimatedImpact: action.estimatedImpact,
+      evidence: progressRecord?.evidence ?? null,
+      id: action.id,
+      isCompleted: status === "completed",
+      order: index + 1,
+      progressId,
+      status,
+      title: action.title,
+      why: action.why
+    };
+  });
+  const nextPendingAction =
+    actionContexts.find(
+      (action) => action.status === "pending" || action.status === "in_progress"
+    ) ?? null;
+
   return {
     cashflow: {
       monthlyIncome: snapshot.cashflow.monthlyIncome,
       monthlyExpenses: snapshot.cashflow.monthlyExpenses,
       monthlyMargin: snapshot.cashflow.monthlyMargin,
       expensesToIncomeRatio: snapshot.cashflow.expensesToIncomeRatio,
-      suggestedMonthlyContribution: snapshot.cashflow.suggestedMonthlyContribution
+      suggestedMonthlyContribution: snapshot.cashflow.suggestedMonthlyContribution,
+      suggestedMonthlyContributionMeaning:
+        "Capacidad sugerida desde el margen mensual; no es necesariamente la bolsa manual ni el aporte asignado a una meta."
     },
     debt: {
       label: snapshot.debt.label,
@@ -339,30 +395,55 @@ function buildAssistantFinancialContext({
       status: snapshot.emergencyFund.status
     },
     goal: {
-      estimatedMonthsToGoal: snapshot.goal.estimatedMonthsToGoal,
-      horizon: onboarding.goalHorizon,
-      name: snapshot.goal.name,
-      priority: onboarding.goalPriority,
-      progressPercentage: snapshot.goal.progressPercentage,
-      remainingAmount: snapshot.goal.remainingAmount,
-      targetAmount: snapshot.goal.targetAmount
+      estimatedMonthsToGoal:
+        primaryGoalAllocation?.estimatedMonthsToGoal ?? snapshot.goal.estimatedMonthsToGoal,
+      horizon: primaryGoalAllocation?.goal.horizon ?? onboarding.goalHorizon,
+      name: primaryGoalAllocation?.goal.title ?? snapshot.goal.name,
+      priority: primaryGoalAllocation?.goal.priority ?? onboarding.goalPriority,
+      progressPercentage:
+        primaryGoalAllocation?.progressPercentage ?? snapshot.goal.progressPercentage,
+      remainingAmount: primaryGoalAllocation?.remainingAmount ?? snapshot.goal.remainingAmount,
+      targetAmount: primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount
+    },
+    goalsPlan: {
+      activeGoals: goalPlan.allocations.filter(
+        (allocation) =>
+          allocation.goal.status !== "completed" && allocation.goal.status !== "paused"
+      ).length,
+      allocations: goalPlan.allocations.map((allocation) => ({
+        isPrimary: allocation.goal.isPrimary === true,
+        monthlyContribution: allocation.monthlyContribution,
+        progressPercentage: allocation.progressPercentage,
+        remainingAmount: allocation.remainingAmount,
+        status: allocation.goal.status,
+        title: allocation.goal.title
+      })),
+      monthlyGoalBudget: goalPlan.monthlyGoalBudget,
+      monthlyGoalBudgetMode: goalPlan.monthlyGoalBudgetMode,
+      monthlyContributionTotal: goalPlan.monthlyContributionTotal,
+      primaryGoalMonthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
+      remainingBudget: goalPlan.remainingBudget
     },
     investment: {
       situation: onboarding.investmentSituation
     },
     monthlyPlan: {
-      actions: actions.map((action) => ({
-        category: action.category,
-        description: action.description,
-        difficulty: action.difficulty,
-        estimatedImpact: action.estimatedImpact,
-        title: action.title,
-        why: action.why
-      })),
+      actions: actionContexts,
       completedActions: completedCount,
       focusText,
       focusTitle,
-      progressPercentage
+      nextPendingAction,
+      primaryGoalMonthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
+      primaryGoalMonthlyContributionLabel: "Aporte meta",
+      primaryGoalMonthlyContributionMeaning:
+        "Aporte asignado a la meta principal dentro de la bolsa de metas. En la UI aparece como Aporte meta.",
+      progressPercentage,
+      realContributionThisMonth,
+      referenceMonthlyContribution,
+      referenceMonthlyContributionLabel: "Referencia mensual",
+      referenceMonthlyContributionMeaning:
+        "Monto de referencia del plan mensual. Puede incluir capacidad sugerida y ajuste de gastos pequenos; no es lo mismo que Aporte meta.",
+      totalActions: actions.length
     },
     precision: {
       label: snapshot.precision.label,
@@ -431,29 +512,71 @@ export default function AssistantScreen() {
   const runtimeContext = useMemo<AssistantRuntimeContext>(() => {
     const data = getMonthlyPlanData(onboarding);
     const metrics = getMonthlyPlanMetrics(data, exactValues);
-    const focus = getMonthlyFocus(data, metrics);
-    const actions = getMonthlyActions(data, metrics);
-    const suggestedProgressKey = getMonthlyPlanProgressKey(metrics, actions);
-    const planProgressKey = getActiveMonthlyPlanProgressKey(
+    const goalPlan = getGoalPlanFromOnboarding(
+      onboarding,
+      metrics.snapshot.cashflow.suggestedMonthlyContribution,
+      exactValues
+    );
+    const primaryGoalAllocation =
+      goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
+      goalPlan.allocations[0] ??
+      null;
+    const monthlyGoalContext: MonthlyGoalContext = {
+      title: primaryGoalAllocation?.goal.title ?? data.financialGoal,
+      monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
+      estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null
+    };
+    const periodKey = getMonthlyPlanPeriodKey();
+    const suggestedActions = getMonthlyActions(data, metrics, undefined, monthlyGoalContext);
+    const suggestedProgressKey = getMonthlyPlanProgressKey(metrics, suggestedActions);
+    const completedActionsForPlanSelection = removeStoredGoalContributionActionsForPeriod(
       completedActions,
+      periodKey
+    );
+    const planProgressKey = getActiveMonthlyPlanProgressKey(
+      completedActionsForPlanSelection,
       suggestedProgressKey
     );
-    const completedCount = actions.filter((action) =>
-      isMonthlyActionCompleted({
-        actionId: action.id,
-        completedActions,
-        planProgressKey
-      })
-    ).length;
+    const activePlanPriorityKey = getMonthlyPlanPriorityKey(planProgressKey);
+    const actions = getMonthlyActions(
+      data,
+      metrics,
+      activePlanPriorityKey ?? undefined,
+      monthlyGoalContext
+    );
+    const focus = getMonthlyFocus(
+      data,
+      metrics,
+      activePlanPriorityKey ?? undefined,
+      monthlyGoalContext
+    );
+    const activePlanProgressKey = getMonthlyPlanProgressKey(
+      metrics,
+      actions,
+      activePlanPriorityKey ?? undefined
+    );
+    const monthlyPlanProgress = getEffectiveMonthlyPlanProgress({
+      actions,
+      completedActions: completedActionsForPlanSelection,
+      periodKey,
+      planProgressKey: activePlanProgressKey,
+      primaryGoalAllocation
+    });
+    const completedCount = monthlyPlanProgress.completedCount;
     const progressPercentage =
       actions.length > 0 ? Math.round((completedCount / actions.length) * 100) : 0;
     const financialContext = buildAssistantFinancialContext({
       actions,
       completedCount,
+      effectiveCompletedActions: monthlyPlanProgress.effectiveCompletedActions,
       focusText: focus.text,
       focusTitle: focus.title,
+      goalPlan,
       onboarding,
+      planProgressKey: activePlanProgressKey,
       progressPercentage,
+      realContributionThisMonth: monthlyPlanProgress.impactSummary.realContributionTotal,
+      referenceMonthlyContribution: metrics.balancedScenarioAmount,
       snapshot: metrics.snapshot
     });
 

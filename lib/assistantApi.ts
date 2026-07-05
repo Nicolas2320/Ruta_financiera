@@ -5,6 +5,27 @@ export type AssistantChatMessage = {
   text: string;
 };
 
+type AssistantMonthlyPlanAction = {
+  category: string;
+  completedAt?: string | null;
+  description: string;
+  difficulty: string;
+  estimatedImpact: string;
+  evidence?: {
+    amount?: number | null;
+    detail?: string | null;
+    label?: string | null;
+    type?: string;
+  } | null;
+  id: string;
+  isCompleted: boolean;
+  order: number;
+  progressId: string;
+  status: string;
+  title: string;
+  why: string;
+};
+
 export type AssistantFinancialContext = {
   cashflow: {
     monthlyIncome: number | null;
@@ -12,6 +33,7 @@ export type AssistantFinancialContext = {
     monthlyMargin: number | null;
     expensesToIncomeRatio: number | null;
     suggestedMonthlyContribution: number;
+    suggestedMonthlyContributionMeaning?: string;
   };
   debt: {
     label: string;
@@ -33,22 +55,40 @@ export type AssistantFinancialContext = {
     remainingAmount: number | null;
     targetAmount: number | null;
   };
+  goalsPlan?: {
+    activeGoals: number;
+    allocations: Array<{
+      isPrimary: boolean;
+      monthlyContribution: number;
+      progressPercentage: number | null;
+      remainingAmount: number | null;
+      status: string | null | undefined;
+      title: string;
+    }>;
+    monthlyGoalBudget: number;
+    monthlyGoalBudgetMode: "recommended" | "manual";
+    monthlyContributionTotal: number;
+    primaryGoalMonthlyContribution: number | null;
+    remainingBudget: number;
+  };
   investment: {
     situation: string | null;
   };
   monthlyPlan: {
-    actions: Array<{
-      category: string;
-      description: string;
-      difficulty: string;
-      estimatedImpact: string;
-      title: string;
-      why: string;
-    }>;
+    actions: AssistantMonthlyPlanAction[];
     completedActions: number;
     focusText: string;
     focusTitle: string;
+    nextPendingAction: AssistantMonthlyPlanAction | null;
+    primaryGoalMonthlyContribution: number | null;
+    primaryGoalMonthlyContributionLabel: "Aporte meta";
+    primaryGoalMonthlyContributionMeaning: string;
     progressPercentage: number;
+    realContributionThisMonth?: number;
+    referenceMonthlyContribution: number;
+    referenceMonthlyContributionLabel: "Referencia mensual";
+    referenceMonthlyContributionMeaning: string;
+    totalActions: number;
   };
   precision: {
     label: string;
