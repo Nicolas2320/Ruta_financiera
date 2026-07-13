@@ -31,6 +31,7 @@ import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, Vi
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
+import { SpendingSectionTabs } from "../components/SpendingSectionTabs";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
@@ -760,13 +761,17 @@ function CategoryAmountRow({
   isExactMonthlyExpense,
   inputValue,
   label,
+  locked,
   onChangeText,
+  onManagePress,
   totalExpenses
 }: {
   isExactMonthlyExpense: boolean;
   inputValue: string;
   label: string;
+  locked?: boolean;
   onChangeText: (value: string) => void;
+  onManagePress?: () => void;
   totalExpenses: number | null;
 }) {
   const visual = getCategoryVisual(label);
@@ -785,19 +790,33 @@ function CategoryAmountRow({
       </View>
       <View style={styles.categoryInputRow}>
         <Text style={styles.categoryInputLabel}>Monto mensual</Text>
-        <View style={styles.categoryInputShell}>
-          <TextInput
-            accessibilityLabel={`Monto mensual en ${label}`}
-            inputMode="numeric"
-            keyboardType="numeric"
-            onChangeText={onChangeText}
-            placeholder="Ingresa monto"
-            placeholderTextColor={colors.textSubtle}
-            style={styles.categoryAmountInput}
-            value={inputValue}
-          />
-          <PencilLine color={colors.textSubtle} size={16} strokeWidth={2.4} />
-        </View>
+        {locked && onManagePress ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onManagePress}
+            style={({ pressed }) => [styles.categoryManagedButton, pressed && styles.pressed]}
+          >
+            <View style={styles.categoryManagedTextGroup}>
+              <Text style={styles.categoryManagedAmount}>{inputValue || "$0"}</Text>
+              <Text style={styles.categoryManagedHelper}>Gestionar en Deudas</Text>
+            </View>
+            <ChevronRight color={colors.primary} size={18} strokeWidth={2.5} />
+          </Pressable>
+        ) : (
+          <View style={styles.categoryInputShell}>
+            <TextInput
+              accessibilityLabel={`Monto mensual en ${label}`}
+              inputMode="numeric"
+              keyboardType="numeric"
+              onChangeText={onChangeText}
+              placeholder="Ingresa monto"
+              placeholderTextColor={colors.textSubtle}
+              style={styles.categoryAmountInput}
+              value={inputValue}
+            />
+            <PencilLine color={colors.textSubtle} size={16} strokeWidth={2.4} />
+          </View>
+        )}
       </View>
       <Text style={[styles.categoryShareText, { color: shareIsOverTotal ? "#C2410C" : visual.color }]}>
         {getCategoryShareLabel(amount, totalExpenses, isExactMonthlyExpense)}
@@ -999,6 +1018,8 @@ export default function SpendingScreen() {
             </View>
           </View>
 
+          <SpendingSectionTabs activeTab="spending" />
+
           <View style={styles.heroCard}>
             <View style={styles.heroTextGroup}>
               <View style={styles.heroTopRow}>
@@ -1151,6 +1172,8 @@ export default function SpendingScreen() {
                       isExactMonthlyExpense={hasExactMonthlyExpenses}
                       inputValue={categoryAmountInputs[category] ?? ""}
                       label={category}
+                      locked={normalizeLabel(category) === "deudas"}
+                      onManagePress={() => router.push("/debts")}
                       onChangeText={(value) => updateCategoryAmountInput(category, value)}
                       totalExpenses={metrics.expenseMidpoint}
                     />
@@ -1724,6 +1747,35 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingHorizontal: 0,
     paddingVertical: 0
+  },
+  categoryManagedButton: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderColor: "#CFE0FF",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 48,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  categoryManagedTextGroup: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0
+  },
+  categoryManagedAmount: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  categoryManagedHelper: {
+    color: colors.primary,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.small
   },
   categoryShareTrack: {
     backgroundColor: "#E4EAF2",

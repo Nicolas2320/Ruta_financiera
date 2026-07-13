@@ -11,6 +11,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   Coffee,
+  CreditCard,
   Flag,
   HandCoins,
   Home,
@@ -34,6 +35,7 @@ import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
 import { getNextPlanAdjustmentHint } from "../utils/actionProgressImpact";
+import { getDebtRatioLabel } from "../utils/debtCalculations";
 import { formatCOP } from "../utils/financialRanges";
 import { getGoalPlanFromOnboarding, type GoalAllocation } from "../utils/goalPlanning";
 import {
@@ -337,6 +339,46 @@ function getGoalTone(status: string): Tone {
   }
 
   return "primary";
+}
+
+function getDashboardDebtTone(level: string): Tone {
+  if (level === "none" || level === "low") {
+    return "support";
+  }
+
+  if (level === "high") {
+    return "danger";
+  }
+
+  return "warning";
+}
+
+function getDashboardDebtText({
+  count,
+  level,
+  monthlyPaymentTotal,
+  source
+}: {
+  count: number;
+  level: string;
+  monthlyPaymentTotal: number;
+  source: string;
+}) {
+  if (count > 0) {
+    return `Tienes ${count} ${count === 1 ? "deuda registrada" : "deudas registradas"}. Usamos estas cuotas para evaluar si una nueva obligacion cabe en tu mes.`;
+  }
+
+  if (source === "category" && monthlyPaymentTotal > 0) {
+    return `Usamos ${formatCOP(monthlyPaymentTotal)} que registraste en gastos como Deudas. Puedes registrar el detalle para mejorar el calculo.`;
+  }
+
+  if (level === "none") {
+    return "No tienes deudas detalladas registradas. Puedes agregarlas si quieres evaluar una nueva cuota.";
+  }
+
+  return monthlyPaymentTotal > 0
+    ? "Ya tenemos una referencia de tus pagos de deuda."
+    : "Agrega tus cuotas para que el diagnostico y el evaluador sean mas claros.";
 }
 
 function isCompletedGoalAllocation(allocation: GoalAllocation) {
@@ -955,6 +997,19 @@ export default function DashboardScreen() {
       : snapshot.sourceMap.smallExpenses === "unknown"
         ? "Por estimar"
         : `Rango: ${getDefinedLabel(data.smallExpensesRange)}`;
+  const dashboardDebtTone = getDashboardDebtTone(snapshot.debt.level);
+  const dashboardDebtValue =
+    snapshot.debt.monthlyPaymentTotal > 0
+      ? snapshot.debt.source === "category"
+        ? `Referencia: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
+        : `Cuotas: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
+      : snapshot.debt.label;
+  const dashboardDebtText = getDashboardDebtText({
+    count: snapshot.debt.registeredDebtCount,
+    level: snapshot.debt.level,
+    monthlyPaymentTotal: snapshot.debt.monthlyPaymentTotal,
+    source: snapshot.debt.source
+  });
   const firstName = onboarding.firstName.trim();
   const greetingTitle = firstName ? `Bienvenido ${firstName}!` : "Bienvenido!";
   const navigate = (route: Route) => router.push(route);
@@ -1126,6 +1181,21 @@ export default function DashboardScreen() {
             ) : null}
             {goalProgressLabel ? (
               <Chip label={goalProgressLabel} tone="primary" />
+            ) : null}
+          </RowCard>
+
+          <RowCard
+            actionLabel="Ver deudas"
+            icon={<CreditCard color={getToneColors(dashboardDebtTone).text} size={36} strokeWidth={2.4} />}
+            onPress={() => router.push("/debts")}
+            text={dashboardDebtText}
+            title="Deudas"
+            tone={dashboardDebtTone}
+            value={dashboardDebtValue}
+          >
+            <Chip label={getDebtRatioLabel(snapshot.debt.debtToIncomeRatio)} tone={dashboardDebtTone} />
+            {snapshot.debt.remainingTotal !== null ? (
+              <Chip label={`Saldo ${formatCOP(snapshot.debt.remainingTotal)}`} tone="warning" />
             ) : null}
           </RowCard>
 

@@ -5,6 +5,7 @@ import {
   getPrimaryFinancialGoal,
   initialOnboarding,
   normalizeCompletedActionsState,
+  normalizeDebtRecords,
   normalizeExpenseCategoryAmounts,
   normalizeFinancialGoals,
   normalizeGoalMonthlyBudget,
@@ -50,6 +51,7 @@ function normalizeOnboarding(onboarding: Partial<OnboardingData> | null | undefi
       onboarding?.expenseCategoryAmounts,
       onboarding?.expenseCategories
     ),
+    debts: normalizeDebtRecords(onboarding?.debts),
     smallExpenseCategories: Array.isArray(onboarding?.smallExpenseCategories)
       ? onboarding.smallExpenseCategories
       : [],
