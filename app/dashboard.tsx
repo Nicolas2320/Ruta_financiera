@@ -30,6 +30,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
+import { FinancialDataStatusScreen } from "../components/FinancialDataStatusScreen";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
@@ -452,20 +453,6 @@ function CircleButton({ onPress }: { onPress: () => void }) {
     >
       <UserRound color={colors.primary} size={27} strokeWidth={2.4} />
     </Pressable>
-  );
-}
-
-function LoadingState({ text, title }: { text: string; title: string }) {
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
-      <View style={styles.centeredState}>
-        <View style={styles.loadingCard}>
-          <Text style={styles.loadingTitle}>{title}</Text>
-          <Text style={styles.loadingText}>{text}</Text>
-        </View>
-      </View>
-    </SafeAreaView>
   );
 }
 
@@ -1016,7 +1003,7 @@ export default function DashboardScreen() {
 
   if (!isAuthReady || !session) {
     return (
-      <LoadingState
+      <FinancialDataStatusScreen
         text="Te llevaremos a iniciar sesion para recuperar tus datos."
         title="Preparando tu inicio"
       />
@@ -1025,7 +1012,7 @@ export default function DashboardScreen() {
 
   if (onboardingSyncStatus === "loading") {
     return (
-      <LoadingState
+      <FinancialDataStatusScreen
         text="Estamos recuperando tu diagnostico y tu plan guardado."
         title="Cargando tu informacion"
       />
@@ -1034,7 +1021,7 @@ export default function DashboardScreen() {
 
   if (!hasCompletedOnboarding) {
     return (
-      <LoadingState
+      <FinancialDataStatusScreen
         text="Te llevaremos al diagnostico inicial para completar los datos faltantes."
         title="Completa tu diagnostico"
       />
@@ -1817,34 +1804,6 @@ const styles = StyleSheet.create({
   },
   hidden: {
     display: "none"
-  },
-  centeredState: {
-    alignItems: "center",
-    flex: 1,
-    justifyContent: "center",
-    padding: spacing.md
-  },
-  loadingCard: {
-    ...shadows.card,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    gap: spacing.sm,
-    maxWidth: 460,
-    padding: spacing.lg,
-    width: "100%"
-  },
-  loadingTitle: {
-    color: colors.text,
-    fontSize: typography.sectionTitle,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.sectionTitle
-  },
-  loadingText: {
-    color: colors.textMuted,
-    fontSize: typography.body,
-    lineHeight: typography.lineHeight.body
   },
   bottomNav: {
     alignSelf: "center",
