@@ -5,6 +5,7 @@ import {
   type ExactFinancialValues,
   type OnboardingData
 } from "../types/financial";
+import { getRegisteredDebtSummary } from "./debtCalculations";
 import { formatCOP } from "./financialRanges";
 
 export type SnapshotSource = "exact" | "estimated" | "missing";
@@ -107,6 +108,14 @@ export type FinancialSnapshot = {
     level: DebtLevel;
     shouldPrioritizeDebt: boolean;
     label: string;
+    source: "registered" | "category" | "none";
+    registeredDebtCount: number;
+    monthlyPaymentTotal: number;
+    categoryMonthlyPaymentTotal: number;
+    remainingTotal: number | null;
+    debtToIncomeRatio: number | null;
+    hasCategoryDebtReference: boolean;
+    hasPossibleDuplicate: boolean;
   };
   priority: {
     key: PriorityKey;
@@ -652,7 +661,14 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const smallExpensesLevel = getSmallExpensesLevel(smallExpenses);
   const smallExpensesOpportunity =
     smallExpenses !== null ? roundDownToNearest(smallExpenses * 0.2, 10000) : null;
-  const debtLevel = getDebtLevel(onboarding.debtSituation, onboarding.debtPaymentShare);
+  const selectedDebtLevel = getDebtLevel(onboarding.debtSituation, onboarding.debtPaymentShare);
+  const registeredDebtSummary = getRegisteredDebtSummary({
+    debts: onboarding.debts,
+    expenseCategoryAmounts: onboarding.expenseCategoryAmounts,
+    monthlyIncome
+  });
+  const debtLevel =
+    registeredDebtSummary.source !== "none" ? registeredDebtSummary.level : selectedDebtLevel;
 
   const baseSnapshot: Omit<FinancialSnapshot, "priority"> = {
     values: {
@@ -720,8 +736,17 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
     },
     debt: {
       level: debtLevel,
-      shouldPrioritizeDebt: debtLevel === "high",
-      label: debtLabels[debtLevel]
+      shouldPrioritizeDebt: debtLevel === "high" || registeredDebtSummary.shouldPrioritizeDebt,
+      label:
+        registeredDebtSummary.source !== "none" ? registeredDebtSummary.label : debtLabels[debtLevel],
+      source: registeredDebtSummary.source,
+      registeredDebtCount: registeredDebtSummary.count,
+      monthlyPaymentTotal: registeredDebtSummary.monthlyPaymentTotal,
+      categoryMonthlyPaymentTotal: registeredDebtSummary.categoryMonthlyPaymentTotal,
+      remainingTotal: registeredDebtSummary.remainingTotal,
+      debtToIncomeRatio: registeredDebtSummary.debtToIncomeRatio,
+      hasCategoryDebtReference: registeredDebtSummary.hasCategoryDebtReference,
+      hasPossibleDuplicate: registeredDebtSummary.hasPossibleDuplicate
     }
   };
 

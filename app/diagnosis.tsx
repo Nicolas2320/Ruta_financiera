@@ -3,13 +3,14 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   AlertCircle,
+  ChevronRight,
   ClipboardCheck,
   Landmark,
   PiggyBank,
   ShieldCheck,
   Sparkles
 } from "lucide-react-native";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
@@ -647,6 +648,14 @@ export default function DiagnosisScreen() {
       : metrics.snapshot.emergencyFund.label;
   const debtMessage = getDebtMessage(onboarding);
   const debtActionMessage = getDebtActionMessage(onboarding);
+  const shouldShowDebtDetailsCta =
+    metrics.snapshot.debt.level === "medium" ||
+    metrics.snapshot.debt.level === "high" ||
+    onboarding.debtPaymentShare === "No estoy seguro";
+  const debtDetailsCtaLabel =
+    metrics.snapshot.debt.registeredDebtCount > 0
+      ? "Ver deudas registradas"
+      : "Agregar deudas para calcular mejor";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -783,6 +792,16 @@ export default function DiagnosisScreen() {
               <Text style={styles.subsectionTitle}>Deudas</Text>
               <Text style={styles.text}>{debtMessage}</Text>
               {debtActionMessage ? <Text style={styles.text}>{debtActionMessage}</Text> : null}
+              {shouldShowDebtDetailsCta ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/debts")}
+                  style={({ pressed }) => [styles.debtCta, pressed && styles.pressed]}
+                >
+                  <Text style={styles.debtCtaText}>{debtDetailsCtaLabel}</Text>
+                  <ChevronRight color={colors.primary} size={20} strokeWidth={2.5} />
+                </Pressable>
+              ) : null}
             </View>
             <View style={styles.subsection}>
               <Text style={styles.subsectionTitle}>Inversiones</Text>
@@ -1101,5 +1120,27 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: colors.surface,
     borderColor: colors.border
+  },
+  debtCta: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.primarySoft,
+    borderColor: "#CFE0FF",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 42,
+    paddingHorizontal: spacing.md
+  },
+  debtCtaText: {
+    color: colors.primary,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  pressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.99 }]
   },
 });

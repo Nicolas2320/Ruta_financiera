@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 
@@ -54,6 +55,9 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
   const [onboardingSyncStatus, setOnboardingSyncStatus] =
     useState<OnboardingContextValue["onboardingSyncStatus"]>("idle");
   const [onboardingSyncError, setOnboardingSyncError] = useState<string | null>(null);
+  const loadedUserIdRef = useRef<string | null>(null);
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
+  const userId = user?.id ?? null;
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -61,6 +65,8 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     }
 
     if (!user) {
+      loadedUserIdRef.current = null;
+      setLoadedUserId(null);
       setOnboarding(initialOnboarding);
       setExactValues({});
       setFinancialProfileExists(false);
@@ -70,6 +76,13 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     }
 
     let isMounted = true;
+
+    if (loadedUserIdRef.current !== user.id) {
+      setOnboarding(initialOnboarding);
+      setExactValues({});
+      setFinancialProfileExists(false);
+    }
+
     setOnboardingSyncStatus("loading");
     setOnboardingSyncError(null);
 
@@ -82,6 +95,8 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
         setOnboarding(profile.onboarding);
         setExactValues(profile.exactValues);
         setFinancialProfileExists(profile.profileExists);
+        loadedUserIdRef.current = user.id;
+        setLoadedUserId(user.id);
         setOnboardingSyncStatus("saved");
       })
       .catch((error: Error) => {
@@ -89,6 +104,8 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
           return;
         }
 
+        loadedUserIdRef.current = user.id;
+        setLoadedUserId(user.id);
         setOnboardingSyncStatus("error");
         setOnboardingSyncError(error.message);
       });
@@ -96,7 +113,7 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     return () => {
       isMounted = false;
     };
-  }, [isAuthReady, isSupabaseConfigured, user]);
+  }, [isAuthReady, isSupabaseConfigured, userId]);
 
   const updateOnboarding = useCallback(
     (data: Partial<OnboardingData>) => {
@@ -210,25 +227,32 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     }
   }, [isSupabaseConfigured, user]);
 
+  const isLoadedForCurrentUser = !userId || loadedUserId === userId;
+  const effectiveOnboardingSyncStatus =
+    userId && !isLoadedForCurrentUser ? "loading" : onboardingSyncStatus;
+
   const value = useMemo(
     () => ({
       exactValues,
-      financialProfileExists,
+      financialProfileExists: isLoadedForCurrentUser && financialProfileExists,
       hasCompletedOnboarding:
-        financialProfileExists && getHasCompletedOnboarding(onboarding),
+        isLoadedForCurrentUser &&
+        financialProfileExists &&
+        getHasCompletedOnboarding(onboarding),
       onboarding,
       onboardingSyncError,
-      onboardingSyncStatus,
+      onboardingSyncStatus: effectiveOnboardingSyncStatus,
       resetFinancialData,
       saveExactValues,
       updateOnboarding
     }),
     [
       exactValues,
+      effectiveOnboardingSyncStatus,
       financialProfileExists,
+      isLoadedForCurrentUser,
       onboarding,
       onboardingSyncError,
-      onboardingSyncStatus,
       resetFinancialData,
       saveExactValues,
       updateOnboarding

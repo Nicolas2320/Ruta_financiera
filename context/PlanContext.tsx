@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 
@@ -35,6 +36,9 @@ export function PlanProvider({ children }: PropsWithChildren) {
   const [planSyncStatus, setPlanSyncStatus] =
     useState<PlanContextValue["planSyncStatus"]>("idle");
   const [planSyncError, setPlanSyncError] = useState<string | null>(null);
+  const loadedUserIdRef = useRef<string | null>(null);
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
+  const userId = user?.id ?? null;
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -42,6 +46,8 @@ export function PlanProvider({ children }: PropsWithChildren) {
     }
 
     if (!user) {
+      loadedUserIdRef.current = null;
+      setLoadedUserId(null);
       setCompletedActions({});
       setPlanSyncStatus(isSupabaseConfigured ? "idle" : "not-configured");
       setPlanSyncError(null);
@@ -49,6 +55,11 @@ export function PlanProvider({ children }: PropsWithChildren) {
     }
 
     let isMounted = true;
+
+    if (loadedUserIdRef.current !== user.id) {
+      setCompletedActions({});
+    }
+
     setPlanSyncStatus("loading");
     setPlanSyncError(null);
 
@@ -59,6 +70,8 @@ export function PlanProvider({ children }: PropsWithChildren) {
         }
 
         setCompletedActions(profile.completedActions);
+        loadedUserIdRef.current = user.id;
+        setLoadedUserId(user.id);
         setPlanSyncStatus("saved");
       })
       .catch((error: Error) => {
@@ -66,6 +79,8 @@ export function PlanProvider({ children }: PropsWithChildren) {
           return;
         }
 
+        loadedUserIdRef.current = user.id;
+        setLoadedUserId(user.id);
         setPlanSyncStatus("error");
         setPlanSyncError(error.message);
       });
@@ -73,7 +88,7 @@ export function PlanProvider({ children }: PropsWithChildren) {
     return () => {
       isMounted = false;
     };
-  }, [isAuthReady, isSupabaseConfigured, user]);
+  }, [isAuthReady, isSupabaseConfigured, userId]);
 
   const savePlanProgress = useCallback(
     (nextActions: CompletedActionsState) => {
@@ -183,11 +198,14 @@ export function PlanProvider({ children }: PropsWithChildren) {
     }
   }, [isSupabaseConfigured, user]);
 
+  const effectivePlanSyncStatus =
+    userId && loadedUserId !== userId ? "loading" : planSyncStatus;
+
   const value = useMemo(
     () => ({
       completedActions,
       planSyncError,
-      planSyncStatus,
+      planSyncStatus: effectivePlanSyncStatus,
       toggleActionCompleted,
       setActionCompleted,
       updateActionProgress,
@@ -195,8 +213,8 @@ export function PlanProvider({ children }: PropsWithChildren) {
     }),
     [
       completedActions,
+      effectivePlanSyncStatus,
       planSyncError,
-      planSyncStatus,
       toggleActionCompleted,
       setActionCompleted,
       updateActionProgress,

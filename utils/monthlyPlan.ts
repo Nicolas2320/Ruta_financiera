@@ -10,7 +10,9 @@ import {
   isActionProgressCompleted,
   type ActionProgressStatus,
   type CompletedActionsState,
+  type DebtRecord,
   type ExactFinancialValues,
+  type ExpenseCategoryAmounts,
   type OnboardingData
 } from "../types/financial";
 import { initialOnboarding } from "../types/financial";
@@ -21,6 +23,7 @@ export type MonthlyPlanData = {
   city: string | null;
   incomeRange: string | null;
   expensesRange: string | null;
+  expenseCategoryAmounts: ExpenseCategoryAmounts;
   expensesFeeling: string | null;
   smallExpensesRange: string | null;
   smallExpensesIntention: string | null;
@@ -30,6 +33,7 @@ export type MonthlyPlanData = {
   emergencyCoverage: string | null;
   debtSituation: string | null;
   debtPaymentShare: string | null;
+  debts: DebtRecord[];
   investmentSituation: string | null;
   financialGoal: string | null;
   goalHorizon: string | null;
@@ -212,6 +216,7 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
     city = null,
     incomeRange = null,
     expensesRange = null,
+    expenseCategoryAmounts = {},
     expensesFeeling = null,
     smallExpensesRange = null,
     smallExpensesIntention = null,
@@ -221,6 +226,7 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
     emergencyCoverage = null,
     debtSituation = null,
     debtPaymentShare = null,
+    debts = [],
     investmentSituation = null,
     financialGoal = null,
     goalHorizon = null,
@@ -234,6 +240,10 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
     city,
     incomeRange,
     expensesRange,
+    expenseCategoryAmounts:
+      expenseCategoryAmounts && typeof expenseCategoryAmounts === "object" && !Array.isArray(expenseCategoryAmounts)
+        ? expenseCategoryAmounts
+        : {},
     expensesFeeling,
     smallExpensesRange,
     smallExpensesIntention,
@@ -243,6 +253,7 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
     emergencyCoverage,
     debtSituation,
     debtPaymentShare,
+    debts: Array.isArray(debts) ? debts : [],
     investmentSituation,
     financialGoal,
     goalHorizon,

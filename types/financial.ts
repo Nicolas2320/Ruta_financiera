@@ -1,3 +1,18 @@
+export type DebtPaymentStatus = "on_track" | "sometimes_heavy" | "overdue" | "not_sure";
+
+export type DebtRecord = {
+  id: string;
+  type: string;
+  name?: string | null;
+  lender?: string | null;
+  remainingAmount?: number | null;
+  monthlyPayment: number;
+  status: DebtPaymentStatus;
+  paymentDay?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type OnboardingData = {
   firstName: string;
   lastName: string;
@@ -19,6 +34,7 @@ export type OnboardingData = {
   emergencyCoverage: string | null;
   debtSituation: string | null;
   debtPaymentShare: string | null;
+  debts: DebtRecord[];
   investmentSituation: string | null;
   financialGoal: string | null;
   goalHorizon: string | null;
@@ -215,6 +231,7 @@ export const initialOnboarding: OnboardingData = {
   emergencyCoverage: null,
   debtSituation: null,
   debtPaymentShare: null,
+  debts: [],
   investmentSituation: null,
   financialGoal: null,
   goalHorizon: null,
@@ -243,6 +260,76 @@ function normalizeGoalAmount(value: unknown) {
 
 export function normalizeGoalMonthlyBudget(value: unknown) {
   return normalizeGoalAmount(value);
+}
+
+function normalizeDebtPaymentStatus(value: unknown): DebtPaymentStatus {
+  if (
+    value === "on_track" ||
+    value === "sometimes_heavy" ||
+    value === "overdue" ||
+    value === "not_sure"
+  ) {
+    return value;
+  }
+
+  return "not_sure";
+}
+
+function normalizeDebtString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function normalizePaymentDay(value: unknown) {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 31) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsedDay = Number(value.replace(/\D/g, ""));
+    return Number.isInteger(parsedDay) && parsedDay >= 1 && parsedDay <= 31
+      ? parsedDay
+      : null;
+  }
+
+  return null;
+}
+
+export function normalizeDebtRecords(value: unknown): DebtRecord[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.reduce<DebtRecord[]>((debts, debt, index) => {
+    if (!debt || typeof debt !== "object") {
+      return debts;
+    }
+
+    const rawDebt = debt as Partial<DebtRecord>;
+    const type = normalizeDebtString(rawDebt.type);
+    const monthlyPayment = normalizeGoalAmount(rawDebt.monthlyPayment);
+
+    if (!type || monthlyPayment === null || monthlyPayment <= 0) {
+      return debts;
+    }
+
+    const remainingAmount = normalizeGoalAmount(rawDebt.remainingAmount);
+    const now = new Date().toISOString();
+
+    debts.push({
+      id: normalizeDebtString(rawDebt.id) ?? `debt-${index + 1}`,
+      type,
+      name: normalizeDebtString(rawDebt.name),
+      lender: normalizeDebtString(rawDebt.lender),
+      remainingAmount,
+      monthlyPayment,
+      status: normalizeDebtPaymentStatus(rawDebt.status),
+      paymentDay: normalizePaymentDay(rawDebt.paymentDay),
+      createdAt: normalizeDebtString(rawDebt.createdAt) ?? now,
+      updatedAt: normalizeDebtString(rawDebt.updatedAt) ?? now
+    });
+
+    return debts;
+  }, []);
 }
 
 export function normalizeExpenseCategoryAmounts(
