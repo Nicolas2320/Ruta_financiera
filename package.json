@@ -2,6 +2,7 @@
   "name": "ruta-financiera",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@10.9.8",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -9,16 +10,18 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "export:web": "expo export --platform web --output-dir dist",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "engines": {
-    "node": ">=20.19.4"
+    "node": ">=22.23.1"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-native/js-polyfills": "0.81.5",
-    "@supabase/supabase-js": "^2.108.2",
+    "@supabase/supabase-js": "2.108.2",
     "expo": "54.0.35",
     "expo-asset": "~12.0.13",
     "expo-constants": "~18.0.13",
@@ -35,15 +38,19 @@
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
-    "react-native-url-polyfill": "^3.0.0",
+    "react-native-url-polyfill": "3.0.0",
     "react-native-web": "~0.21.0",
-    "ws": "^8.21.0"
+    "react-native-worklets": "0.5.1",
+    "ws": "8.21.0"
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
-    "@types/ws": "^8.18.1",
+    "@types/react-test-renderer": "19.1.0",
+    "@types/ws": "8.18.1",
+    "@vitest/coverage-v8": "4.1.10",
     "babel-preset-expo": "~54.0.11",
-    "metro": "0.83.3",
-    "typescript": "~5.9.2"
+    "react-test-renderer": "19.1.0",
+    "typescript": "~5.9.2",
+    "vitest": "4.1.10"
   }
 }

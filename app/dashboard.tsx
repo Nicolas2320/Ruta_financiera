@@ -7,7 +7,6 @@ import {
   Bot,
   CalendarCheck,
   ChartColumnIncreasing,
-  CheckCircle2,
   ChevronRight,
   ClipboardCheck,
   Coffee,
@@ -19,10 +18,7 @@ import {
   PencilLine,
   PieChart,
   PiggyBank,
-  ReceiptText,
-  Settings,
   ShieldCheck,
-  Target,
   TrendingUp,
   UserRound
 } from "lucide-react-native";
@@ -52,9 +48,6 @@ import {
   getMonthlyPlanPeriodKey,
   getMonthlyPlanPriorityKey,
   getMonthlyPlanProgressKey,
-  goalNeedsAmount,
-  hasLowEmergencyCoverage,
-  type MonthlyAction,
   type MonthlyGoalContext
 } from "../utils/monthlyPlan";
 
@@ -113,123 +106,6 @@ function getRoundedMonthsLabel(value: number) {
   return value < 10 ? value.toFixed(1).replace(".0", "") : Math.round(value).toString();
 }
 
-function getEmergencyStatus(emergencyCoverage: string | null): {
-  state: string;
-  text: string;
-  tone: Tone;
-} {
-  if (emergencyCoverage === "No podría cubrirlos" || emergencyCoverage === "Menos de 1 mes") {
-    return {
-      state: "Prioridad alta",
-      text: "Construir una base para imprevistos puede darte más tranquilidad.",
-      tone: "warning"
-    };
-  }
-
-  if (emergencyCoverage === "1 – 3 meses") {
-    return {
-      state: "Base inicial",
-      text: "Ya tienes una base, pero podrías fortalecerla.",
-      tone: "support"
-    };
-  }
-
-  if (emergencyCoverage === "3 – 6 meses" || emergencyCoverage === "Más de 6 meses") {
-    return {
-      state: "Cobertura saludable",
-      text: "Tienes una protección más sólida frente a imprevistos.",
-      tone: "support"
-    };
-  }
-
-  return {
-    state: "Por calcular",
-    text: "Puedes empezar calculando tus gastos esenciales.",
-    tone: "neutral"
-  };
-}
-
-function getEmergencyStatusFromExactValues({
-  currentSavings,
-  monthlyExpenses
-}: {
-  currentSavings: number | null;
-  monthlyExpenses: number | null;
-}): {
-  state: string;
-  text: string;
-  tone: Tone;
-} | null {
-  if (currentSavings === null) {
-    return null;
-  }
-
-  if (monthlyExpenses === null || monthlyExpenses <= 0) {
-    return {
-      state: "Dato ingresado",
-      text: "Usaremos tu ahorro actual ingresado como base para estimar tu fondo de emergencia.",
-      tone: "primary"
-    };
-  }
-
-  const months = currentSavings / monthlyExpenses;
-  const monthsLabel = getRoundedMonthsLabel(months);
-
-  if (months < 1) {
-    return {
-      state: "Base por fortalecer",
-      text: `Con tus datos ingresados, tu ahorro actual cubriría cerca de ${monthsLabel} meses de gasto mensual.`,
-      tone: "warning"
-    };
-  }
-
-  if (months < 3) {
-    return {
-      state: "Base inicial",
-      text: `Con tus datos ingresados, tu ahorro actual cubriría cerca de ${monthsLabel} meses de gasto mensual.`,
-      tone: "support"
-    };
-  }
-
-  return {
-    state: "Base más clara",
-    text: `Con tus datos ingresados, tu ahorro actual cubriría cerca de ${monthsLabel} meses de gasto mensual.`,
-    tone: "support"
-  };
-}
-
-function getGoalStatus({
-  financialGoal,
-  goalHorizon,
-  goalAmountRange,
-  emergencyCoverage,
-  hasGoalTargetAmount
-}: {
-  financialGoal: string | null;
-  goalHorizon: string | null;
-  goalAmountRange: string | null;
-  emergencyCoverage: string | null;
-  hasGoalTargetAmount?: boolean;
-}) {
-  if (financialGoal === "Empezar a invertir" && hasLowEmergencyCoverage(emergencyCoverage)) {
-    return "Primero fortalece tu base financiera";
-  }
-
-  if (!hasGoalTargetAmount && goalNeedsAmount(goalAmountRange)) {
-    return "Falta concretar una cifra";
-  }
-
-  if (hasGoalTargetAmount) {
-    return "Monto más claro";
-  }
-
-  if (financialGoal && goalHorizon && goalAmountRange) {
-    return "Lista para revisar escenarios";
-  }
-
-  return "En definición";
-}
-
 function getImprovePlanDashboardText(count: number) {
   if (count === 0) {
     return "Agrega 4 datos opcionales para calcular mejor tu margen mensual, fondo de emergencia y avance hacia tu meta.";
@@ -252,22 +128,6 @@ function getImprovePlanActionLabel(count: number) {
   }
 
   return "Editar datos";
-}
-
-function getActionTone(action: MonthlyAction): Tone {
-  if (action.category === "Ahorro") {
-    return "support";
-  }
-
-  if (action.category === "Gastos hormiga" || action.category === "Meta") {
-    return "purple";
-  }
-
-  if (action.category === "Gastos" || action.category === "Deudas") {
-    return "warning";
-  }
-
-  return "primary";
 }
 
 function getToneColors(tone: Tone) {
@@ -533,59 +393,6 @@ function MonthlyPlanCard({
             <ChevronRight color={colors.surface} size={20} strokeWidth={2.5} />
           </Pressable>
         </View>
-      </View>
-    </View>
-  );
-}
-
-function NextActionCard({
-  action,
-  onRegisterProgress
-}: {
-  action: MonthlyAction | undefined;
-  onRegisterProgress: () => void;
-}) {
-  return (
-    <View style={styles.nextActionCard}>
-      <IconBubble
-        icon={<CalendarCheck color="#D97706" size={48} strokeWidth={2.4} />}
-        size="large"
-        tone="warning"
-      />
-      {action ? (
-        <View style={styles.nextActionBody}>
-          <Text style={styles.kickerWarning}>Próxima acción</Text>
-          <Text style={styles.nextActionTitle}>{action.title}</Text>
-          <Text style={styles.text}>{action.description}</Text>
-          <View style={styles.chipRow}>
-            <Chip label={action.category} tone={getActionTone(action)} />
-            <Chip label={`Dificultad: ${action.difficulty}`} tone={action.difficulty === "Baja" ? "support" : "warning"} />
-          </View>
-          <View style={styles.impactInline}>
-            <Text style={styles.impactInlineLabel}>Impacto estimado</Text>
-            <Text style={styles.impactInlineText}>{action.estimatedImpact}</Text>
-          </View>
-        </View>
-      ) : (
-        <View style={styles.nextActionBody}>
-          <Text style={styles.kickerPrimary}>Plan completado</Text>
-          <Text style={styles.nextActionTitle}>Tus 3 acciones están listas</Text>
-          <Text style={styles.text}>
-            Completaste tus acciones de este mes. Puedes revisar tu plan o ajustar tus respuestas.
-          </Text>
-        </View>
-      )}
-      <View style={styles.nextActionControls}>
-        {action ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={onRegisterProgress}
-            style={({ pressed }) => [styles.primaryPillButton, pressed && styles.pressed]}
-          >
-            <CheckCircle2 color={colors.surface} size={20} strokeWidth={2.4} />
-            <Text style={styles.primaryPillButtonText}>Registrar avance</Text>
-          </Pressable>
-        ) : null}
       </View>
     </View>
   );
@@ -1307,12 +1114,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
   },
-  kickerWarning: {
-    color: "#B45309",
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
   heroTitle: {
     color: colors.text,
     fontSize: typography.cardTitle,
@@ -1446,70 +1247,6 @@ const styles = StyleSheet.create({
   },
   monthlyPlanActions: {
     alignItems: "flex-start"
-  },
-  nextActionCard: {
-    ...shadows.card,
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.lg,
-    padding: spacing.lg
-  },
-  nextActionBody: {
-    flexBasis: 240,
-    flex: 1,
-    gap: spacing.xs,
-    minWidth: 0
-  },
-  nextActionTitle: {
-    color: colors.text,
-    fontSize: typography.sectionTitle,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.sectionTitle
-  },
-  nextActionControls: {
-    alignItems: "flex-end",
-    flexBasis: 150,
-    flexGrow: 0,
-    minWidth: 150
-  },
-  primaryPillButton: {
-    alignItems: "center",
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-    flexDirection: "row",
-    gap: spacing.sm,
-    justifyContent: "center",
-    minHeight: 48,
-    paddingHorizontal: spacing.md
-  },
-  primaryPillButtonText: {
-    color: colors.surface,
-    fontSize: typography.button,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.button
-  },
-  impactInline: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.xs,
-    marginTop: spacing.xs
-  },
-  impactInlineLabel: {
-    color: colors.support,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  impactInlineText: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.caption
   },
   twoColumnGrid: {
     flexDirection: "row",

@@ -359,22 +359,6 @@ function getStatusLabel(status: ActionProgressStatus) {
   return "Pendiente";
 }
 
-function getStatusTone(status: ActionProgressStatus): ChipTone {
-  if (status === "completed") {
-    return "support";
-  }
-
-  if (status === "in_progress") {
-    return "primary";
-  }
-
-  if (status === "skipped") {
-    return "neutral";
-  }
-
-  return "warning";
-}
-
 function getEvidenceInputLabel(config: EvidenceConfig) {
   if (config.type === "amount") {
     return "Monto en COP";

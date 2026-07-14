@@ -347,60 +347,6 @@ function getProfileExactValues(profile: FinancialValueProfile) {
   return profile.exactValues ?? profile.exact_values ?? {};
 }
 
-export function getPreferredMonthlyIncome(profile: FinancialValueProfile) {
-  const exactValue = getProfileExactValues(profile).monthlyIncome;
-
-  if (hasExactFinancialValue(exactValue)) {
-    return exactValue;
-  }
-
-  return getIncomeRangeEstimate(profile.onboarding?.incomeRange ?? null).midpoint;
-}
-
-export function getPreferredMonthlyExpenses(profile: FinancialValueProfile) {
-  const exactValue = getProfileExactValues(profile).monthlyExpenses;
-
-  if (hasExactFinancialValue(exactValue)) {
-    return exactValue;
-  }
-
-  return getExpenseRangeEstimate(profile.onboarding?.expensesRange ?? null).midpoint;
-}
-
-export function getPreferredCurrentSavings(profile: FinancialValueProfile) {
-  const exactValue = getProfileExactValues(profile).currentSavings;
-
-  if (hasExactFinancialValue(exactValue)) {
-    return exactValue;
-  }
-
-  return getSavingsRangeEstimate(profile.onboarding?.savingsRange ?? null).midpoint;
-}
-
-export function getPreferredGoalTargetAmount(profile: FinancialValueProfile) {
-  const primaryGoal = profile.onboarding
-    ? getPrimaryFinancialGoal({ ...initialOnboarding, ...profile.onboarding })
-    : null;
-
-  if (hasExactFinancialValue(primaryGoal?.targetAmount)) {
-    return primaryGoal.targetAmount;
-  }
-
-  return getGoalAmountRangeEstimate(
-    primaryGoal?.amountRange ?? profile.onboarding?.goalAmountRange ?? null
-  ).midpoint;
-}
-
-export function getPreferredSmallExpenses(profile: FinancialValueProfile) {
-  const exactValue = getProfileExactValues(profile).smallExpenses;
-
-  if (hasExactFinancialValue(exactValue)) {
-    return exactValue;
-  }
-
-  return getSmallExpenseRangeEstimate(profile.onboarding?.smallExpensesRange ?? null).midpoint;
-}
-
 function getExactDisplay(
   label: string,
   value: number | undefined,
@@ -494,18 +440,4 @@ export function getGoalTargetAmountDisplay(
       "Dato ingresado para estimar tu avance hacia la meta."
     ) ?? getRangeDisplay("Cifra aproximada", primaryGoal?.amountRange ?? profile.onboarding?.goalAmountRange)
   );
-}
-
-export function getFinancialDataSourceLabel(profile: FinancialValueProfile) {
-  const exactValuesCount = getExactValuesCount(getProfileExactValues(profile));
-
-  if (exactValuesCount === 0) {
-    return "Usamos los rangos seleccionados como una primera referencia.";
-  }
-
-  if (exactValuesCount === exactFinancialValueKeys.length) {
-    return "Usamos tus datos ingresados para una lectura más clara.";
-  }
-
-  return "Usamos tus datos ingresados y completamos con rangos cuando hace falta.";
 }

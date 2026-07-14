@@ -26,14 +26,21 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.19.4
+          node-version: 22.23.1
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
+
+      - name: Verify registry signatures
+        run: npm audit signatures
+        continue-on-error: true
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Unit and authentication tests
+        run: npm test
 
       - name: Export web app
         run: npm run export:web

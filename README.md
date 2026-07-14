@@ -15,7 +15,7 @@ El MVP busca ayudar al usuario a ingresar informacion financiera aproximada, ent
 
 ## Requisitos
 
-- Node.js `>=20.19.4`
+- Node.js `>=22.23.1`
 - npm
 - Expo Go compatible con SDK 54
 
@@ -45,8 +45,20 @@ npm run web
 
 ```bash
 npm run typecheck
+npm test
+npm run test:coverage
 npx expo install --check
 ```
+
+Las pruebas de base de datos requieren Docker y usan un PostgreSQL local aislado:
+
+```bash
+npx supabase start -x edge-runtime,gotrue,imgproxy,kong,logflare,mailpit,postgres-meta,postgrest,realtime,storage-api,studio,supavisor,vector --yes
+npx supabase test db supabase/tests/database/auth_rls.test.sql --local
+npx supabase stop --no-backup
+```
+
+Los casos pgTAP se ejecutan dentro de una transaccion y revierten sus datos al finalizar.
 
 ## Web y GitHub Pages
 
@@ -80,7 +92,13 @@ https://Nicolas2320.github.io/Ruta_financiera/
 La app puede persistir el onboarding y el progreso del plan mensual en Supabase.
 
 1. Crea un proyecto en Supabase.
-2. Ejecuta el SQL de `docs/supabase-schema.sql` en el SQL Editor.
+2. Vincula el proyecto y aplica las migraciones versionadas de `supabase/migrations/`:
+
+```bash
+npx supabase link
+npx supabase db push
+```
+
 3. Copia `.env.example` a `.env` y completa:
 
 ```bash
