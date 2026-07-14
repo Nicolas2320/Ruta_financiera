@@ -5,13 +5,12 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState
 } from "react";
 
 import { useAuth } from "./AuthContext";
+import { useFinancialProfile } from "./FinancialProfileContext";
 import {
-  fetchFinancialProfile,
   saveExactValues as persistExactValues,
   saveOnboardingData
 } from "../lib/financialProfile";
@@ -49,14 +48,18 @@ function getEmptyOnboarding(): OnboardingData {
 
 export function OnboardingProvider({ children }: PropsWithChildren) {
   const { isAuthReady, isSupabaseConfigured, user } = useAuth();
+  const {
+    financialProfile,
+    financialProfileLoadError,
+    financialProfileLoadStatus,
+    financialProfileUserId
+  } = useFinancialProfile();
   const [onboarding, setOnboarding] = useState<OnboardingData>(initialOnboarding);
   const [exactValues, setExactValues] = useState<ExactFinancialValues>({});
   const [financialProfileExists, setFinancialProfileExists] = useState(false);
   const [onboardingSyncStatus, setOnboardingSyncStatus] =
     useState<OnboardingContextValue["onboardingSyncStatus"]>("idle");
   const [onboardingSyncError, setOnboardingSyncError] = useState<string | null>(null);
-  const loadedUserIdRef = useRef<string | null>(null);
-  const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
   const userId = user?.id ?? null;
 
   useEffect(() => {
@@ -65,8 +68,6 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     }
 
     if (!user) {
-      loadedUserIdRef.current = null;
-      setLoadedUserId(null);
       setOnboarding(initialOnboarding);
       setExactValues({});
       setFinancialProfileExists(false);
@@ -75,45 +76,55 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    let isMounted = true;
-
-    if (loadedUserIdRef.current !== user.id) {
+    if (!isSupabaseConfigured || financialProfileLoadStatus === "not-configured") {
       setOnboarding(initialOnboarding);
       setExactValues({});
       setFinancialProfileExists(false);
+      setOnboardingSyncStatus("not-configured");
+      setOnboardingSyncError(null);
+      return;
     }
 
-    setOnboardingSyncStatus("loading");
-    setOnboardingSyncError(null);
+    if (
+      financialProfileLoadStatus === "loading" ||
+      financialProfileLoadStatus === "idle" ||
+      financialProfileUserId !== user.id
+    ) {
+      if (financialProfileUserId !== user.id) {
+        setOnboarding(initialOnboarding);
+        setExactValues({});
+        setFinancialProfileExists(false);
+      }
 
-    fetchFinancialProfile(user.id)
-      .then((profile) => {
-        if (!isMounted) {
-          return;
-        }
+      setOnboardingSyncStatus("loading");
+      setOnboardingSyncError(null);
+      return;
+    }
 
-        setOnboarding(profile.onboarding);
-        setExactValues(profile.exactValues);
-        setFinancialProfileExists(profile.profileExists);
-        loadedUserIdRef.current = user.id;
-        setLoadedUserId(user.id);
-        setOnboardingSyncStatus("saved");
-      })
-      .catch((error: Error) => {
-        if (!isMounted) {
-          return;
-        }
+    if (financialProfileLoadStatus === "error") {
+      setOnboardingSyncStatus("error");
+      setOnboardingSyncError(
+        financialProfileLoadError ?? "No pudimos recuperar tus datos financieros."
+      );
+      return;
+    }
 
-        loadedUserIdRef.current = user.id;
-        setLoadedUserId(user.id);
-        setOnboardingSyncStatus("error");
-        setOnboardingSyncError(error.message);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isAuthReady, isSupabaseConfigured, userId]);
+    if (financialProfileLoadStatus === "ready") {
+      setOnboarding(financialProfile.onboarding);
+      setExactValues(financialProfile.exactValues);
+      setFinancialProfileExists(financialProfile.profileExists);
+      setOnboardingSyncStatus("saved");
+      setOnboardingSyncError(null);
+    }
+  }, [
+    financialProfile,
+    financialProfileLoadError,
+    financialProfileLoadStatus,
+    financialProfileUserId,
+    isAuthReady,
+    isSupabaseConfigured,
+    userId
+  ]);
 
   const updateOnboarding = useCallback(
     (data: Partial<OnboardingData>) => {
@@ -227,9 +238,21 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     }
   }, [isSupabaseConfigured, user]);
 
-  const isLoadedForCurrentUser = !userId || loadedUserId === userId;
+  const isLoadedForCurrentUser = userId
+    ? financialProfileLoadStatus === "ready" && financialProfileUserId === userId
+    : financialProfileUserId === null;
   const effectiveOnboardingSyncStatus =
-    userId && !isLoadedForCurrentUser ? "loading" : onboardingSyncStatus;
+    userId && !isLoadedForCurrentUser
+      ? financialProfileLoadStatus === "error"
+        ? "error"
+        : financialProfileLoadStatus === "not-configured"
+          ? "not-configured"
+          : "loading"
+      : onboardingSyncStatus;
+  const effectiveOnboardingSyncError =
+    userId && financialProfileLoadStatus === "error"
+      ? financialProfileLoadError
+      : onboardingSyncError;
 
   const value = useMemo(
     () => ({
@@ -240,7 +263,7 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
         financialProfileExists &&
         getHasCompletedOnboarding(onboarding),
       onboarding,
-      onboardingSyncError,
+      onboardingSyncError: effectiveOnboardingSyncError,
       onboardingSyncStatus: effectiveOnboardingSyncStatus,
       resetFinancialData,
       saveExactValues,
@@ -249,10 +272,10 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     [
       exactValues,
       effectiveOnboardingSyncStatus,
+      effectiveOnboardingSyncError,
       financialProfileExists,
       isLoadedForCurrentUser,
       onboarding,
-      onboardingSyncError,
       resetFinancialData,
       saveExactValues,
       updateOnboarding
