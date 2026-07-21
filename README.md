@@ -12,6 +12,8 @@ El MVP busca ayudar al usuario a ingresar informacion financiera aproximada, ent
 - Expo Router
 - React Native StyleSheet
 - Lucide React Native
+- Supabase Auth, Postgres y Edge Functions
+- Vitest y pgTAP
 
 ## Requisitos
 
@@ -44,17 +46,20 @@ npm run web
 ## Validacion
 
 ```bash
-npm run typecheck
-npm test
+npm run check
 npm run test:coverage
+npm run test:edge
 npx expo install --check
+npx expo-doctor
 ```
+
+`npm run check` ejecuta TypeScript, las pruebas unitarias y el export estatico web.
 
 Las pruebas de base de datos requieren Docker y usan un PostgreSQL local aislado:
 
 ```bash
 npx supabase start -x edge-runtime,gotrue,imgproxy,kong,logflare,mailpit,postgres-meta,postgrest,realtime,storage-api,studio,supavisor,vector --yes
-npx supabase test db supabase/tests/database/auth_rls.test.sql --local
+npx supabase test db --local
 npx supabase stop --no-backup
 ```
 
@@ -106,6 +111,11 @@ EXPO_PUBLIC_SUPABASE_URL=...
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
 ```
 
+La Edge Function `assistant` mantiene `OPENAI_API_KEY`, `OPENAI_MODEL`,
+`ASSISTANT_DAILY_LIMIT` y `ASSISTANT_USAGE_TIME_ZONE` como secrets del servidor.
+Las llaves internas de Supabase son proporcionadas automaticamente por la plataforma;
+no deben copiarse al cliente ni guardarse en el repositorio.
+
 Para pruebas, puedes crear un usuario desde `/auth`. Si Supabase exige confirmacion por correo, confirma el email o desactiva temporalmente esa opcion en el proyecto de pruebas.
 
 ### Naming convention
@@ -116,25 +126,38 @@ Para pruebas, puedes crear un usuario desde `/auth`. Si Supabase exige confirmac
 
 ## Pantallas actuales
 
-- `/`: Pantalla de bienvenida.
-- `/privacy`: Placeholder de privacidad y confianza.
-- `/demo`: Placeholder de demo.
+- `/` y `/privacy`: bienvenida, privacidad y entrada al recorrido.
+- `/auth`: registro e inicio de sesion.
+- `/dashboard`: resumen financiero principal.
+- `/spending`, `/expenses` y `/debts`: gastos y deudas.
+- `/goals-overview`, `/action-plan` y `/simulation`: metas, plan y escenarios.
+- `/assistant`: asistente financiero educativo.
+- `/settings`: ajustes y gestion de datos.
 
 ## Estructura principal
 
 ```text
 app/
   _layout.tsx
+  assistant.tsx
+  dashboard.tsx
   index.tsx
   privacy.tsx
-  demo.tsx
 components/
-  BenefitCard.tsx
-  PrimaryButton.tsx
+  navigation/
+  ui/
 constants/
   theme.ts
+context/
+lib/
+supabase/
+tests/
+utils/
 ```
 
 ## Notas del MVP
 
-La pantalla de bienvenida no solicita datos reales, no implementa login, backend, pagos ni conexion bancaria. El CTA principal navega a `/privacy` para continuar con la Pantalla 2 del flujo.
+El MVP implementa autenticacion, persistencia del perfil financiero, calculos y planes
+educativos. No implementa pagos, movimientos de dinero ni conexion bancaria. El
+asistente explica resultados calculados por la app y no reemplaza asesoria financiera
+profesional.

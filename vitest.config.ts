@@ -8,6 +8,7 @@ export default defineConfig({
     coverage: {
       include: [
         "context/AuthContext.tsx",
+        "supabase/functions/assistant/handler.ts",
         "utils/debtCalculations.ts",
         "utils/financialCalculations.ts",
         "utils/goalPlanning.ts"
