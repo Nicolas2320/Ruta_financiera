@@ -2,7 +2,7 @@ import type { ImageSourcePropType, ImageStyle, StyleProp } from "react-native";
 import { ShieldCheck } from "lucide-react-native";
 import { Image, StyleSheet, Text, View } from "react-native";
 
-import { colors, radius, shadows, spacing, typography } from "../../constants/theme";
+import { colors, shadows, spacing, typography } from "../../constants/theme";
 
 type HeroInfoCardProps = {
   image: ImageSourcePropType;

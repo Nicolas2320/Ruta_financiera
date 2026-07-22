@@ -1,6 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { Asset } from "expo-asset";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -26,12 +25,14 @@ import {
   ShoppingBag,
   Users
 } from "lucide-react-native";
-import type { ViewStyle } from "react-native";
-import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
-import { SpendingSectionTabs } from "../components/SpendingSectionTabs";
+import {
+  SpendingSectionContent,
+  SpendingSectionTabs
+} from "../components/SpendingSectionTabs";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
@@ -45,15 +46,6 @@ import {
   type MonthlyPlanData,
   type MonthlyPlanMetrics
 } from "../utils/monthlyPlan";
-
-const expensesCupReceipt = require("../assets/illustrations/expenses-cup-receipt.png");
-const expensesCupReceiptUri = Asset.fromModule(expensesCupReceipt).uri;
-const webHeroImageStyle = {
-  backgroundImage: `url(${expensesCupReceiptUri})`,
-  backgroundPosition: "center",
-  backgroundRepeat: "no-repeat",
-  backgroundSize: "contain"
-} as unknown as ViewStyle;
 
 type IconProps = {
   color?: string;
@@ -835,21 +827,6 @@ function CategoryAmountRow({
   );
 }
 
-function HeroIllustration() {
-  if (Platform.OS === "web") {
-    return <View accessibilityRole="image" style={[styles.heroImage, webHeroImageStyle]} />;
-  }
-
-  return (
-    <Image
-      accessibilityIgnoresInvertColors
-      resizeMode="contain"
-      source={expensesCupReceipt}
-      style={styles.heroImage}
-    />
-  );
-}
-
 function EmptyState({
   text,
   actionLabel,
@@ -1020,6 +997,7 @@ export default function SpendingScreen() {
 
           <SpendingSectionTabs activeTab="spending" />
 
+          <SpendingSectionContent activeTab="spending">
           <View style={styles.heroCard}>
             <View style={styles.heroTextGroup}>
               <View style={styles.heroTopRow}>
@@ -1031,7 +1009,6 @@ export default function SpendingScreen() {
               </Text>
               <Text style={styles.heroInsight}>{getQuickReadText(metrics)}</Text>
             </View>
-            <HeroIllustration />
           </View>
 
           <View style={styles.comparisonCard}>
@@ -1234,6 +1211,7 @@ export default function SpendingScreen() {
             ) : null}
           </SectionCard>
 
+          </SpendingSectionContent>
         </View>
       </ScrollView>
 
@@ -1296,21 +1274,17 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     ...shadows.card,
-    alignItems: "center",
+    alignItems: "stretch",
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radius.lg,
     borderWidth: 1,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.lg,
     padding: spacing.lg
   },
   heroTextGroup: {
-    flexBasis: 260,
-    flex: 1,
     gap: spacing.xs,
-    minWidth: 0
+    minWidth: 0,
+    width: "100%"
   },
   heroTopRow: {
     flexDirection: "row",
@@ -1341,10 +1315,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.body,
     marginTop: spacing.xs
-  },
-  heroImage: {
-    height: 132,
-    width: 132
   },
   comparisonCard: {
     ...shadows.card,

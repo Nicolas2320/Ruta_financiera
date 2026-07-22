@@ -504,14 +504,6 @@ export default function SmallExpensesScreen() {
   );
 }
 
-function NumberBadge({ value }: { value: number }) {
-  return (
-    <View style={styles.numberBadge}>
-      <Text style={styles.numberBadgeText}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: "#F3F7FC",
@@ -550,20 +542,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.sm,
     padding: spacing.md
-  },
-  numberBadge: {
-    alignItems: "center",
-    backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    height: 28,
-    justifyContent: "center",
-    width: 28
-  },
-  numberBadgeText: {
-    color: colors.surface,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
   },
   questionTitle: {
     color: colors.text,

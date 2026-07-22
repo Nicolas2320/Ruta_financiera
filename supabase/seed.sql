@@ -1,0 +1,1 @@
+-- Intentionally empty. Automated tests create isolated data inside transactions.

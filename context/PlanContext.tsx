@@ -5,12 +5,12 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState
 } from "react";
 
 import { useAuth } from "./AuthContext";
-import { fetchFinancialProfile, saveCompletedActions } from "../lib/financialProfile";
+import { useFinancialProfile } from "./FinancialProfileContext";
+import { saveCompletedActions } from "../lib/financialProfile";
 import {
   createActionProgressRecord,
   isActionProgressCompleted,
@@ -32,12 +32,16 @@ const PlanContext = createContext<PlanContextValue | null>(null);
 
 export function PlanProvider({ children }: PropsWithChildren) {
   const { isAuthReady, isSupabaseConfigured, user } = useAuth();
+  const {
+    financialProfile,
+    financialProfileLoadError,
+    financialProfileLoadStatus,
+    financialProfileUserId
+  } = useFinancialProfile();
   const [completedActions, setCompletedActions] = useState<CompletedActionsState>({});
   const [planSyncStatus, setPlanSyncStatus] =
     useState<PlanContextValue["planSyncStatus"]>("idle");
   const [planSyncError, setPlanSyncError] = useState<string | null>(null);
-  const loadedUserIdRef = useRef<string | null>(null);
-  const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
   const userId = user?.id ?? null;
 
   useEffect(() => {
@@ -46,49 +50,55 @@ export function PlanProvider({ children }: PropsWithChildren) {
     }
 
     if (!user) {
-      loadedUserIdRef.current = null;
-      setLoadedUserId(null);
       setCompletedActions({});
       setPlanSyncStatus(isSupabaseConfigured ? "idle" : "not-configured");
       setPlanSyncError(null);
       return;
     }
 
-    let isMounted = true;
-
-    if (loadedUserIdRef.current !== user.id) {
+    if (!isSupabaseConfigured || financialProfileLoadStatus === "not-configured") {
       setCompletedActions({});
+      setPlanSyncStatus("not-configured");
+      setPlanSyncError(null);
+      return;
     }
 
-    setPlanSyncStatus("loading");
-    setPlanSyncError(null);
+    if (
+      financialProfileLoadStatus === "loading" ||
+      financialProfileLoadStatus === "idle" ||
+      financialProfileUserId !== user.id
+    ) {
+      if (financialProfileUserId !== user.id) {
+        setCompletedActions({});
+      }
 
-    fetchFinancialProfile(user.id)
-      .then((profile) => {
-        if (!isMounted) {
-          return;
-        }
+      setPlanSyncStatus("loading");
+      setPlanSyncError(null);
+      return;
+    }
 
-        setCompletedActions(profile.completedActions);
-        loadedUserIdRef.current = user.id;
-        setLoadedUserId(user.id);
-        setPlanSyncStatus("saved");
-      })
-      .catch((error: Error) => {
-        if (!isMounted) {
-          return;
-        }
+    if (financialProfileLoadStatus === "error") {
+      setPlanSyncStatus("error");
+      setPlanSyncError(
+        financialProfileLoadError ?? "No pudimos recuperar el avance de tu plan."
+      );
+      return;
+    }
 
-        loadedUserIdRef.current = user.id;
-        setLoadedUserId(user.id);
-        setPlanSyncStatus("error");
-        setPlanSyncError(error.message);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isAuthReady, isSupabaseConfigured, userId]);
+    if (financialProfileLoadStatus === "ready") {
+      setCompletedActions(financialProfile.completedActions);
+      setPlanSyncStatus("saved");
+      setPlanSyncError(null);
+    }
+  }, [
+    financialProfile,
+    financialProfileLoadError,
+    financialProfileLoadStatus,
+    financialProfileUserId,
+    isAuthReady,
+    isSupabaseConfigured,
+    userId
+  ]);
 
   const savePlanProgress = useCallback(
     (nextActions: CompletedActionsState) => {
@@ -198,13 +208,26 @@ export function PlanProvider({ children }: PropsWithChildren) {
     }
   }, [isSupabaseConfigured, user]);
 
+  const isLoadedForCurrentUser = userId
+    ? financialProfileLoadStatus === "ready" && financialProfileUserId === userId
+    : financialProfileUserId === null;
   const effectivePlanSyncStatus =
-    userId && loadedUserId !== userId ? "loading" : planSyncStatus;
+    userId && !isLoadedForCurrentUser
+      ? financialProfileLoadStatus === "error"
+        ? "error"
+        : financialProfileLoadStatus === "not-configured"
+          ? "not-configured"
+          : "loading"
+      : planSyncStatus;
+  const effectivePlanSyncError =
+    userId && financialProfileLoadStatus === "error"
+      ? financialProfileLoadError
+      : planSyncError;
 
   const value = useMemo(
     () => ({
       completedActions,
-      planSyncError,
+      planSyncError: effectivePlanSyncError,
       planSyncStatus: effectivePlanSyncStatus,
       toggleActionCompleted,
       setActionCompleted,
@@ -214,7 +237,7 @@ export function PlanProvider({ children }: PropsWithChildren) {
     [
       completedActions,
       effectivePlanSyncStatus,
-      planSyncError,
+      effectivePlanSyncError,
       toggleActionCompleted,
       setActionCompleted,
       updateActionProgress,

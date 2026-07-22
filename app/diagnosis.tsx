@@ -315,30 +315,6 @@ function getMainPriority(metrics: FinancialMetrics): MainPriority {
   };
 }
 
-function getEmergencyMessage(emergencyCoverage: string | null) {
-  if (emergencyCoverage === "No podría cubrirlos" || emergencyCoverage === "Menos de 1 mes") {
-    return "Tu fondo de emergencia parece ser una prioridad inicial. Tener una base para imprevistos puede ayudarte a evitar deudas inesperadas.";
-  }
-
-  if (emergencyCoverage === "1 – 3 meses") {
-    return "Ya tienes una base, pero podrías fortalecerla para cubrir más imprevistos.";
-  }
-
-  if (emergencyCoverage === "3 – 6 meses") {
-    return "Tienes una cobertura saludable frente a imprevistos.";
-  }
-
-  if (emergencyCoverage === "Más de 6 meses") {
-    return "Tienes una cobertura fuerte frente a imprevistos.";
-  }
-
-  if (emergencyCoverage === "No estoy seguro") {
-    return "Podrías empezar calculando tus gastos esenciales mensuales.";
-  }
-
-  return "No tenemos suficiente información para orientar esta parte todavía.";
-}
-
 function getSmallExpensesMessages(onboarding: OnboardingSnapshot, metrics: FinancialMetrics) {
   if (onboarding.hasSmallExpenses === "Sí") {
     const categories =

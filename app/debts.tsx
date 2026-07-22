@@ -32,7 +32,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
-import { SpendingSectionTabs } from "../components/SpendingSectionTabs";
+import {
+  SpendingSectionContent,
+  SpendingSectionTabs
+} from "../components/SpendingSectionTabs";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import type { DebtPaymentStatus, DebtRecord } from "../types/financial";
@@ -612,71 +615,6 @@ function StatusButton({
   );
 }
 
-function MonthYearPicker({
-  value,
-  onChange
-}: {
-  value: MonthYearValue;
-  onChange: (value: MonthYearValue) => void;
-}) {
-  return (
-    <View style={styles.monthYearPicker}>
-      <View style={styles.monthYearHeader}>
-        <IconBubble
-          icon={<CalendarDays color={colors.primary} size={20} strokeWidth={2.4} />}
-          size="small"
-        />
-        <View style={styles.monthYearTitleGroup}>
-          <InputLabel label="Primer mes de pago" optional />
-          <Text style={styles.monthYearValue}>{formatMonthYear(value)}</Text>
-        </View>
-        <View style={styles.yearControls}>
-          <Pressable
-            accessibilityLabel="Año anterior"
-            accessibilityRole="button"
-            onPress={() => onChange({ ...value, year: value.year - 1 })}
-            style={({ pressed }) => [styles.yearButton, pressed && styles.pressed]}
-          >
-            <ChevronLeft color={colors.primary} size={18} strokeWidth={2.5} />
-          </Pressable>
-          <Pressable
-            accessibilityLabel="Año siguiente"
-            accessibilityRole="button"
-            onPress={() => onChange({ ...value, year: value.year + 1 })}
-            style={({ pressed }) => [styles.yearButton, pressed && styles.pressed]}
-          >
-            <ChevronRight color={colors.primary} size={18} strokeWidth={2.5} />
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.monthGrid}>
-        {monthLabels.map((monthLabel, monthIndex) => {
-          const selected = value.month === monthIndex;
-
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              key={monthLabel}
-              onPress={() => onChange({ ...value, month: monthIndex })}
-              style={({ pressed }) => [
-                styles.monthButton,
-                selected && styles.monthButtonSelected,
-                pressed && styles.pressed
-              ]}
-            >
-              <Text style={[styles.monthButtonText, selected && styles.monthButtonTextSelected]}>
-                {monthLabel.slice(0, 3)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
 function MonthYearField({
   value,
   onPress
@@ -1216,6 +1154,7 @@ export default function DebtsScreen() {
 
           <SpendingSectionTabs activeTab="debts" />
 
+          <SpendingSectionContent activeTab="debts">
           <View style={styles.heroCard}>
             <View style={styles.heroTextGroup}>
               <Text style={styles.heroKicker}>Pagas al mes en deudas</Text>
@@ -1237,10 +1176,6 @@ export default function DebtsScreen() {
                 </Text>
               </View>
             </View>
-            <IconBubble
-              icon={<WalletCards color={colors.primary} size={44} strokeWidth={2.4} />}
-              size="large"
-            />
           </View>
 
           <View style={styles.summaryGrid}>
@@ -1414,6 +1349,7 @@ export default function DebtsScreen() {
               </View>
             </View>
           </SectionCard>
+          </SpendingSectionContent>
         </View>
       </ScrollView>
 
@@ -1548,21 +1484,17 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     ...shadows.card,
-    alignItems: "center",
+    alignItems: "stretch",
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radius.lg,
     borderWidth: 1,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.lg,
     padding: spacing.lg
   },
   heroTextGroup: {
-    flexBasis: 260,
-    flex: 1,
     gap: spacing.xs,
-    minWidth: 0
+    minWidth: 0,
+    width: "100%"
   },
   heroTopRow: {
     flexDirection: "row",
@@ -1909,32 +1841,6 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
-  },
-  monthYearPicker: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexBasis: 220,
-    flexGrow: 1,
-    gap: spacing.sm,
-    padding: spacing.md
-  },
-  monthYearHeader: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: spacing.sm
-  },
-  monthYearTitleGroup: {
-    flex: 1,
-    gap: spacing.xs,
-    minWidth: 0
-  },
-  monthYearValue: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
   },
   yearControls: {
     alignItems: "center",

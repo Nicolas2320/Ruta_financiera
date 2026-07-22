@@ -12,7 +12,7 @@ type IconProps = {
   strokeWidth?: number;
 };
 
-type Route = Parameters<ReturnType<typeof useRouter>["push"]>[0];
+type Route = Parameters<ReturnType<typeof useRouter>["replace"]>[0];
 
 type NavRoute = "/dashboard" | "/spending" | "/goals-overview" | "/simulation" | "/assistant";
 
@@ -89,7 +89,7 @@ export function BottomNavigation({ activeRoute }: { activeRoute: NavRoute }) {
               key={item.route}
               onPress={() => {
                 if (!active) {
-                  router.push(item.route as Route);
+                  router.replace(item.route as Route);
                 }
               }}
               style={({ pressed }) => [

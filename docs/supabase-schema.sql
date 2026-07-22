@@ -1,3 +1,7 @@
+-- LEGACY REFERENCE ONLY.
+-- The source of truth for the database schema is now supabase/migrations/.
+-- Do not run this file against the linked project; use versioned migrations.
+
 create table if not exists public.financial_profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   onboarding jsonb not null default '{}'::jsonb,

@@ -112,7 +112,6 @@ export type GenerateAssistantResponseInput = {
 
 export type GenerateAssistantResponseResult = {
   answer: string;
-  model?: string;
   usage?: AssistantUsageStatus;
 };
 
@@ -129,45 +128,20 @@ export type GetAssistantUsageStatusResult = {
 };
 
 export class AssistantApiError extends Error {
+  code?: string;
   usage?: AssistantUsageStatus;
 
-  constructor(message: string, usage?: AssistantUsageStatus) {
+  constructor(message: string, usage?: AssistantUsageStatus, code?: string) {
     super(message);
     this.name = "AssistantApiError";
+    this.code = code;
     this.usage = usage;
     Object.setPrototypeOf(this, AssistantApiError.prototype);
   }
 }
 
-function getFriendlyAssistantErrorMessage(message: string) {
-  const normalizedMessage = message.toLowerCase();
-
-  if (
-    normalizedMessage.includes("exceeded your current quota") ||
-    normalizedMessage.includes("insufficient_quota") ||
-    normalizedMessage.includes("billing")
-  ) {
-    return "La cuenta de OpenAI no tiene cuota disponible o necesita activar billing. Revisa el plan, créditos o límite mensual en OpenAI Platform.";
-  }
-
-  if (normalizedMessage.includes("model") && normalizedMessage.includes("not found")) {
-    return "El modelo configurado no está disponible para esta cuenta de OpenAI. Revisa OPENAI_MODEL en los secrets de Supabase.";
-  }
-
-  if (
-    normalizedMessage.includes("incorrect api key") ||
-    normalizedMessage.includes("invalid authentication") ||
-    normalizedMessage.includes("api key")
-  ) {
-    return "La API key de OpenAI no es válida o no tiene permisos. Revisa OPENAI_API_KEY en los secrets de Supabase.";
-  }
-
-  return message;
-}
-
 async function getFunctionErrorPayload(error: unknown) {
-  const fallback =
-    error instanceof Error ? error.message : "No pudimos contactar al asistente.";
+  const fallback = "No pudimos contactar al asistente. Inténtalo de nuevo.";
   const context =
     error && typeof error === "object" && "context" in error
       ? (error as { context?: unknown }).context
@@ -180,7 +154,6 @@ async function getFunctionErrorPayload(error: unknown) {
   const response = context as {
     json?: () => Promise<unknown>;
     status?: number;
-    text?: () => Promise<string>;
   };
 
   try {
@@ -194,7 +167,11 @@ async function getFunctionErrorPayload(error: unknown) {
         typeof (payload as { error?: unknown }).error === "string"
       ) {
         return {
-          message: getFriendlyAssistantErrorMessage((payload as { error: string }).error),
+          code:
+            "code" in payload && typeof (payload as { code?: unknown }).code === "string"
+              ? (payload as { code: string }).code
+              : undefined,
+          message: (payload as { error: string }).error,
           usage:
             "usage" in payload
               ? ((payload as { usage?: AssistantUsageStatus }).usage)
@@ -203,19 +180,26 @@ async function getFunctionErrorPayload(error: unknown) {
       }
     }
 
-    if (typeof response.text === "function") {
-      const text = await response.text();
-
-      if (text.trim()) {
-        return { message: getFriendlyAssistantErrorMessage(text.trim()) };
-      }
-    }
   } catch {
-    return { message: getFriendlyAssistantErrorMessage(fallback) };
+    // The gateway can return an empty or non-JSON response. Map it below by status.
   }
 
-  const message = response.status ? `${fallback} Estado HTTP: ${response.status}.` : fallback;
-  return { message: getFriendlyAssistantErrorMessage(message) };
+  if (response.status === 401 || response.status === 403) {
+    return { code: "AUTH_REQUIRED", message: "Tu sesión no está activa. Vuelve a iniciar sesión." };
+  }
+
+  if (response.status === 413) {
+    return { code: "REQUEST_TOO_LARGE", message: "La solicitud del asistente es demasiado grande." };
+  }
+
+  if (response.status === 429) {
+    return {
+      code: "REQUEST_RATE_LIMITED",
+      message: "El asistente recibió demasiadas solicitudes. Inténtalo más tarde."
+    };
+  }
+
+  return { message: fallback };
 }
 
 export async function getAssistantUsageStatus(): Promise<GetAssistantUsageStatusResult> {
@@ -234,7 +218,7 @@ export async function getAssistantUsageStatus(): Promise<GetAssistantUsageStatus
 
   if (error) {
     const payload = await getFunctionErrorPayload(error);
-    throw new AssistantApiError(payload.message, payload.usage);
+    throw new AssistantApiError(payload.message, payload.usage, payload.code);
   }
 
   if (!data?.usage) {
@@ -266,7 +250,7 @@ export async function generateAssistantResponse({
 
   if (error) {
     const payload = await getFunctionErrorPayload(error);
-    throw new AssistantApiError(payload.message, payload.usage);
+    throw new AssistantApiError(payload.message, payload.usage, payload.code);
   }
 
   if (!data?.answer) {
