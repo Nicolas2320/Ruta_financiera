@@ -17,7 +17,14 @@ export default function RootLayout() {
                 screenOptions={{
                   headerShown: false
                 }}
-              />
+              >
+                <Stack.Screen name="dashboard" options={{ animation: "none" }} />
+                <Stack.Screen name="spending" options={{ animation: "none" }} />
+                <Stack.Screen name="debts" options={{ animation: "none" }} />
+                <Stack.Screen name="goals-overview" options={{ animation: "none" }} />
+                <Stack.Screen name="simulation" options={{ animation: "none" }} />
+                <Stack.Screen name="assistant" options={{ animation: "none" }} />
+              </Stack>
             </FinancialDataGate>
           </PlanProvider>
         </OnboardingProvider>

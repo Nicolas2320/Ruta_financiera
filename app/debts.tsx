@@ -32,7 +32,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
-import { SpendingSectionTabs } from "../components/SpendingSectionTabs";
+import {
+  SpendingSectionContent,
+  SpendingSectionTabs
+} from "../components/SpendingSectionTabs";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import type { DebtPaymentStatus, DebtRecord } from "../types/financial";
@@ -1151,6 +1154,7 @@ export default function DebtsScreen() {
 
           <SpendingSectionTabs activeTab="debts" />
 
+          <SpendingSectionContent activeTab="debts">
           <View style={styles.heroCard}>
             <View style={styles.heroTextGroup}>
               <Text style={styles.heroKicker}>Pagas al mes en deudas</Text>
@@ -1172,10 +1176,6 @@ export default function DebtsScreen() {
                 </Text>
               </View>
             </View>
-            <IconBubble
-              icon={<WalletCards color={colors.primary} size={44} strokeWidth={2.4} />}
-              size="large"
-            />
           </View>
 
           <View style={styles.summaryGrid}>
@@ -1349,6 +1349,7 @@ export default function DebtsScreen() {
               </View>
             </View>
           </SectionCard>
+          </SpendingSectionContent>
         </View>
       </ScrollView>
 
@@ -1483,21 +1484,17 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     ...shadows.card,
-    alignItems: "center",
+    alignItems: "stretch",
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radius.lg,
     borderWidth: 1,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.lg,
     padding: spacing.lg
   },
   heroTextGroup: {
-    flexBasis: 260,
-    flex: 1,
     gap: spacing.xs,
-    minWidth: 0
+    minWidth: 0,
+    width: "100%"
   },
   heroTopRow: {
     flexDirection: "row",

@@ -7,6 +7,7 @@ import {
   CalendarCheck,
   ClipboardCheck,
   Lightbulb,
+  MessageCircleQuestion,
   PiggyBank,
   Send,
   ShieldCheck,
@@ -745,7 +746,16 @@ export default function AssistantScreen() {
             </View>
             <View style={styles.headerText}>
               <Text style={styles.title}>Asistente AI</Text>
-              <Text style={styles.subtitle}>
+            </View>
+          </View>
+
+          <View style={styles.assistantIntroCard}>
+            <View style={styles.assistantIntroIcon}>
+              <MessageCircleQuestion color={colors.primary} size={24} strokeWidth={2.4} />
+            </View>
+            <View style={styles.assistantIntroText}>
+              <Text style={styles.assistantIntroLabel}>Consultas con contexto</Text>
+              <Text style={styles.assistantIntroDescription}>
                 Pregunta sobre tu diagnóstico, gastos, metas, simulación o plan mensual.
               </Text>
             </View>
@@ -933,22 +943,19 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.lg,
+    gap: spacing.md,
     padding: spacing.lg
   },
   headerIcon: {
     alignItems: "center",
     backgroundColor: colors.primarySoft,
     borderRadius: radius.pill,
-    height: 82,
+    height: 64,
     justifyContent: "center",
-    width: 82
+    width: 64
   },
   headerText: {
-    flexBasis: 260,
     flex: 1,
-    gap: spacing.xs,
     minWidth: 0
   },
   title: {
@@ -957,10 +964,41 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.title
   },
-  subtitle: {
+  assistantIntroCard: {
+    ...shadows.card,
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  assistantIntroIcon: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.md,
+    height: 48,
+    justifyContent: "center",
+    width: 48
+  },
+  assistantIntroText: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  assistantIntroLabel: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    letterSpacing: 0.2,
+    lineHeight: typography.lineHeight.caption
+  },
+  assistantIntroDescription: {
     color: colors.textMuted,
-    fontSize: typography.subtitle,
-    lineHeight: typography.lineHeight.subtitle
+    fontSize: typography.body,
+    lineHeight: typography.lineHeight.body
   },
   emptyState: {
     ...shadows.card,

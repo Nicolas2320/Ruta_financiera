@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { type PropsWithChildren, useEffect, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import { CreditCard, ReceiptText } from "lucide-react-native";
+import { useReducedMotion } from "react-native-reanimated";
 import {
   Animated,
   Easing,
@@ -15,7 +16,7 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 
 type SpendingTab = "spending" | "debts";
 
-type Route = Parameters<ReturnType<typeof useRouter>["push"]>[0];
+type Route = Parameters<ReturnType<typeof useRouter>["replace"]>[0];
 
 const tabs = [
   {
@@ -32,13 +33,56 @@ const tabs = [
   }
 ];
 
+let lastActiveIndex: number | null = null;
+let pendingContentTab: SpendingTab | null = null;
+
+export function SpendingSectionContent({
+  activeTab,
+  children
+}: PropsWithChildren<{ activeTab: SpendingTab }>) {
+  const reduceMotion = useReducedMotion();
+  const shouldAnimate = useRef(
+    pendingContentTab === activeTab && !reduceMotion && Platform.OS !== "web"
+  ).current;
+  const opacity = useRef(new Animated.Value(shouldAnimate ? 0.9 : 1)).current;
+
+  useEffect(() => {
+    pendingContentTab = null;
+
+    if (!shouldAnimate) {
+      opacity.setValue(1);
+      return;
+    }
+
+    const animation = Animated.timing(opacity, {
+      duration: 150,
+      easing: Easing.out(Easing.cubic),
+      toValue: 1,
+      useNativeDriver: Platform.OS !== "web"
+    });
+
+    animation.start();
+
+    return () => animation.stop();
+  }, [opacity, shouldAnimate]);
+
+  return (
+    <Animated.View style={[styles.contentTransition, { opacity }]}>
+      {children}
+    </Animated.View>
+  );
+}
+
 export function SpendingSectionTabs({ activeTab }: { activeTab: SpendingTab }) {
   const router = useRouter();
   const activeIndex = tabs.findIndex((tab) => tab.key === activeTab);
-  const indicatorPosition = useRef(new Animated.Value(activeIndex)).current;
+  const previousIndex = useRef(lastActiveIndex).current;
+  const indicatorPosition = useRef(
+    new Animated.Value(previousIndex ?? activeIndex)
+  ).current;
   const [containerWidth, setContainerWidth] = useState(0);
-  const [visualActiveTab, setVisualActiveTab] = useState(activeTab);
-  const [isNavigating, setIsNavigating] = useState(false);
+  const hasAnimatedIndicator = useRef(false);
+  const reduceMotion = useReducedMotion();
   const indicatorWidth = Math.max(
     (containerWidth - spacing.xs * 2 - spacing.sm) / tabs.length,
     0
@@ -49,36 +93,42 @@ export function SpendingSectionTabs({ activeTab }: { activeTab: SpendingTab }) {
   });
 
   useEffect(() => {
-    const nextIndex = tabs.findIndex((tab) => tab.key === activeTab);
-    indicatorPosition.setValue(nextIndex);
-    setVisualActiveTab(activeTab);
-    setIsNavigating(false);
-  }, [activeTab, indicatorPosition]);
+    lastActiveIndex = activeIndex;
+  }, [activeIndex]);
 
-  const navigateToTab = (tab: (typeof tabs)[number], nextIndex: number) => {
-    if (tab.key === visualActiveTab || isNavigating) {
+  useEffect(() => {
+    if (containerWidth <= 0 || hasAnimatedIndicator.current) {
       return;
     }
 
-    setVisualActiveTab(tab.key);
-    setIsNavigating(true);
+    hasAnimatedIndicator.current = true;
 
-    Animated.timing(indicatorPosition, {
-      duration: 220,
-      easing: Easing.out(Easing.cubic),
-      toValue: nextIndex,
-      useNativeDriver: Platform.OS !== "web"
-    }).start(({ finished }) => {
-      setIsNavigating(false);
-
-      if (finished) {
-        router.push(tab.route as Route);
-        return;
-      }
-
-      setVisualActiveTab(activeTab);
+    if (previousIndex === null || previousIndex === activeIndex || reduceMotion) {
       indicatorPosition.setValue(activeIndex);
+      return;
+    }
+
+    const animation = Animated.spring(indicatorPosition, {
+      damping: 20,
+      mass: 0.8,
+      stiffness: 190,
+      toValue: activeIndex,
+      useNativeDriver: Platform.OS !== "web"
     });
+
+    animation.start();
+
+    return () => animation.stop();
+  }, [activeIndex, containerWidth, indicatorPosition, previousIndex, reduceMotion]);
+
+  const navigateToTab = (tab: (typeof tabs)[number]) => {
+    if (tab.key === activeTab) {
+      return;
+    }
+
+    lastActiveIndex = activeIndex;
+    pendingContentTab = tab.key;
+    router.replace(tab.route as Route);
   };
 
   return (
@@ -98,8 +148,8 @@ export function SpendingSectionTabs({ activeTab }: { activeTab: SpendingTab }) {
         />
       ) : null}
 
-      {tabs.map((tab, index) => {
-        const active = tab.key === visualActiveTab;
+      {tabs.map((tab) => {
+        const active = tab.key === activeTab;
         const Icon = tab.icon;
         const color = active ? colors.primary : colors.textSubtle;
 
@@ -107,9 +157,8 @@ export function SpendingSectionTabs({ activeTab }: { activeTab: SpendingTab }) {
           <Pressable
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            disabled={isNavigating}
             key={tab.key}
-            onPress={() => navigateToTab(tab, index)}
+            onPress={() => navigateToTab(tab)}
             style={({ pressed }) => [
               styles.tabButton,
               pressed && styles.pressed
@@ -145,6 +194,9 @@ const styles = StyleSheet.create({
     pointerEvents: "none",
     position: "absolute",
     top: spacing.xs
+  },
+  contentTransition: {
+    gap: spacing.md
   },
   tabButton: {
     alignItems: "center",
