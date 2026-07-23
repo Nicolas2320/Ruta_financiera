@@ -130,21 +130,8 @@ export default function AuthScreen() {
                     : "Entra para recuperar la información guardada."
                   : isSavePlanFlow
                     ? "Ya viste tu diagnóstico y simulación. Crea una cuenta para guardar tus respuestas y abrir tu plan mensual."
-                    : "Guarda tu diagnóstico y recupéralo cuando vuelvas."}
+                    : "Crea tu cuenta y después comenzaremos tu diagnóstico."}
               </Text>
-            </View>
-
-            <View style={styles.modeSwitch}>
-              <ModeButton
-                active={isSignIn}
-                label="Entrar"
-                onPress={() => setMode("sign-in")}
-              />
-              <ModeButton
-                active={!isSignIn}
-                label="Crear"
-                onPress={() => setMode("sign-up")}
-              />
             </View>
 
             <View style={styles.form}>
@@ -211,6 +198,25 @@ export default function AuthScreen() {
               title={isSubmitting ? "Validando..." : isSignIn ? "Entrar" : "Crear cuenta"}
             />
 
+            <Pressable
+              accessibilityLabel={
+                isSignIn ? "Crear una cuenta" : "Iniciar sesión en una cuenta existente"
+              }
+              accessibilityRole="button"
+              onPress={() => {
+                setFeedback(null);
+                setMode(isSignIn ? "sign-up" : "sign-in");
+              }}
+              style={({ pressed }) => [styles.modePrompt, pressed && styles.pressed]}
+            >
+              <Text style={styles.modePromptText}>
+                {isSignIn ? "¿No tienes una cuenta? " : "¿Ya tienes una cuenta? "}
+                <Text style={styles.modePromptLink}>
+                  {isSignIn ? "Crear una" : "Iniciar sesión"}
+                </Text>
+              </Text>
+            </Pressable>
+
             <PrimaryButton
               accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
@@ -223,33 +229,6 @@ export default function AuthScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function ModeButton({
-  active,
-  label,
-  onPress
-}: {
-  active: boolean;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.modeButton,
-        active && styles.modeButtonActive,
-        pressed && styles.pressed
-      ]}
-    >
-      <Text style={[styles.modeButtonText, active && styles.modeButtonTextActive]}>
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -320,36 +299,6 @@ const styles = StyleSheet.create({
     fontSize: typography.subtitle,
     lineHeight: typography.lineHeight.subtitle
   },
-  modeSwitch: {
-    backgroundColor: colors.surfaceMuted,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.xs,
-    padding: spacing.xs
-  },
-  modeButton: {
-    alignItems: "center",
-    borderRadius: radius.sm,
-    flex: 1,
-    justifyContent: "center",
-    minHeight: 42
-  },
-  modeButtonActive: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1
-  },
-  modeButtonText: {
-    color: colors.textSubtle,
-    fontSize: typography.button,
-    fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.button
-  },
-  modeButtonTextActive: {
-    color: colors.primary
-  },
   form: {
     gap: spacing.sm
   },
@@ -400,6 +349,22 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
+  },
+  modePrompt: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 36,
+    paddingHorizontal: spacing.sm
+  },
+  modePromptText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption,
+    textAlign: "center"
+  },
+  modePromptLink: {
+    color: colors.primary,
+    fontWeight: typography.weight.black
   },
   secondaryButton: {
     backgroundColor: colors.surface,

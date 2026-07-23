@@ -970,21 +970,15 @@ export default function SimulationScreen() {
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel={
-                session ? "Ir al plan mensual" : "Crear una cuenta y guardar mi plan"
+                session ? "Ir al plan mensual" : "Ver vista previa de mi plan mensual"
               }
               iconPosition="right"
               onPress={() =>
                 session
                   ? router.push("/action-plan")
-                  : router.push({
-                      pathname: "/auth",
-                      params: {
-                        intent: "save-plan",
-                        returnTo: "/action-plan"
-                      }
-                    })
+                  : router.push("/plan-preview")
               }
-              title={session ? "Plan mensual" : "Crear cuenta y guardar mi plan"}
+              title={session ? "Plan mensual" : "Ver cómo sería mi plan"}
             />
             <PrimaryButton
               accessibilityLabel="Volver a la pantalla anterior"
