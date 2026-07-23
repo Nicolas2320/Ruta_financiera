@@ -5,12 +5,20 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 
 import { useAuth } from "./AuthContext";
 import { useFinancialProfile } from "./FinancialProfileContext";
 import {
+  clearGuestFinancialDraft,
+  loadGuestFinancialDraft,
+  saveGuestFinancialDraft,
+  type GuestFinancialDraft
+} from "../lib/guestFinancialDraft";
+import {
+  saveFinancialProfileDraft,
   saveExactValues as persistExactValues,
   saveOnboardingData
 } from "../lib/financialProfile";
@@ -28,7 +36,14 @@ type OnboardingContextValue = {
   hasCompletedOnboarding: boolean;
   onboarding: OnboardingData;
   onboardingSyncError: string | null;
-  onboardingSyncStatus: "idle" | "loading" | "saving" | "saved" | "error" | "not-configured";
+  onboardingSyncStatus:
+    | "idle"
+    | "loading"
+    | "migrating"
+    | "saving"
+    | "saved"
+    | "error"
+    | "not-configured";
   resetFinancialData: () => Promise<boolean>;
   saveExactValues: (values: ExactFinancialValues) => Promise<boolean>;
   updateOnboarding: (data: Partial<OnboardingData>) => void;
@@ -54,31 +69,64 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     financialProfileLoadStatus,
     financialProfileUserId
   } = useFinancialProfile();
-  const [onboarding, setOnboarding] = useState<OnboardingData>(initialOnboarding);
+  const [onboarding, setOnboarding] = useState<OnboardingData>(getEmptyOnboarding);
   const [exactValues, setExactValues] = useState<ExactFinancialValues>({});
   const [financialProfileExists, setFinancialProfileExists] = useState(false);
   const [onboardingSyncStatus, setOnboardingSyncStatus] =
     useState<OnboardingContextValue["onboardingSyncStatus"]>("idle");
   const [onboardingSyncError, setOnboardingSyncError] = useState<string | null>(null);
+  const guestSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const migrationRef = useRef<{
+    promise: Promise<GuestFinancialDraft | null>;
+    userId: string;
+  } | null>(null);
   const userId = user?.id ?? null;
 
   useEffect(() => {
-    if (!isAuthReady) {
+    if (!isAuthReady || user) {
       return;
     }
 
-    if (!user) {
-      setOnboarding(initialOnboarding);
-      setExactValues({});
-      setFinancialProfileExists(false);
-      setOnboardingSyncStatus(isSupabaseConfigured ? "idle" : "not-configured");
-      setOnboardingSyncError(null);
+    let isMounted = true;
+    migrationRef.current = null;
+    setFinancialProfileExists(false);
+    setOnboardingSyncStatus("loading");
+    setOnboardingSyncError(null);
+
+    loadGuestFinancialDraft()
+      .then((draft) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setOnboarding(draft?.onboarding ?? getEmptyOnboarding());
+        setExactValues(draft?.exactValues ?? {});
+        setOnboardingSyncStatus("saved");
+      })
+      .catch((error: Error) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setOnboarding(getEmptyOnboarding());
+        setExactValues({});
+        setOnboardingSyncStatus("error");
+        setOnboardingSyncError(
+          error.message || "No pudimos recuperar el diagnóstico guardado en este dispositivo."
+        );
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthReady, userId]);
+
+  useEffect(() => {
+    if (!isAuthReady || !user) {
       return;
     }
 
     if (!isSupabaseConfigured || financialProfileLoadStatus === "not-configured") {
-      setOnboarding(initialOnboarding);
-      setExactValues({});
       setFinancialProfileExists(false);
       setOnboardingSyncStatus("not-configured");
       setOnboardingSyncError(null);
@@ -90,12 +138,6 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
       financialProfileLoadStatus === "idle" ||
       financialProfileUserId !== user.id
     ) {
-      if (financialProfileUserId !== user.id) {
-        setOnboarding(initialOnboarding);
-        setExactValues({});
-        setFinancialProfileExists(false);
-      }
-
       setOnboardingSyncStatus("loading");
       setOnboardingSyncError(null);
       return;
@@ -110,11 +152,67 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     }
 
     if (financialProfileLoadStatus === "ready") {
-      setOnboarding(financialProfile.onboarding);
-      setExactValues(financialProfile.exactValues);
-      setFinancialProfileExists(financialProfile.profileExists);
-      setOnboardingSyncStatus("saved");
+      if (financialProfile.profileExists) {
+        migrationRef.current = null;
+        setOnboarding(financialProfile.onboarding);
+        setExactValues(financialProfile.exactValues);
+        setFinancialProfileExists(true);
+        setOnboardingSyncStatus("saved");
+        setOnboardingSyncError(null);
+        void clearGuestFinancialDraft().catch(() => undefined);
+        return;
+      }
+
+      let isMounted = true;
+      setOnboardingSyncStatus("migrating");
       setOnboardingSyncError(null);
+
+      if (migrationRef.current?.userId !== user.id) {
+        const migrationPromise = guestSaveQueueRef.current
+          .catch(() => undefined)
+          .then(() => loadGuestFinancialDraft())
+          .then(async (draft) => {
+            if (!draft) {
+              return null;
+            }
+
+            await saveFinancialProfileDraft(user.id, draft.onboarding, draft.exactValues);
+            await clearGuestFinancialDraft();
+            return draft;
+          });
+
+        migrationRef.current = {
+          promise: migrationPromise,
+          userId: user.id
+        };
+      }
+
+      migrationRef.current.promise
+        .then((draft) => {
+          if (!isMounted) {
+            return;
+          }
+
+          setOnboarding(draft?.onboarding ?? getEmptyOnboarding());
+          setExactValues(draft?.exactValues ?? {});
+          setFinancialProfileExists(Boolean(draft));
+          setOnboardingSyncStatus("saved");
+          setOnboardingSyncError(null);
+        })
+        .catch((error: Error) => {
+          if (!isMounted) {
+            return;
+          }
+
+          setOnboardingSyncStatus("error");
+          setOnboardingSyncError(
+            error.message || "No pudimos guardar tu diagnóstico en la nueva cuenta."
+          );
+        });
+
+      return () => {
+        isMounted = false;
+      };
     }
   }, [
     financialProfile,
@@ -134,13 +232,25 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
           ...data
         };
 
-        if (!isSupabaseConfigured) {
-          setOnboardingSyncStatus("not-configured");
+        if (!user) {
+          setOnboardingSyncStatus("saving");
+          setOnboardingSyncError(null);
+          guestSaveQueueRef.current = guestSaveQueueRef.current
+            .catch(() => undefined)
+            .then(() => saveGuestFinancialDraft(next, exactValues));
+          guestSaveQueueRef.current
+            .then(() => {
+              setOnboardingSyncStatus("saved");
+            })
+            .catch((error: Error) => {
+              setOnboardingSyncStatus("error");
+              setOnboardingSyncError(error.message);
+            });
           return next;
         }
 
-        if (!user) {
-          setOnboardingSyncStatus("idle");
+        if (!isSupabaseConfigured) {
+          setOnboardingSyncStatus("not-configured");
           return next;
         }
 
@@ -160,22 +270,40 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
         return next;
       });
     },
-    [isSupabaseConfigured, user]
+    [exactValues, isSupabaseConfigured, user]
   );
 
   const saveExactValues = useCallback(
     async (values: ExactFinancialValues) => {
       const nextValues = normalizeExactValues(values);
 
+      if (!user) {
+        setExactValues(nextValues);
+        setOnboardingSyncStatus("saving");
+        setOnboardingSyncError(null);
+
+        try {
+          guestSaveQueueRef.current = guestSaveQueueRef.current
+            .catch(() => undefined)
+            .then(() => saveGuestFinancialDraft(onboarding, nextValues));
+          await guestSaveQueueRef.current;
+          setOnboardingSyncStatus("saved");
+          return true;
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "No pudimos guardar los datos en este dispositivo.";
+          setOnboardingSyncStatus("error");
+          setOnboardingSyncError(message);
+          return false;
+        }
+      }
+
       if (!isSupabaseConfigured) {
         setExactValues(nextValues);
         setOnboardingSyncStatus("not-configured");
         return true;
-      }
-
-      if (!user) {
-        setOnboardingSyncStatus("idle");
-        return false;
       }
 
       setOnboardingSyncStatus("saving");
@@ -194,27 +322,39 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
         return false;
       }
     },
-    [isSupabaseConfigured, user]
+    [isSupabaseConfigured, onboarding, user]
   );
 
   const resetFinancialData = useCallback(async () => {
     const nextOnboarding = getEmptyOnboarding();
     const nextExactValues: ExactFinancialValues = {};
 
+    if (!user) {
+      setOnboardingSyncStatus("saving");
+
+      try {
+        await guestSaveQueueRef.current.catch(() => undefined);
+        await clearGuestFinancialDraft();
+        setOnboarding(nextOnboarding);
+        setExactValues(nextExactValues);
+        setFinancialProfileExists(false);
+        setOnboardingSyncStatus("saved");
+        setOnboardingSyncError(null);
+        return true;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "No pudimos borrar el diagnóstico local.";
+        setOnboardingSyncStatus("error");
+        setOnboardingSyncError(message);
+        return false;
+      }
+    }
+
     if (!isSupabaseConfigured) {
       setOnboarding(nextOnboarding);
       setExactValues(nextExactValues);
       setFinancialProfileExists(false);
       setOnboardingSyncStatus("not-configured");
-      setOnboardingSyncError(null);
-      return true;
-    }
-
-    if (!user) {
-      setOnboarding(nextOnboarding);
-      setExactValues(nextExactValues);
-      setFinancialProfileExists(false);
-      setOnboardingSyncStatus("idle");
       setOnboardingSyncError(null);
       return true;
     }
@@ -259,9 +399,8 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
       exactValues,
       financialProfileExists: isLoadedForCurrentUser && financialProfileExists,
       hasCompletedOnboarding:
-        isLoadedForCurrentUser &&
-        financialProfileExists &&
-        getHasCompletedOnboarding(onboarding),
+        getHasCompletedOnboarding(onboarding) &&
+        (!userId || (isLoadedForCurrentUser && financialProfileExists)),
       onboarding,
       onboardingSyncError: effectiveOnboardingSyncError,
       onboardingSyncStatus: effectiveOnboardingSyncStatus,

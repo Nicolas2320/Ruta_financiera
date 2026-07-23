@@ -20,7 +20,9 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
+import { FinancialDataStatusScreen } from "../components/FinancialDataStatusScreen";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
+import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
 import {
@@ -792,6 +794,34 @@ function ActionCard({
 }
 
 export default function ActionPlanScreen() {
+  const router = useRouter();
+  const { isAuthReady, session } = useAuth();
+
+  useEffect(() => {
+    if (isAuthReady && !session) {
+      router.replace({
+        pathname: "/auth",
+        params: {
+          intent: "save-plan",
+          returnTo: "/action-plan"
+        }
+      });
+    }
+  }, [isAuthReady, router, session]);
+
+  if (!isAuthReady || !session) {
+    return (
+      <FinancialDataStatusScreen
+        text="Necesitamos una cuenta para guardar y actualizar tu plan mensual."
+        title="Preparando tu plan"
+      />
+    );
+  }
+
+  return <ActionPlanContent />;
+}
+
+function ActionPlanContent() {
   const router = useRouter();
   const { exactValues, onboarding, updateOnboarding } = useOnboarding();
   const { completedActions, planSyncError, planSyncStatus, updateActionProgress } = usePlan();

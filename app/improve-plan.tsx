@@ -110,7 +110,7 @@ function getValuesToSave(
   }, {});
 
   if (reportedNoSmallExpenses) {
-    values.smallExpenses = 0;
+    delete values.smallExpenses;
   }
 
   return values;
@@ -167,17 +167,24 @@ export default function ImprovePlanScreen() {
     () => getValuesToSave(inputValues, reportedNoSmallExpenses),
     [inputValues, reportedNoSmallExpenses]
   );
+  const effectiveDraftValues = useMemo(
+    () =>
+      reportedNoSmallExpenses
+        ? { ...valuesToSave, smallExpenses: 0 }
+        : valuesToSave,
+    [reportedNoSmallExpenses, valuesToSave]
+  );
   const savedPrecisionStatus = useMemo(
     () => getPlanPrecisionStatus(effectiveExactValues),
     [effectiveExactValues]
   );
   const draftPrecisionStatus = useMemo(
-    () => getPlanPrecisionStatus(valuesToSave),
-    [valuesToSave]
+    () => getPlanPrecisionStatus(effectiveDraftValues),
+    [effectiveDraftValues]
   );
   const hasUnsavedChanges = useMemo(
-    () => hasUnsavedExactValueChanges(effectiveExactValues, valuesToSave),
-    [effectiveExactValues, valuesToSave]
+    () => hasUnsavedExactValueChanges(effectiveExactValues, effectiveDraftValues),
+    [effectiveDraftValues, effectiveExactValues]
   );
 
   const handleInputChange = (fieldId: ExactFinancialValueKey, value: string) => {
@@ -255,6 +262,36 @@ export default function ImprovePlanScreen() {
                 value={inputValues[field.id]}
               />
             ))}
+            {reportedNoSmallExpenses ? (
+              <View style={styles.revisitCard}>
+                <View style={styles.revisitIcon}>
+                  <Coffee color="#7C3AED" size={22} strokeWidth={2.4} />
+                </View>
+                <View style={styles.revisitBody}>
+                  <View style={styles.fieldLabelRow}>
+                    <Text style={styles.fieldLabel}>Gastos pequeños mensuales</Text>
+                    <Text style={styles.reportedAnswerText}>RESPONDISTE “NO”</Text>
+                  </View>
+                  <Text style={styles.fieldHelper}>
+                    Conservamos tu respuesta. Si ahora identificaste consumos pequeños frecuentes,
+                    puedes volver a revisarlos y agregarlos a tu diagnóstico.
+                  </Text>
+                  <PrimaryButton
+                    accessibilityLabel="Revisar y agregar gastos pequeños"
+                    icon={null}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/small-expenses",
+                        params: { source: "improve-plan" }
+                      })
+                    }
+                    style={styles.revisitButton}
+                    title="Revisar gastos pequeños"
+                    variant="secondary"
+                  />
+                </View>
+              </View>
+            ) : null}
           </View>
 
           {feedback ? (
@@ -435,6 +472,42 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
     padding: spacing.md
+  },
+  revisitCard: {
+    ...shadows.card,
+    alignItems: "flex-start",
+    backgroundColor: "#FBF8FF",
+    borderColor: "#DCCBFF",
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  revisitIcon: {
+    alignItems: "center",
+    backgroundColor: "#F1E8FF",
+    borderRadius: radius.pill,
+    height: 46,
+    justifyContent: "center",
+    width: 46
+  },
+  revisitBody: {
+    flex: 1,
+    gap: spacing.sm,
+    minWidth: 0
+  },
+  reportedAnswerText: {
+    color: "#7C3AED",
+    fontSize: typography.small,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.small
+  },
+  revisitButton: {
+    alignSelf: "stretch",
+    backgroundColor: colors.surface,
+    borderColor: "#DCCBFF",
+    minHeight: 48
   },
   fieldIcon: {
     alignItems: "center",

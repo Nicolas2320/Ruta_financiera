@@ -25,6 +25,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNavigation } from "../components/BottomNavigation";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
+import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
 import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
@@ -689,6 +690,7 @@ export default function SimulationScreen() {
   const [showCalculationDetails, setShowCalculationDetails] = useState(false);
   const [showScenarioGuide, setShowScenarioGuide] = useState(false);
   const navigate = (route: Route) => router.push(route);
+  const { session } = useAuth();
   const { exactValues, onboarding } = useOnboarding();
   const { completedActions } = usePlan();
   const metrics = useMemo(
@@ -967,10 +969,22 @@ export default function SimulationScreen() {
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel="Ir al plan mensual"
+              accessibilityLabel={
+                session ? "Ir al plan mensual" : "Crear una cuenta y guardar mi plan"
+              }
               iconPosition="right"
-              onPress={() => router.push("/action-plan")}
-              title="Plan mensual"
+              onPress={() =>
+                session
+                  ? router.push("/action-plan")
+                  : router.push({
+                      pathname: "/auth",
+                      params: {
+                        intent: "save-plan",
+                        returnTo: "/action-plan"
+                      }
+                    })
+              }
+              title={session ? "Plan mensual" : "Crear cuenta y guardar mi plan"}
             />
             <PrimaryButton
               accessibilityLabel="Volver a la pantalla anterior"

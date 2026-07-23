@@ -623,7 +623,13 @@ export default function DashboardScreen() {
     }
 
     if (!session) {
-      router.replace("/auth");
+      router.replace({
+        pathname: "/auth",
+        params: {
+          mode: "sign-in",
+          returnTo: "/dashboard"
+        }
+      });
       return;
     }
 

@@ -18,6 +18,7 @@ export default function RootLayout() {
                   headerShown: false
                 }}
               >
+                <Stack.Screen name="index" options={{ animation: "none" }} />
                 <Stack.Screen name="dashboard" options={{ animation: "none" }} />
                 <Stack.Screen name="spending" options={{ animation: "none" }} />
                 <Stack.Screen name="debts" options={{ animation: "none" }} />

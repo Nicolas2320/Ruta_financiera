@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 import type { StyleProp, TextStyle, ViewStyle } from "react-native";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -292,7 +292,7 @@ function getInitialAmountSelection(goal: FinancialGoal | null) {
 export default function GoalsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { onboarding, updateOnboarding } = useOnboarding();
+  const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
   const goals = getOnboardingGoals(onboarding);
   const primaryGoal = getPrimaryFinancialGoal(onboarding);
   const isAddMode = params.mode === "add";
@@ -316,6 +316,27 @@ export default function GoalsScreen() {
   const [targetAmountInput, setTargetAmountInput] = useState(
     getCurrencyInputValue(initialGoal?.targetAmount)
   );
+  const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
+
+  useEffect(() => {
+    if (onboardingSyncStatus !== "saved" || hasHydratedStoredAnswers.current) {
+      return;
+    }
+
+    hasHydratedStoredAnswers.current = true;
+    const storedGoal = isAddMode ? null : getPrimaryFinancialGoal(onboarding);
+    const storedGoalSelection = getInitialGoalSelection(storedGoal);
+
+    setSelectedGoal(storedGoalSelection);
+    setCustomGoalName(
+      storedGoal && storedGoalSelection === customGoalOption.title ? storedGoal.title : ""
+    );
+    setSelectedIconKey(storedGoal?.iconKey ?? null);
+    setSelectedHorizon(storedGoal?.horizon ?? null);
+    setSelectedPriority(storedGoal?.priority ?? null);
+    setSelectedAmountRange(getInitialAmountSelection(storedGoal));
+    setTargetAmountInput(getCurrencyInputValue(storedGoal?.targetAmount));
+  }, [isAddMode, onboarding, onboardingSyncStatus]);
 
   const isCustomGoal = selectedGoal === customGoalOption.title;
   const finalGoalTitle = isCustomGoal ? customGoalName.trim() : selectedGoal;
@@ -438,7 +459,7 @@ export default function GoalsScreen() {
               currentStep={7}
               nextAccessibilityLabel="Continuar hacia revisión de respuestas"
               nextDisabled={!canContinue}
-              onBack={() => router.push("/savings-debts")}
+              onBack={() => router.replace("/savings-debts")}
               onNext={handleContinue}
               title="Meta financiera"
               totalSteps={7}

@@ -1,5 +1,5 @@
 import type { DimensionValue } from "react-native";
-import { ArrowRight, ChevronLeft } from "lucide-react-native";
+import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radius, spacing, typography } from "../../constants/theme";
@@ -59,7 +59,7 @@ export function StepHeader({
               pressed && !nextDisabled && styles.pressed
             ]}
           >
-            <ArrowRight color={nextIconColor} size={21} strokeWidth={2.5} />
+            <ChevronRight color={nextIconColor} size={21} strokeWidth={2.5} />
           </Pressable>
         ) : (
           <View style={styles.headerSpacer} />
