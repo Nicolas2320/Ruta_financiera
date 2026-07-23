@@ -121,13 +121,13 @@ export default function IncomeScreen() {
           ) : null}
           {!isProfileEditMode ? (
             <StepHeader
-              currentStep={4}
+              currentStep={3}
               nextAccessibilityLabel="Continuar hacia preguntas de gastos"
               nextDisabled={!canContinue}
               onBack={() => router.push("/profile")}
               onNext={handleContinue}
               title="Ingresos"
-              totalSteps={8}
+              totalSteps={7}
             />
           ) : null}
 

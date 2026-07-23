@@ -95,16 +95,25 @@ function getInitialInputValues(exactValues: ExactFinancialValues): InputValues {
   );
 }
 
-function getValuesToSave(inputValues: InputValues): ExactFinancialValues {
-  return fields.reduce<ExactFinancialValues>((values, field) => {
+function getValuesToSave(
+  inputValues: InputValues,
+  reportedNoSmallExpenses: boolean
+): ExactFinancialValues {
+  const values = fields.reduce<ExactFinancialValues>((draftValues, field) => {
     const parsedValue = parseCOPInput(inputValues[field.id]);
 
     if (parsedValue !== null) {
-      values[field.id] = parsedValue;
+      draftValues[field.id] = parsedValue;
     }
 
-    return values;
+    return draftValues;
   }, {});
+
+  if (reportedNoSmallExpenses) {
+    values.smallExpenses = 0;
+  }
+
+  return values;
 }
 
 function getComparableExactValue(values: ExactFinancialValues, fieldId: ExactFinancialValueKey) {
@@ -125,9 +134,24 @@ function hasUnsavedExactValueChanges(
 
 export default function ImprovePlanScreen() {
   const router = useRouter();
-  const { exactValues, onboardingSyncError, saveExactValues } = useOnboarding();
+  const { exactValues, onboarding, onboardingSyncError, saveExactValues } = useOnboarding();
+  const reportedNoSmallExpenses = onboarding.hasSmallExpenses === "No";
+  const effectiveExactValues = useMemo(
+    () =>
+      reportedNoSmallExpenses
+        ? { ...exactValues, smallExpenses: 0 }
+        : exactValues,
+    [exactValues, reportedNoSmallExpenses]
+  );
+  const visibleFields = useMemo(
+    () =>
+      reportedNoSmallExpenses
+        ? fields.filter((field) => field.id !== "smallExpenses")
+        : fields,
+    [reportedNoSmallExpenses]
+  );
   const [inputValues, setInputValues] = useState<InputValues>(() =>
-    getInitialInputValues(exactValues)
+    getInitialInputValues(effectiveExactValues)
   );
   const [hasEdited, setHasEdited] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -135,22 +159,25 @@ export default function ImprovePlanScreen() {
 
   useEffect(() => {
     if (!hasEdited) {
-      setInputValues(getInitialInputValues(exactValues));
+      setInputValues(getInitialInputValues(effectiveExactValues));
     }
-  }, [exactValues, hasEdited]);
+  }, [effectiveExactValues, hasEdited]);
 
-  const valuesToSave = useMemo(() => getValuesToSave(inputValues), [inputValues]);
+  const valuesToSave = useMemo(
+    () => getValuesToSave(inputValues, reportedNoSmallExpenses),
+    [inputValues, reportedNoSmallExpenses]
+  );
   const savedPrecisionStatus = useMemo(
-    () => getPlanPrecisionStatus(exactValues),
-    [exactValues]
+    () => getPlanPrecisionStatus(effectiveExactValues),
+    [effectiveExactValues]
   );
   const draftPrecisionStatus = useMemo(
     () => getPlanPrecisionStatus(valuesToSave),
     [valuesToSave]
   );
   const hasUnsavedChanges = useMemo(
-    () => hasUnsavedExactValueChanges(exactValues, valuesToSave),
-    [exactValues, valuesToSave]
+    () => hasUnsavedExactValueChanges(effectiveExactValues, valuesToSave),
+    [effectiveExactValues, valuesToSave]
   );
 
   const handleInputChange = (fieldId: ExactFinancialValueKey, value: string) => {
@@ -205,6 +232,9 @@ export default function ImprovePlanScreen() {
                 <Text style={styles.statusBadgeText}>{savedPrecisionStatus.state}</Text>
               </View>
               <Text style={styles.progressText}>{savedPrecisionStatus.count} de 4 datos guardados</Text>
+              {reportedNoSmallExpenses ? (
+                <Text style={styles.progressText}>Gastos pequeños: no aplica</Text>
+              ) : null}
             </View>
             {hasUnsavedChanges ? (
               <View style={styles.unsavedNotice}>
@@ -217,7 +247,7 @@ export default function ImprovePlanScreen() {
           </View>
 
           <View style={styles.form}>
-            {fields.map((field) => (
+            {visibleFields.map((field) => (
               <CurrencyField
                 key={field.id}
                 field={field}
@@ -236,8 +266,9 @@ export default function ImprovePlanScreen() {
           <View style={styles.noticeCard}>
             <CheckCircle2 color={colors.support} size={18} strokeWidth={2.4} />
             <Text style={styles.noticeText}>
-              Los 4 datos son opcionales. Puedes guardar solo lo que tengas claro y ajustar el
-              resto después.
+              {reportedNoSmallExpenses
+                ? "Los 3 datos visibles son opcionales. Tu respuesta sobre gastos pequeños se conserva como No aplica."
+                : "Los 4 datos son opcionales. Puedes guardar solo lo que tengas claro y ajustar el resto después."}
             </Text>
           </View>
 

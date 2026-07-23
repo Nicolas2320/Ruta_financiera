@@ -161,7 +161,8 @@ const smallExpenseRanges = [
   "Menos de $100.000",
   "$100.000 – $250.000",
   "$250.000 – $500.000",
-  "Más de $500.000"
+  "Más de $500.000",
+  "No sé"
 ] as const;
 
 function normalizeSmallExpenseRange(range: string | null) {
@@ -256,12 +257,13 @@ export default function SmallExpensesScreen() {
   );
 
   const needsCategory = selectedPresence === "Sí";
-  const shouldShowCategoryQuestion = selectedPresence !== "No";
+  const shouldShowDetails = selectedPresence !== "No";
   const canContinue = Boolean(
     selectedPresence &&
-      selectedRange &&
-      selectedIntention &&
-      (!needsCategory || selectedCategories.length > 0)
+      (selectedPresence === "No" ||
+        (selectedRange &&
+          selectedIntention &&
+          (!needsCategory || selectedCategories.length > 0)))
   );
 
   const handlePresenceSelect = (presence: string) => {
@@ -269,6 +271,8 @@ export default function SmallExpensesScreen() {
 
     if (presence === "No") {
       setSelectedCategories([]);
+      setSelectedRange(null);
+      setSelectedIntention(null);
     }
   };
 
@@ -281,7 +285,11 @@ export default function SmallExpensesScreen() {
   };
 
   const handleContinue = () => {
-    if (!selectedPresence || !selectedRange || !selectedIntention) {
+    if (!selectedPresence) {
+      return;
+    }
+
+    if (selectedPresence !== "No" && (!selectedRange || !selectedIntention)) {
       return;
     }
 
@@ -295,8 +303,8 @@ export default function SmallExpensesScreen() {
     updateOnboarding({
       hasSmallExpenses: selectedPresence,
       smallExpenseCategories: categoriesToSave,
-      smallExpensesRange: selectedRange,
-      smallExpensesIntention: selectedIntention
+      smallExpensesRange: selectedPresence === "No" ? null : selectedRange,
+      smallExpensesIntention: selectedPresence === "No" ? null : selectedIntention
     });
     router.push(
       isSpendingEditMode
@@ -341,13 +349,13 @@ export default function SmallExpensesScreen() {
           ) : null}
           {!isEditMode ? (
           <StepHeader
-            currentStep={6}
+            currentStep={5}
             nextAccessibilityLabel="Continuar hacia ahorros y deudas"
             nextDisabled={!canContinue}
             onBack={() => router.push("/expenses")}
             onNext={handleContinue}
             title="Gastos hormiga"
-            totalSteps={8}
+            totalSteps={7}
           />
           ) : null}
 
@@ -387,7 +395,7 @@ export default function SmallExpensesScreen() {
             </View>
           </View>
 
-          {shouldShowCategoryQuestion ? (
+          {shouldShowDetails ? (
             <View style={styles.card}>
               <Text style={styles.questionTitle}>¿En qué categorías crees que se van?</Text>
               <Text style={styles.helperText}>
@@ -418,51 +426,53 @@ export default function SmallExpensesScreen() {
             </View>
           )}
 
-          <View style={styles.twoColumnSection}>
-            <View style={styles.card}>
-              <Text style={styles.questionTitle}>
-                ¿Cuánto crees que gastas al mes en estos consumos?
-              </Text>
-              <View style={styles.optionList}>
-                {smallExpenseRanges.map((range) => (
-                  <SelectableCard
-                    key={range}
-                    onPress={() => setSelectedRange(range)}
-                    selected={selectedRange === range}
-                    title={range}
-                  />
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.questionTitle}>¿Qué te gustaría hacer con estos gastos?</Text>
-              <View style={styles.optionList}>
-                {smallExpenseIntentions.map((intention) => {
-                  const Icon = intention.icon;
-
-                  return (
+          {shouldShowDetails ? (
+            <View style={styles.twoColumnSection}>
+              <View style={styles.card}>
+                <Text style={styles.questionTitle}>
+                  ¿Cuánto crees que gastas al mes en estos consumos?
+                </Text>
+                <View style={styles.optionList}>
+                  {smallExpenseRanges.map((range) => (
                     <SelectableCard
-                      key={intention.title}
-                      leading={
-                        <View
-                          style={[
-                            styles.rowIcon,
-                            { backgroundColor: intention.backgroundColor }
-                          ]}
-                        >
-                          <Icon color={intention.color} size={20} strokeWidth={2.5} />
-                        </View>
-                      }
-                      onPress={() => setSelectedIntention(intention.title)}
-                      selected={selectedIntention === intention.title}
-                      title={intention.title}
+                      key={range}
+                      onPress={() => setSelectedRange(range)}
+                      selected={selectedRange === range}
+                      title={range}
                     />
-                  );
-                })}
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.card}>
+                <Text style={styles.questionTitle}>¿Qué te gustaría hacer con estos gastos?</Text>
+                <View style={styles.optionList}>
+                  {smallExpenseIntentions.map((intention) => {
+                    const Icon = intention.icon;
+
+                    return (
+                      <SelectableCard
+                        key={intention.title}
+                        leading={
+                          <View
+                            style={[
+                              styles.rowIcon,
+                              { backgroundColor: intention.backgroundColor }
+                            ]}
+                          >
+                            <Icon color={intention.color} size={20} strokeWidth={2.5} />
+                          </View>
+                        }
+                        onPress={() => setSelectedIntention(intention.title)}
+                        selected={selectedIntention === intention.title}
+                        title={intention.title}
+                      />
+                    );
+                  })}
+                </View>
               </View>
             </View>
-          </View>
+          ) : null}
 
           <View style={styles.actions}>
             <PrimaryButton

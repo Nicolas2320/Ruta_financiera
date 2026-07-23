@@ -289,13 +289,13 @@ export default function SavingsDebtsScreen() {
           ) : null}
           {!isProfileEditMode ? (
             <StepHeader
-              currentStep={7}
+              currentStep={6}
               nextAccessibilityLabel="Continuar hacia meta financiera"
               nextDisabled={!canContinue}
               onBack={() => router.push("/small-expenses")}
               onNext={handleContinue}
               title="Ahorros y deudas"
-              totalSteps={8}
+              totalSteps={7}
             />
           ) : null}
 

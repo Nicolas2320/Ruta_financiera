@@ -435,13 +435,13 @@ export default function GoalsScreen() {
             />
           ) : (
             <StepHeader
-              currentStep={8}
+              currentStep={7}
               nextAccessibilityLabel="Continuar hacia revisión de respuestas"
               nextDisabled={!canContinue}
               onBack={() => router.push("/savings-debts")}
               onNext={handleContinue}
               title="Meta financiera"
-              totalSteps={8}
+              totalSteps={7}
             />
           )}
 

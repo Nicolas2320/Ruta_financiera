@@ -6,15 +6,17 @@ import type {
 import { formatCOP } from "./financialRanges";
 
 export type DebtLevel = "none" | "low" | "medium" | "high" | "unknown";
+export type DebtDataSource = "registered" | "category" | "reported" | "none";
 export type NewDebtViability = "possible" | "tight" | "risky" | "missing";
 
 export type RegisteredDebtSummary = {
   count: number;
-  source: "registered" | "category" | "none";
+  source: DebtDataSource;
   monthlyPaymentTotal: number;
   categoryMonthlyPaymentTotal: number;
   remainingTotal: number | null;
   debtToIncomeRatio: number | null;
+  reportedPaymentShare: string | null;
   level: DebtLevel;
   label: string;
   shouldPrioritizeDebt: boolean;
@@ -75,6 +77,40 @@ function getDebtLevelFromRatio(ratio: number | null): DebtLevel {
   }
 
   return "high";
+}
+
+export function getReportedDebtPaymentRatio(debtPaymentShare: string | null | undefined) {
+  const normalizedShare = normalizeText(debtPaymentShare ?? "");
+
+  if (
+    !normalizedShare ||
+    normalizedShare.includes("no estoy seguro") ||
+    normalizedShare.includes("prefiero")
+  ) {
+    return null;
+  }
+
+  if (normalizedShare.includes("no pago")) {
+    return 0;
+  }
+
+  if (normalizedShare.includes("menos") && normalizedShare.includes("10")) {
+    return 0.05;
+  }
+
+  if (normalizedShare.includes("10") && normalizedShare.includes("20")) {
+    return 0.15;
+  }
+
+  if (normalizedShare.includes("20") && normalizedShare.includes("40")) {
+    return 0.3;
+  }
+
+  if (normalizedShare.includes("mas") && normalizedShare.includes("40")) {
+    return 0.4;
+  }
+
+  return null;
 }
 
 function getStatusLevel(debts: DebtRecord[]): DebtLevel {
@@ -149,10 +185,12 @@ export function getDebtCategoryMonthlyPaymentTotal(
 
 export function getRegisteredDebtSummary({
   debts,
+  debtPaymentShare,
   expenseCategoryAmounts,
   monthlyIncome
 }: {
   debts: DebtRecord[] | null | undefined;
+  debtPaymentShare?: string | null;
   expenseCategoryAmounts?: ExpenseCategoryAmounts | null;
   monthlyIncome: number | null | undefined;
 }): RegisteredDebtSummary {
@@ -166,8 +204,32 @@ export function getRegisteredDebtSummary({
     : categoryMonthlyPaymentTotal;
   const remainingTotal = getDebtRemainingTotal(validDebts);
   const debtToIncomeRatio = getDebtToIncomeRatio(monthlyPaymentTotal, monthlyIncome);
+  const reportedPaymentRatio = getReportedDebtPaymentRatio(debtPaymentShare);
 
   if (!hasRegisteredDebts && !hasCategoryDebtReference) {
+    if (reportedPaymentRatio !== null && reportedPaymentRatio > 0) {
+      const reportedMonthlyPayment =
+        monthlyIncome && monthlyIncome > 0
+          ? Math.round(monthlyIncome * reportedPaymentRatio)
+          : 0;
+      const reportedLevel = getDebtLevelFromRatio(reportedPaymentRatio);
+
+      return {
+        count: 0,
+        source: "reported",
+        monthlyPaymentTotal: reportedMonthlyPayment,
+        categoryMonthlyPaymentTotal: 0,
+        remainingTotal,
+        debtToIncomeRatio: reportedPaymentRatio,
+        reportedPaymentShare: debtPaymentShare ?? null,
+        level: reportedLevel,
+        label: `Estimado por tu respuesta: ${debtPaymentShare}`,
+        shouldPrioritizeDebt: reportedLevel === "high",
+        hasCategoryDebtReference: false,
+        hasPossibleDuplicate: false
+      };
+    }
+
     return {
       count: 0,
       source: "none",
@@ -175,6 +237,7 @@ export function getRegisteredDebtSummary({
       categoryMonthlyPaymentTotal: 0,
       remainingTotal,
       debtToIncomeRatio,
+      reportedPaymentShare: debtPaymentShare ?? null,
       level: "none",
       label: registeredDebtLabels.none,
       shouldPrioritizeDebt: false,
@@ -195,6 +258,7 @@ export function getRegisteredDebtSummary({
     categoryMonthlyPaymentTotal,
     remainingTotal,
     debtToIncomeRatio,
+    reportedPaymentShare: debtPaymentShare ?? null,
     level,
     label: source === "category" ? "Referencia desde gastos" : registeredDebtLabels[level],
     shouldPrioritizeDebt: level === "high",
@@ -206,7 +270,11 @@ export function getRegisteredDebtSummary({
   };
 }
 
-export function getDebtRatioLabel(ratio: number | null) {
+export function getDebtRatioLabel(ratio: number | null, reportedPaymentShare?: string | null) {
+  if (reportedPaymentShare && ratio !== null) {
+    return `${reportedPaymentShare} de ingresos (estimado)`;
+  }
+
   if (ratio === null) {
     return "Por calcular";
   }

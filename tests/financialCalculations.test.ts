@@ -167,4 +167,57 @@ describe("calculateFinancialSnapshot", () => {
     expect(snapshot.sourceMap.currentSavings).toBe("exact");
     expect(snapshot.emergencyFund.status).toBe("none");
   });
+
+  it("does not create savings opportunities after the user reports no small expenses", () => {
+    const snapshot = calculateFinancialSnapshot({
+      onboarding: makeOnboarding({
+        hasSmallExpenses: "No",
+        smallExpensesRange: "Menos de $100.000",
+        smallExpensesIntention: "Redirigir una parte a una meta"
+      }),
+      exactValues: {
+        smallExpenses: 200_000
+      }
+    });
+
+    expect(snapshot.values.smallExpenses).toBe(0);
+    expect(snapshot.sourceMap.smallExpenses).toBe("reported_none");
+    expect(snapshot.smallExpenses.opportunityAmount).toBe(0);
+  });
+
+  it("marks intentionally withheld savings differently from missing data", () => {
+    const snapshot = calculateFinancialSnapshot({
+      onboarding: makeOnboarding({
+        savingsRange: "Prefiero no responder"
+      }),
+      exactValues: {
+        currentSavings: 2_000_000
+      }
+    });
+
+    expect(snapshot.values.currentSavings).toBeNull();
+    expect(snapshot.sourceMap.currentSavings).toBe("withheld");
+  });
+
+  it("uses the reported debt range until detailed debts are registered", () => {
+    const snapshot = calculateFinancialSnapshot({
+      onboarding: makeOnboarding({
+        debtSituation: "Son una preocupación importante",
+        debtPaymentShare: "20% – 40%"
+      }),
+      exactValues: {
+        monthlyIncome: 2_000_000,
+        monthlyExpenses: 2_500_000
+      }
+    });
+
+    expect(snapshot.debt).toMatchObject({
+      source: "reported",
+      monthlyPaymentTotal: 600_000,
+      debtToIncomeRatio: 0.3,
+      reportedPaymentShare: "20% – 40%",
+      level: "high"
+    });
+    expect(snapshot.priority.key).toBe("debt_pressure");
+  });
 });

@@ -32,7 +32,7 @@ import {
   calculateFinancialSnapshot,
   type FinancialSnapshot
 } from "../utils/financialCalculations";
-import { formatCOP } from "../utils/financialRanges";
+import { formatCOP, formatSignedCOP } from "../utils/financialRanges";
 import { formatGoalContribution, getGoalPlanFromOnboarding } from "../utils/goalPlanning";
 import type { ExactFinancialValues } from "../types/financial";
 import { getMonthlyPlanPeriodKey } from "../utils/monthlyPlan";
@@ -141,7 +141,9 @@ function getToneColors(tone: Tone) {
   };
 }
 
-function toFinancialDisplaySource(source: "exact" | "estimated" | "missing"): FinancialDisplay["source"] {
+function toFinancialDisplaySource(
+  source: "exact" | "estimated" | "withheld" | "missing"
+): FinancialDisplay["source"] {
   if (source === "exact") {
     return "exact";
   }
@@ -161,9 +163,18 @@ function getSnapshotDisplay({
 }: {
   exactLabel: string;
   estimatedLabel: string;
-  source: "exact" | "estimated" | "missing";
+  source: "exact" | "estimated" | "withheld" | "missing";
   value: number | null;
 }): FinancialDisplay {
+  if (source === "withheld") {
+    return {
+      label: estimatedLabel,
+      value: "No compartido",
+      source: "empty",
+      helper: "Elegiste no compartir este dato."
+    };
+  }
+
   if (value === null) {
     return {
       label: estimatedLabel,
@@ -287,7 +298,7 @@ function getScenarios(
       ? capacityContribution
       : contributionFromPositiveValue(metrics.estimatedMargin, 0.2);
   const balancedSmallExpensePart = metrics.snapshot.smallExpenses.opportunityAmount;
-  return [
+  const scenarios: Scenario[] = [
     ...(registeredContribution > 0
       ? [
           {
@@ -331,22 +342,31 @@ function getScenarios(
       tags: ["Referencia", "No asigna solo"],
       tone: "support",
       recommended: assignedGoalContribution === null || assignedGoalContribution <= 0
-    },
-    {
+    }
+  ];
+
+  if (balancedSmallExpensePart !== null && balancedSmallExpensePart > 0) {
+    scenarios.push({
       key: "with-small-expenses",
       name: "Capacidad + ajuste",
       monthlyContribution: sumAvailableParts([scenarioWithSmallExpenses, balancedSmallExpensePart]),
       assumption: getScenarioDescription(
         [
           getMarginShareDescription("Capacidad sugerida", scenarioWithSmallExpenses, metrics),
-          getSmallExpensesShareDescription("Parte de gastos pequeños", balancedSmallExpensePart, metrics)
+          getSmallExpensesShareDescription(
+            "Parte de gastos pequeños",
+            balancedSmallExpensePart,
+            metrics
+          )
         ],
         "Combina la capacidad sugerida con una parte de tus gastos pequeños."
       ),
       tags: ["Más exigente", "Revisar"],
       tone: "warning"
-    }
-  ];
+    });
+  }
+
+  return scenarios;
 }
 
 function getAdvanceLabel(scenario: Scenario, months: number) {
@@ -373,7 +393,12 @@ function getMarginLabel(metrics: SimulationBase) {
   }
 
   if (metrics.estimatedMargin <= 0) {
-    return "Margen ajustado";
+    const isMorePrecise =
+      metrics.incomeDisplay.source === "exact" && metrics.expenseDisplay.source === "exact";
+
+    return isMorePrecise
+      ? formatSignedCOP(metrics.estimatedMargin)
+      : `${formatSignedCOP(metrics.estimatedMargin)} aprox.`;
   }
 
   return getAmountLabel(

@@ -1042,6 +1042,10 @@ function GoalCard({
               <Text style={styles.registerButtonText}>Registrar</Text>
             </Pressable>
           </View>
+          <Text style={styles.helperText}>
+            Registrar suma este monto al ahorro actual de la meta y recalcula el tiempo restante.
+            No modifica el aporte mensual asignado.
+          </Text>
         </View>
       ) : isPausedGoal ? (
         <View style={styles.pausedContributionBox}>
@@ -1095,6 +1099,9 @@ function GoalCard({
               <Text style={styles.metaValue}>{estimatedTime}</Text>
             </View>
           </View>
+          <Text style={styles.helperText}>
+            Tiempo estimado = monto restante ÷ aporte mensual, redondeado al mes siguiente.
+          </Text>
 
           <View style={styles.contributionBox}>
             <View style={styles.contributionHeader}>

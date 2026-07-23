@@ -49,7 +49,7 @@ import {
   type NewDebtViability
 } from "../utils/debtCalculations";
 import { calculateFinancialSnapshot } from "../utils/financialCalculations";
-import { formatCOP, parseCOPInput } from "../utils/financialRanges";
+import { formatCOP, formatSignedCOP, parseCOPInput } from "../utils/financialRanges";
 
 type IconProps = {
   color?: string;
@@ -357,6 +357,12 @@ function getDebtInsight({
 }) {
   if (source === "category" && monthlyPaymentTotal > 0) {
     return `Usamos ${formatCOP(monthlyPaymentTotal)} que registraste en gastos como Deudas. Puedes agregar el detalle cuando lo tengas.`;
+  }
+
+  if (source === "reported") {
+    return monthlyPaymentTotal > 0
+      ? "Esta cifra es una referencia calculada desde el rango que reportaste, no una cuota confirmada."
+      : "Conservamos el rango que reportaste; falta una referencia de ingresos para convertirlo en un monto.";
   }
 
   if (count === 0) {
@@ -1002,10 +1008,16 @@ export default function DebtsScreen() {
     () =>
       getRegisteredDebtSummary({
         debts,
+        debtPaymentShare: onboarding.debtPaymentShare,
         expenseCategoryAmounts: onboarding.expenseCategoryAmounts,
         monthlyIncome: snapshot.cashflow.monthlyIncome
       }),
-    [debts, onboarding.expenseCategoryAmounts, snapshot.cashflow.monthlyIncome]
+    [
+      debts,
+      onboarding.debtPaymentShare,
+      onboarding.expenseCategoryAmounts,
+      snapshot.cashflow.monthlyIncome
+    ]
   );
   const newDebtPaymentValue = parseCOPInput(newDebtPayment);
   const newDebtEvaluation = useMemo(
@@ -1159,7 +1171,9 @@ export default function DebtsScreen() {
             <View style={styles.heroTextGroup}>
               <Text style={styles.heroKicker}>Pagas al mes en deudas</Text>
               <Text style={[styles.heroAmount, { color: getToneColors(summaryTone).text }]}>
-                {getDebtTotalLabel(debtSummary.monthlyPaymentTotal)}
+                {debtSummary.source === "reported" && debtSummary.monthlyPaymentTotal > 0
+                  ? `${formatCOP(debtSummary.monthlyPaymentTotal)} aprox.`
+                  : getDebtTotalLabel(debtSummary.monthlyPaymentTotal)}
               </Text>
               <Text style={styles.heroInsight}>
                 {getDebtInsight({
@@ -1171,8 +1185,9 @@ export default function DebtsScreen() {
               </Text>
               <View style={styles.guidanceNote}>
                 <Text style={styles.guidanceNoteText}>
-                  Agrega tus cuotas para evaluar mejor si una nueva obligacion cabe en tu
-                  presupuesto.
+                  {debtSummary.source === "reported"
+                    ? "Usamos tu rango mientras no registres cuotas. Puedes mantenerlo así o agregar detalles para mejorar la precisión."
+                    : "Agrega tus cuotas para evaluar mejor si una nueva obligación cabe en tu presupuesto."}
                 </Text>
               </View>
             </View>
@@ -1182,7 +1197,12 @@ export default function DebtsScreen() {
             <SummaryMetric
               label="Relacion deudas vs ingresos"
               tone={summaryTone}
-              value={getDebtRatioLabel(debtSummary.debtToIncomeRatio)}
+              value={getDebtRatioLabel(
+                debtSummary.debtToIncomeRatio,
+                debtSummary.source === "reported"
+                  ? debtSummary.reportedPaymentShare
+                  : null
+              )}
             />
             <SummaryMetric
               label="Saldo registrado"
@@ -1198,7 +1218,7 @@ export default function DebtsScreen() {
               }
               value={
                 snapshot.cashflow.monthlyMargin !== null
-                  ? formatCOP(snapshot.cashflow.monthlyMargin)
+                  ? formatSignedCOP(snapshot.cashflow.monthlyMargin)
                   : "Por calcular"
               }
             />

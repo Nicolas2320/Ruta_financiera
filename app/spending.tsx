@@ -431,6 +431,10 @@ function getSmallExpensesValue(metrics: MonthlyPlanMetrics) {
   const { amount } = metrics.snapshot.smallExpenses;
   const source = metrics.snapshot.sourceMap.smallExpenses;
 
+  if (source === "reported_none") {
+    return "No identificados";
+  }
+
   if (source === "unknown") {
     return "No claro aún";
   }
@@ -455,6 +459,10 @@ function getSmallExpensesToIncomePercentage(metrics: MonthlyPlanMetrics) {
 
 function getSmallExpensesComparisonValue(metrics: MonthlyPlanMetrics) {
   const smallExpenses = metrics.snapshot.smallExpenses.amount;
+
+  if (metrics.snapshot.sourceMap.smallExpenses === "reported_none") {
+    return "No identificados";
+  }
 
   if (metrics.snapshot.sourceMap.smallExpenses === "unknown") {
     return "Monto no claro aún";
@@ -1198,7 +1206,9 @@ export default function SpendingScreen() {
               <Text style={styles.smallExpensesLabel}>Monto mensual</Text>
               <Text style={styles.smallExpensesValue}>{getSmallExpensesValue(metrics)}</Text>
               <Text style={styles.helperText}>
-                {data.smallExpensesRange ?? "Sin rango definido."}
+                {data.hasSmallExpenses === "No"
+                  ? "No usamos este rubro para estimar aportes."
+                  : data.smallExpensesRange ?? "Sin rango definido."}
               </Text>
             </View>
             <Text style={styles.text}>{getSmallExpensesText(data, metrics)}</Text>

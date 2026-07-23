@@ -74,7 +74,7 @@ export default function PrivacyScreen() {
             </Pressable>
 
             <View style={styles.stepPill}>
-              <Text style={styles.stepPillText}>Paso 2 de 8</Text>
+              <Text style={styles.stepPillText}>Inicio del diagnóstico · 1 de 7</Text>
             </View>
 
             <Pressable
@@ -87,7 +87,7 @@ export default function PrivacyScreen() {
             </Pressable>
           </View>
 
-          <StepProgress currentStep={2} totalSteps={8} />
+          <StepProgress currentStep={1} totalSteps={7} />
 
           <View style={styles.heroCard}>
             <View style={styles.heroContent}>

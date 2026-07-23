@@ -66,13 +66,13 @@ export default function ProfileScreen() {
           ) : null}
           {!isProfileEditMode ? (
             <StepHeader
-              currentStep={3}
+              currentStep={2}
               nextAccessibilityLabel="Continuar hacia preguntas de ingresos"
               nextDisabled={!canContinue}
               onBack={() => router.push("/privacy")}
               onNext={handleContinue}
               title="Perfil básico"
-              totalSteps={8}
+              totalSteps={7}
             />
           ) : null}
 

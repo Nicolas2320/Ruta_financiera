@@ -286,13 +286,13 @@ export default function ExpensesScreen() {
           ) : null}
           {!isEditMode ? (
           <StepHeader
-            currentStep={5}
+            currentStep={4}
             nextAccessibilityLabel="Continuar hacia gastos hormiga"
             nextDisabled={!canContinue}
             onBack={() => router.push("/income")}
             onNext={handleContinue}
             title="Gastos"
-            totalSteps={8}
+            totalSteps={7}
           />
           ) : null}
 

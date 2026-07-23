@@ -636,8 +636,12 @@ export function getLegacyFieldsFromGoal(goal: FinancialGoal | null) {
 }
 
 export function hasCompletedOnboarding(onboarding: OnboardingData) {
+  const skipsSmallExpenseDetails = onboarding.hasSmallExpenses === "No";
   const hasRequiredSmallExpenseCategories =
     onboarding.hasSmallExpenses !== "Sí" || onboarding.smallExpenseCategories.length > 0;
+  const hasRequiredSmallExpensePlan =
+    skipsSmallExpenseDetails ||
+    Boolean(onboarding.smallExpensesRange && onboarding.smallExpensesIntention);
   const primaryGoal = getPrimaryFinancialGoal(onboarding);
 
   return Boolean(
@@ -652,8 +656,7 @@ export function hasCompletedOnboarding(onboarding: OnboardingData) {
       onboarding.expensesFeeling &&
       onboarding.hasSmallExpenses &&
       hasRequiredSmallExpenseCategories &&
-      onboarding.smallExpensesRange &&
-      onboarding.smallExpensesIntention &&
+      hasRequiredSmallExpensePlan &&
       onboarding.savingsRange &&
       onboarding.emergencyCoverage &&
       onboarding.debtSituation &&

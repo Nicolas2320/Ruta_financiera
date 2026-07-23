@@ -5,11 +5,19 @@ import {
   type ExactFinancialValues,
   type OnboardingData
 } from "../types/financial";
-import { getRegisteredDebtSummary } from "./debtCalculations";
+import {
+  getRegisteredDebtSummary,
+  type DebtDataSource
+} from "./debtCalculations";
 import { formatCOP } from "./financialRanges";
 
-export type SnapshotSource = "exact" | "estimated" | "missing";
-export type SmallExpensesSource = "exact" | "estimated" | "unknown" | "missing";
+export type SnapshotSource = "exact" | "estimated" | "withheld" | "missing";
+export type SmallExpensesSource =
+  | "exact"
+  | "estimated"
+  | "reported_none"
+  | "unknown"
+  | "missing";
 export type SavingsCapacityLevel = "negative" | "very_tight" | "low" | "medium" | "high" | "unknown";
 export type EmergencyFundStatus = "none" | "starter" | "building" | "solid" | "strong" | "unknown";
 export type GoalStatus =
@@ -108,12 +116,13 @@ export type FinancialSnapshot = {
     level: DebtLevel;
     shouldPrioritizeDebt: boolean;
     label: string;
-    source: "registered" | "category" | "none";
+    source: DebtDataSource;
     registeredDebtCount: number;
     monthlyPaymentTotal: number;
     categoryMonthlyPaymentTotal: number;
     remainingTotal: number | null;
     debtToIncomeRatio: number | null;
+    reportedPaymentShare: string | null;
     hasCategoryDebtReference: boolean;
     hasPossibleDuplicate: boolean;
   };
@@ -251,6 +260,14 @@ function getRangeEstimate(label: string | null | undefined, estimates: Record<st
 
 function getSource(value: number | null): SnapshotSource {
   return value === null ? "missing" : "estimated";
+}
+
+function getRangeSource(value: number | null, selectedRange: string | null | undefined): SnapshotSource {
+  if (normalizeText(selectedRange ?? "").includes("prefiero")) {
+    return "withheld";
+  }
+
+  return getSource(value);
 }
 
 function isPositiveNumber(value: unknown): value is number {
@@ -605,6 +622,9 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
     primaryGoal?.amountRange ?? onboarding.goalAmountRange
   );
   const estimatedSmallExpenses = estimateSmallExpensesFromRange(onboarding.smallExpensesRange);
+  const reportedNoSmallExpenses = onboarding.hasSmallExpenses === "No";
+  const withheldSavings =
+    normalizeText(onboarding.savingsRange ?? "").includes("prefiero");
 
   const monthlyIncome = isPositiveNumber(exactMonthlyIncome)
     ? exactMonthlyIncome
@@ -612,15 +632,19 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const monthlyExpenses = isPositiveNumber(exactMonthlyExpenses)
     ? exactMonthlyExpenses
     : estimatedMonthlyExpenses;
-  const currentSavings = isNonNegativeNumber(exactCurrentSavings)
-    ? exactCurrentSavings
-    : estimatedCurrentSavings;
+  const currentSavings = withheldSavings
+    ? null
+    : isNonNegativeNumber(exactCurrentSavings)
+      ? exactCurrentSavings
+      : estimatedCurrentSavings;
   const goalTargetAmount = isPositiveNumber(primaryGoal?.targetAmount)
     ? primaryGoal.targetAmount
     : estimatedGoalTargetAmount;
-  const smallExpenses = isNonNegativeNumber(exactSmallExpenses)
-    ? exactSmallExpenses
-    : estimatedSmallExpenses;
+  const smallExpenses = reportedNoSmallExpenses
+    ? 0
+    : isNonNegativeNumber(exactSmallExpenses)
+      ? exactSmallExpenses
+      : estimatedSmallExpenses;
   const goalCurrentSavings = isNonNegativeNumber(primaryGoal?.currentAmount)
     ? primaryGoal.currentAmount
     : currentSavings;
@@ -664,6 +688,7 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const selectedDebtLevel = getDebtLevel(onboarding.debtSituation, onboarding.debtPaymentShare);
   const registeredDebtSummary = getRegisteredDebtSummary({
     debts: onboarding.debts,
+    debtPaymentShare: onboarding.debtPaymentShare,
     expenseCategoryAmounts: onboarding.expenseCategoryAmounts,
     monthlyIncome
   });
@@ -679,19 +704,25 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
       smallExpenses
     },
     sourceMap: {
-      monthlyIncome: isPositiveNumber(exactMonthlyIncome) ? "exact" : getSource(monthlyIncome),
+      monthlyIncome: isPositiveNumber(exactMonthlyIncome)
+        ? "exact"
+        : getRangeSource(monthlyIncome, onboarding.incomeRange),
       monthlyExpenses: isPositiveNumber(exactMonthlyExpenses)
         ? "exact"
-        : getSource(monthlyExpenses),
-      currentSavings: isNonNegativeNumber(exactCurrentSavings)
+        : getRangeSource(monthlyExpenses, onboarding.expensesRange),
+      currentSavings: withheldSavings
+        ? "withheld"
+        : isNonNegativeNumber(exactCurrentSavings)
         ? "exact"
-        : getSource(currentSavings),
+        : getRangeSource(currentSavings, onboarding.savingsRange),
       goalTargetAmount:
         isPositiveNumber(primaryGoal?.targetAmount)
           ? "exact"
           : getSource(goalTargetAmount),
       smallExpenses:
-        isNonNegativeNumber(exactSmallExpenses)
+        reportedNoSmallExpenses
+          ? "reported_none"
+          : isNonNegativeNumber(exactSmallExpenses)
           ? "exact"
           : onboarding.smallExpensesRange === "No sé" || onboarding.smallExpensesRange === "No estoy seguro"
           ? "unknown"
@@ -731,8 +762,12 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
       amount: smallExpenses,
       level: smallExpensesLevel,
       opportunityAmount: smallExpensesOpportunity,
-      label: smallExpensesLabels[smallExpensesLevel],
-      recommendation: "Podrías revisar una parte de estos gastos, sin eliminarlos todos."
+      label: reportedNoSmallExpenses
+        ? "No identificaste gastos pequeños frecuentes"
+        : smallExpensesLabels[smallExpensesLevel],
+      recommendation: reportedNoSmallExpenses
+        ? "Indicaste que no identificas gastos pequeños frecuentes. No usamos este rubro para crear aportes."
+        : "Podrías revisar una parte de estos gastos, sin eliminarlos todos."
     },
     debt: {
       level: debtLevel,
@@ -745,6 +780,7 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
       categoryMonthlyPaymentTotal: registeredDebtSummary.categoryMonthlyPaymentTotal,
       remainingTotal: registeredDebtSummary.remainingTotal,
       debtToIncomeRatio: registeredDebtSummary.debtToIncomeRatio,
+      reportedPaymentShare: registeredDebtSummary.reportedPaymentShare,
       hasCategoryDebtReference: registeredDebtSummary.hasCategoryDebtReference,
       hasPossibleDuplicate: registeredDebtSummary.hasPossibleDuplicate
     }
