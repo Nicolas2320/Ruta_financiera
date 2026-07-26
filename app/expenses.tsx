@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -210,7 +210,7 @@ export default function ExpensesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string }>();
   const { width } = useWindowDimensions();
-  const { onboarding, updateOnboarding } = useOnboarding();
+  const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isSpendingEditMode = source === "spending";
   const isProfileEditMode = source === "profile";
@@ -225,6 +225,18 @@ export default function ExpensesScreen() {
   const [selectedExpenseFeeling, setSelectedExpenseFeeling] = useState<string | null>(
     onboarding.expensesFeeling
   );
+  const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
+
+  useEffect(() => {
+    if (onboardingSyncStatus !== "saved" || hasHydratedStoredAnswers.current) {
+      return;
+    }
+
+    hasHydratedStoredAnswers.current = true;
+    setSelectedExpenseRange(normalizeExpenseRange(onboarding.expensesRange));
+    setSelectedCategories(onboarding.expenseCategories);
+    setSelectedExpenseFeeling(onboarding.expensesFeeling);
+  }, [onboarding, onboardingSyncStatus]);
 
   const canContinue = Boolean(
     selectedExpenseRange && selectedCategories.length > 0 && selectedExpenseFeeling
@@ -286,13 +298,13 @@ export default function ExpensesScreen() {
           ) : null}
           {!isEditMode ? (
           <StepHeader
-            currentStep={5}
+            currentStep={4}
             nextAccessibilityLabel="Continuar hacia gastos hormiga"
             nextDisabled={!canContinue}
-            onBack={() => router.push("/income")}
+            onBack={() => router.replace("/income")}
             onNext={handleContinue}
             title="Gastos"
-            totalSteps={8}
+            totalSteps={7}
           />
           ) : null}
 

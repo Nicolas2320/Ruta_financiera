@@ -302,12 +302,18 @@ export default function SummaryScreen() {
               },
               {
                 label: "Categorías seleccionadas",
-                value: onboarding.smallExpenseCategories
+                value:
+                  onboarding.hasSmallExpenses === "No"
+                    ? "No aplica"
+                    : onboarding.smallExpenseCategories
               },
               { label: smallExpensesDisplay.label, value: smallExpensesDisplay.value },
               {
                 label: "Qué quiere hacer con esos gastos",
-                value: onboarding.smallExpensesIntention
+                value:
+                  onboarding.hasSmallExpenses === "No"
+                    ? "No aplica"
+                    : onboarding.smallExpensesIntention
               }
             ]}
             icon={Coffee}

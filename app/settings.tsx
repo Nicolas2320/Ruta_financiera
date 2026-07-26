@@ -67,7 +67,7 @@ export default function SettingsScreen() {
             </View>
             <Text style={styles.title}>Configuracion</Text>
             <Text style={styles.subtitle}>
-              Gestiona la sesion de prueba y revisa el estado de sincronizacion.
+              Gestiona la sesión de prueba y revisa el estado de sincronización.
             </Text>
           </View>
 
@@ -145,8 +145,8 @@ export default function SettingsScreen() {
               <View style={styles.resetConfirmBox}>
                 <Text style={styles.resetConfirmTitle}>Confirmar borrado</Text>
                 <Text style={styles.settingsLinkText}>
-                  Tendras que crear de nuevo tu diagnostico financiero para ver dashboard,
-                  simulacion y plan mensual.
+                  Tendrás que crear de nuevo tu diagnóstico financiero para ver el dashboard,
+                  simulación y plan mensual.
                 </Text>
                 <View style={styles.resetActions}>
                   <Pressable

@@ -95,16 +95,25 @@ function getInitialInputValues(exactValues: ExactFinancialValues): InputValues {
   );
 }
 
-function getValuesToSave(inputValues: InputValues): ExactFinancialValues {
-  return fields.reduce<ExactFinancialValues>((values, field) => {
+function getValuesToSave(
+  inputValues: InputValues,
+  reportedNoSmallExpenses: boolean
+): ExactFinancialValues {
+  const values = fields.reduce<ExactFinancialValues>((draftValues, field) => {
     const parsedValue = parseCOPInput(inputValues[field.id]);
 
     if (parsedValue !== null) {
-      values[field.id] = parsedValue;
+      draftValues[field.id] = parsedValue;
     }
 
-    return values;
+    return draftValues;
   }, {});
+
+  if (reportedNoSmallExpenses) {
+    delete values.smallExpenses;
+  }
+
+  return values;
 }
 
 function getComparableExactValue(values: ExactFinancialValues, fieldId: ExactFinancialValueKey) {
@@ -125,9 +134,24 @@ function hasUnsavedExactValueChanges(
 
 export default function ImprovePlanScreen() {
   const router = useRouter();
-  const { exactValues, onboardingSyncError, saveExactValues } = useOnboarding();
+  const { exactValues, onboarding, onboardingSyncError, saveExactValues } = useOnboarding();
+  const reportedNoSmallExpenses = onboarding.hasSmallExpenses === "No";
+  const effectiveExactValues = useMemo(
+    () =>
+      reportedNoSmallExpenses
+        ? { ...exactValues, smallExpenses: 0 }
+        : exactValues,
+    [exactValues, reportedNoSmallExpenses]
+  );
+  const visibleFields = useMemo(
+    () =>
+      reportedNoSmallExpenses
+        ? fields.filter((field) => field.id !== "smallExpenses")
+        : fields,
+    [reportedNoSmallExpenses]
+  );
   const [inputValues, setInputValues] = useState<InputValues>(() =>
-    getInitialInputValues(exactValues)
+    getInitialInputValues(effectiveExactValues)
   );
   const [hasEdited, setHasEdited] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -135,22 +159,32 @@ export default function ImprovePlanScreen() {
 
   useEffect(() => {
     if (!hasEdited) {
-      setInputValues(getInitialInputValues(exactValues));
+      setInputValues(getInitialInputValues(effectiveExactValues));
     }
-  }, [exactValues, hasEdited]);
+  }, [effectiveExactValues, hasEdited]);
 
-  const valuesToSave = useMemo(() => getValuesToSave(inputValues), [inputValues]);
+  const valuesToSave = useMemo(
+    () => getValuesToSave(inputValues, reportedNoSmallExpenses),
+    [inputValues, reportedNoSmallExpenses]
+  );
+  const effectiveDraftValues = useMemo(
+    () =>
+      reportedNoSmallExpenses
+        ? { ...valuesToSave, smallExpenses: 0 }
+        : valuesToSave,
+    [reportedNoSmallExpenses, valuesToSave]
+  );
   const savedPrecisionStatus = useMemo(
-    () => getPlanPrecisionStatus(exactValues),
-    [exactValues]
+    () => getPlanPrecisionStatus(effectiveExactValues),
+    [effectiveExactValues]
   );
   const draftPrecisionStatus = useMemo(
-    () => getPlanPrecisionStatus(valuesToSave),
-    [valuesToSave]
+    () => getPlanPrecisionStatus(effectiveDraftValues),
+    [effectiveDraftValues]
   );
   const hasUnsavedChanges = useMemo(
-    () => hasUnsavedExactValueChanges(exactValues, valuesToSave),
-    [exactValues, valuesToSave]
+    () => hasUnsavedExactValueChanges(effectiveExactValues, effectiveDraftValues),
+    [effectiveDraftValues, effectiveExactValues]
   );
 
   const handleInputChange = (fieldId: ExactFinancialValueKey, value: string) => {
@@ -205,6 +239,9 @@ export default function ImprovePlanScreen() {
                 <Text style={styles.statusBadgeText}>{savedPrecisionStatus.state}</Text>
               </View>
               <Text style={styles.progressText}>{savedPrecisionStatus.count} de 4 datos guardados</Text>
+              {reportedNoSmallExpenses ? (
+                <Text style={styles.progressText}>Gastos pequeños: no aplica</Text>
+              ) : null}
             </View>
             {hasUnsavedChanges ? (
               <View style={styles.unsavedNotice}>
@@ -217,7 +254,7 @@ export default function ImprovePlanScreen() {
           </View>
 
           <View style={styles.form}>
-            {fields.map((field) => (
+            {visibleFields.map((field) => (
               <CurrencyField
                 key={field.id}
                 field={field}
@@ -225,6 +262,36 @@ export default function ImprovePlanScreen() {
                 value={inputValues[field.id]}
               />
             ))}
+            {reportedNoSmallExpenses ? (
+              <View style={styles.revisitCard}>
+                <View style={styles.revisitIcon}>
+                  <Coffee color="#7C3AED" size={22} strokeWidth={2.4} />
+                </View>
+                <View style={styles.revisitBody}>
+                  <View style={styles.fieldLabelRow}>
+                    <Text style={styles.fieldLabel}>Gastos pequeños mensuales</Text>
+                    <Text style={styles.reportedAnswerText}>RESPONDISTE “NO”</Text>
+                  </View>
+                  <Text style={styles.fieldHelper}>
+                    Conservamos tu respuesta. Si ahora identificaste consumos pequeños frecuentes,
+                    puedes volver a revisarlos y agregarlos a tu diagnóstico.
+                  </Text>
+                  <PrimaryButton
+                    accessibilityLabel="Revisar y agregar gastos pequeños"
+                    icon={null}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/small-expenses",
+                        params: { source: "improve-plan" }
+                      })
+                    }
+                    style={styles.revisitButton}
+                    title="Revisar gastos pequeños"
+                    variant="secondary"
+                  />
+                </View>
+              </View>
+            ) : null}
           </View>
 
           {feedback ? (
@@ -236,8 +303,9 @@ export default function ImprovePlanScreen() {
           <View style={styles.noticeCard}>
             <CheckCircle2 color={colors.support} size={18} strokeWidth={2.4} />
             <Text style={styles.noticeText}>
-              Los 4 datos son opcionales. Puedes guardar solo lo que tengas claro y ajustar el
-              resto después.
+              {reportedNoSmallExpenses
+                ? "Los 3 datos visibles son opcionales. Tu respuesta sobre gastos pequeños se conserva como No aplica."
+                : "Los 4 datos son opcionales. Puedes guardar solo lo que tengas claro y ajustar el resto después."}
             </Text>
           </View>
 
@@ -404,6 +472,42 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
     padding: spacing.md
+  },
+  revisitCard: {
+    ...shadows.card,
+    alignItems: "flex-start",
+    backgroundColor: "#FBF8FF",
+    borderColor: "#DCCBFF",
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  revisitIcon: {
+    alignItems: "center",
+    backgroundColor: "#F1E8FF",
+    borderRadius: radius.pill,
+    height: 46,
+    justifyContent: "center",
+    width: 46
+  },
+  revisitBody: {
+    flex: 1,
+    gap: spacing.sm,
+    minWidth: 0
+  },
+  reportedAnswerText: {
+    color: "#7C3AED",
+    fontSize: typography.small,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.small
+  },
+  revisitButton: {
+    alignSelf: "stretch",
+    backgroundColor: colors.surface,
+    borderColor: "#DCCBFF",
+    minHeight: 48
   },
   fieldIcon: {
     alignItems: "center",

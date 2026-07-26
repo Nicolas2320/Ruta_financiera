@@ -159,12 +159,12 @@ const impactDefinitionsByActionId: Record<string, ImpactDefinition> = {
   },
   "small-expense-limit": {
     kind: "limit_commitment",
-    label: "Limite mensual definido",
+    label: "Límite mensual definido",
     target: "small_expenses"
   },
   "weekly-limit": {
     kind: "limit_commitment",
-    label: "Limite semanal definido",
+    label: "Límite semanal definido",
     target: "cashflow"
   }
 };
@@ -201,7 +201,7 @@ function getFallbackImpactDefinition(value: ActionProgressValue | null | undefin
   if (record?.evidence?.type === "decision") {
     return {
       kind: "insight",
-      label: record.evidence.label ?? "Decision registrada",
+      label: record.evidence.label ?? "Decisión registrada",
       target: "profile"
     };
   }
@@ -297,11 +297,11 @@ export function getActionImpactMessage(item: MonthlyActionImpactItem | null) {
   }
 
   if (item.kind === "limit_commitment") {
-    return "Queda como compromiso para revisar despues; aun no se toma como ahorro real.";
+    return "Queda como compromiso para revisar después; aún no se toma como ahorro real.";
   }
 
   if (item.kind === "data_signal") {
-    return "Sirve como senal para actualizar datos con confirmacion, no como cambio automatico.";
+    return "Sirve como señal para actualizar datos con confirmación, no como cambio automático.";
   }
 
   return null;
@@ -320,36 +320,36 @@ export function getMonthlyImpactHeadline(summary: MonthlyActionImpactSummary) {
 
   if (summary.insightSignals.length > 0 || summary.dataSignals.length > 0) {
     const totalSignals = summary.insightSignals.length + summary.dataSignals.length;
-    return `${totalSignals} senal${totalSignals === 1 ? "" : "es"} para ajustar el plan.`;
+    return `${totalSignals} ${totalSignals === 1 ? "señal" : "señales"} para ajustar el plan.`;
   }
 
-  return "Aun no hay impacto registrado este mes.";
+  return "Aún no hay impacto registrado este mes.";
 }
 
 export function getNextPlanAdjustmentHint(summary: MonthlyActionImpactSummary) {
   if (summary.realContributionTotal > 0 && summary.limitCommitments.length > 0) {
-    return "El proximo plan puede mantener el aporte real y comprobar si tus limites funcionaron.";
+    return "El próximo plan puede mantener el aporte real y comprobar si tus límites funcionaron.";
   }
 
   if (summary.goalContributionTotal > 0) {
-    return "El proximo plan puede sostener este aporte o probar un aumento pequeno si el mes se sintio viable.";
+    return "El próximo plan puede sostener este aporte o probar un aumento pequeño si el mes se sintió viable.";
   }
 
   if (summary.emergencyContributionTotal > 0 || summary.generalSavingsContributionTotal > 0) {
-    return "El proximo plan puede repetir el aporte y enfocarse en hacerlo mas automatico.";
+    return "El próximo plan puede repetir el aporte y enfocarse en hacerlo más automático.";
   }
 
   if (summary.limitCommitments.length > 0) {
-    return "El proximo plan deberia revisar si el limite se cumplio antes de contarlo como ahorro.";
+    return "El próximo plan debería revisar si el límite se cumplió antes de contarlo como ahorro.";
   }
 
   if (summary.dataSignals.length > 0) {
-    return "El proximo plan puede pedir confirmacion para convertir esos datos en valores del perfil.";
+    return "El próximo plan puede pedir confirmación para convertir esos datos en valores del perfil.";
   }
 
   if (summary.insightSignals.length > 0) {
-    return "El proximo plan puede convertir lo que aprendiste en una accion con monto o decision concreta.";
+    return "El próximo plan puede convertir lo que aprendiste en una acción con monto o decisión concreta.";
   }
 
-  return "Si no registras avances, el proximo plan deberia mantener pasos pequenos y faciles de completar.";
+  return "Si no registras avances, el próximo plan debería mantener pasos pequeños y fáciles de completar.";
 }

@@ -51,11 +51,11 @@ const goalTypeLabels: Record<string, string> = {
   business: "Negocio",
   cashflow: "Flujo",
   debt: "Deudas",
-  education: "Educacion",
+  education: "Educación",
   financial: "Financiera",
   future: "Futuro",
   home: "Vivienda",
-  investment: "Inversion",
+  investment: "Inversión",
   security: "Seguridad",
   wellbeing: "Bienestar"
 };
@@ -349,7 +349,7 @@ function getViability({
   if (monthlyContribution > 0) {
     return {
       viability: "stretched",
-      viabilityLabel: "Necesita mas tiempo"
+      viabilityLabel: "Necesita más tiempo"
     };
   }
 

@@ -3,9 +3,9 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   CalendarCheck,
-  CirclePlay,
   ClipboardList,
   Coffee,
+  LogIn,
   Route,
   ShieldCheck
 } from "lucide-react-native";
@@ -75,9 +75,13 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const { session } = useAuth();
   const { hasCompletedOnboarding, onboardingSyncStatus } = useOnboarding();
-  const isLoadingProfile = Boolean(session && onboardingSyncStatus === "loading");
+  const isLoadingProfile = onboardingSyncStatus === "loading";
   const primaryButtonTitle =
-    session && hasCompletedOnboarding ? "Ir a mi inicio" : "Crear mi diagnóstico";
+    session && hasCompletedOnboarding
+      ? "Ir a mi inicio"
+      : !session && hasCompletedOnboarding
+        ? "Continuar mi diagnóstico"
+        : "Crear mi diagnóstico";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -149,7 +153,7 @@ export default function WelcomeScreen() {
               iconPosition="right"
               onPress={() => {
                 if (!session) {
-                  router.push("/auth");
+                  router.push(hasCompletedOnboarding ? "/summary" : "/privacy");
                   return;
                 }
 
@@ -163,15 +167,22 @@ export default function WelcomeScreen() {
               style={styles.primaryButton}
               title={isLoadingProfile ? "Cargando..." : primaryButtonTitle}
             />
-            <PrimaryButton
-              accessibilityLabel="Explorar la demo de Ruta Financiera"
-              icon={CirclePlay}
-              iconPosition="right"
-              onPress={() => router.push("/demo")}
-              style={styles.secondaryButton}
-              title="Explorar demo"
-              variant="secondary"
-            />
+            {!session ? (
+              <PrimaryButton
+                accessibilityLabel="Iniciar sesión en una cuenta existente"
+                icon={LogIn}
+                iconPosition="right"
+                onPress={() =>
+                  router.push({
+                    pathname: "/auth",
+                    params: { mode: "sign-in" }
+                  })
+                }
+                style={styles.loginButton}
+                title="Iniciar sesión"
+                variant="secondary"
+              />
+            ) : null}
           </View>
         </View>
       </ScrollView>
@@ -382,9 +393,9 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     minHeight: 56
   },
-  secondaryButton: {
-    backgroundColor: colors.surface,
-    borderColor: colors.primary,
+  loginButton: {
+    backgroundColor: colors.primarySoft,
+    borderColor: "#CFE0FF",
     borderRadius: 17,
     minHeight: 54
   }

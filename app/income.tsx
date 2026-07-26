@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ArrowLeftRight, CalendarCheck, PiggyBank } from "lucide-react-native";
@@ -73,7 +73,7 @@ const incomeFrequencies = [
 export default function IncomeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string }>();
-  const { onboarding, updateOnboarding } = useOnboarding();
+  const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isProfileEditMode = source === "profile";
   const [selectedIncomeRange, setSelectedIncomeRange] = useState<string | null>(
@@ -85,6 +85,18 @@ export default function IncomeScreen() {
   const [selectedIncomeFrequency, setSelectedIncomeFrequency] = useState<string | null>(
     onboarding.incomeFrequency
   );
+  const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
+
+  useEffect(() => {
+    if (onboardingSyncStatus !== "saved" || hasHydratedStoredAnswers.current) {
+      return;
+    }
+
+    hasHydratedStoredAnswers.current = true;
+    setSelectedIncomeRange(onboarding.incomeRange);
+    setSelectedIncomeType(onboarding.incomeType);
+    setSelectedIncomeFrequency(onboarding.incomeFrequency);
+  }, [onboarding, onboardingSyncStatus]);
 
   const canContinue = Boolean(
     selectedIncomeRange && selectedIncomeType && selectedIncomeFrequency
@@ -121,13 +133,13 @@ export default function IncomeScreen() {
           ) : null}
           {!isProfileEditMode ? (
             <StepHeader
-              currentStep={4}
+              currentStep={3}
               nextAccessibilityLabel="Continuar hacia preguntas de gastos"
               nextDisabled={!canContinue}
-              onBack={() => router.push("/profile")}
+              onBack={() => router.replace("/profile")}
               onNext={handleContinue}
               title="Ingresos"
-              totalSteps={8}
+              totalSteps={7}
             />
           ) : null}
 

@@ -83,6 +83,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
 
         setAuthError(null);
+        setSession(data.session);
         return { error: null, session: data.session };
       },
       signOut: async () => {
@@ -116,6 +117,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
 
         setAuthError(null);
+        if (data.session) {
+          setSession(data.session);
+        }
         return { error: null, session: data.session };
       }
     }),

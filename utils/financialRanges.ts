@@ -268,6 +268,10 @@ export function formatCOP(value: number) {
   return `$${Math.round(value).toLocaleString("es-CO")}`;
 }
 
+export function formatSignedCOP(value: number) {
+  return value < 0 ? `-${formatCOP(Math.abs(value))}` : formatCOP(value);
+}
+
 export function parseCOPInput(value: string) {
   if (value.includes("-")) {
     return null;
@@ -417,6 +421,15 @@ export function getCurrentSavingsDisplay(profile: FinancialValueProfile): Financ
 }
 
 export function getSmallExpensesDisplay(profile: FinancialValueProfile): FinancialValueDisplay {
+  if (profile.onboarding?.hasSmallExpenses === "No") {
+    return {
+      label: "Gastos pequeños mensuales",
+      value: "$0",
+      source: "exact",
+      helper: "Indicaste que no identificas gastos pequeños frecuentes."
+    };
+  }
+
   return (
     getExactDisplay(
       "Gastos pequeños mensuales",

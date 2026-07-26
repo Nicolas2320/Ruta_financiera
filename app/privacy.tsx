@@ -1,23 +1,22 @@
 import type { ComponentType } from "react";
-import type { DimensionValue } from "react-native";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
-  ArrowRight,
   ArrowLeftRight,
   Ban,
-  ChevronLeft,
   CreditCard,
   IdCard,
   KeyRound,
   LockKeyhole,
   ShieldCheck
 } from "lucide-react-native";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
+import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
+import { useAuth } from "../context/AuthContext";
 
 const privacyShield = require("../assets/illustrations/privacy-shield.png");
 
@@ -53,6 +52,7 @@ const excludedData: ExcludedDataItem[] = [
 
 export default function PrivacyScreen() {
   const router = useRouter();
+  const { session } = useAuth();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -63,31 +63,14 @@ export default function PrivacyScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <View style={styles.stepHeader}>
-            <Pressable
-              accessibilityLabel="Volver a la pantalla anterior"
-              accessibilityRole="button"
-              onPress={() => router.back()}
-              style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-            >
-              <ChevronLeft color="#0B1B3F" size={22} strokeWidth={2.4} />
-            </Pressable>
-
-            <View style={styles.stepPill}>
-              <Text style={styles.stepPillText}>Paso 2 de 8</Text>
-            </View>
-
-            <Pressable
-              accessibilityLabel="Continuar hacia el perfil financiero"
-              accessibilityRole="button"
-              onPress={() => router.push("/profile")}
-              style={({ pressed }) => [styles.nextButton, pressed && styles.pressed]}
-            >
-              <ArrowRight color={colors.primary} size={21} strokeWidth={2.5} />
-            </Pressable>
-          </View>
-
-          <StepProgress currentStep={2} totalSteps={8} />
+          <StepHeader
+            currentStep={1}
+            nextAccessibilityLabel="Continuar hacia el perfil financiero"
+            onBack={() => router.replace("/")}
+            onNext={() => router.push("/profile")}
+            title="Privacidad y confianza"
+            totalSteps={7}
+          />
 
           <View style={styles.heroCard}>
             <View style={styles.heroContent}>
@@ -115,7 +98,9 @@ export default function PrivacyScreen() {
                 <LockKeyhole color={colors.support} size={18} strokeWidth={2.4} />
               </View>
               <Text style={styles.supportText}>
-                Tus datos sensibles no hacen parte de este primer paso.
+                {session
+                  ? "Tus respuestas se guardarán en tu cuenta."
+                  : "Sin una cuenta, tus respuestas se guardan temporalmente solo en este dispositivo."}
               </Text>
             </View>
           </View>
@@ -150,9 +135,9 @@ export default function PrivacyScreen() {
               title="Continuar"
             />
             <PrimaryButton
-              accessibilityLabel="Volver a la pantalla anterior"
+              accessibilityLabel="Volver a la pantalla de inicio"
               icon={null}
-              onPress={() => router.back()}
+              onPress={() => router.replace("/")}
               style={styles.secondaryButton}
               title="Volver"
               variant="secondary"
@@ -161,40 +146,6 @@ export default function PrivacyScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function StepProgress({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
-  const progressWidth = `${((currentStep - 1) / (totalSteps - 1)) * 100}%` as DimensionValue;
-
-  return (
-    <View
-      accessibilityLabel={`Progreso del paso ${currentStep} de ${totalSteps}`}
-      accessible
-      style={styles.progressWrap}
-    >
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: progressWidth }]} />
-      </View>
-      <View style={styles.progressDots}>
-        {Array.from({ length: totalSteps }).map((_, index) => {
-          const step = index + 1;
-          const isCompleted = step <= currentStep;
-          const isActive = step === currentStep;
-
-          return (
-            <View
-              key={step}
-              style={[
-                styles.progressDot,
-                isCompleted && styles.progressDotComplete,
-                isActive && styles.progressDotActive
-              ]}
-            />
-          );
-        })}
-      </View>
-    </View>
   );
 }
 
@@ -235,87 +186,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     maxWidth: 520,
     width: "100%"
-  },
-  stepHeader: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between"
-  },
-  backButton: {
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: "#D6E4F7",
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    height: 38,
-    justifyContent: "center",
-    width: 38
-  },
-  pressed: {
-    opacity: 0.76,
-    transform: [{ scale: 0.98 }]
-  },
-  stepPill: {
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    paddingHorizontal: 24,
-    paddingVertical: spacing.sm
-  },
-  stepPillText: {
-    color: colors.primary,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  nextButton: {
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: "#D6E4F7",
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    height: 38,
-    justifyContent: "center",
-    width: 38
-  },
-  progressWrap: {
-    height: 18,
-    justifyContent: "center",
-    marginBottom: spacing.xs
-  },
-  progressTrack: {
-    backgroundColor: "#DDE9F8",
-    borderRadius: radius.pill,
-    height: 3,
-    left: 10,
-    overflow: "hidden",
-    position: "absolute",
-    right: 10
-  },
-  progressFill: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    height: 3,
-    left: 0,
-    position: "absolute"
-  },
-  progressDots: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 10
-  },
-  progressDot: {
-    backgroundColor: "#DDE9F8",
-    borderRadius: radius.pill,
-    height: 9,
-    width: 9
-  },
-  progressDotComplete: {
-    backgroundColor: colors.primary
-  },
-  progressDotActive: {
-    height: 11,
-    width: 11
   },
   heroCard: {
     ...shadows.card,

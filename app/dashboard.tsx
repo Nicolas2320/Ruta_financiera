@@ -33,7 +33,7 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
 import { getNextPlanAdjustmentHint } from "../utils/actionProgressImpact";
 import { getDebtRatioLabel } from "../utils/debtCalculations";
-import { formatCOP } from "../utils/financialRanges";
+import { formatCOP, formatSignedCOP } from "../utils/financialRanges";
 import { getGoalPlanFromOnboarding, type GoalAllocation } from "../utils/goalPlanning";
 import {
   getEffectiveMonthlyPlanProgress,
@@ -88,7 +88,7 @@ function getMarginLabel(value: number | null, isMorePrecise = false) {
   }
 
   if (value <= 0) {
-    return "Margen ajustado";
+    return isMorePrecise ? formatSignedCOP(value) : `${formatSignedCOP(value)} aprox.`;
   }
 
   return isMorePrecise ? formatCOP(value) : `${formatCOP(value)} aprox.`;
@@ -226,11 +226,17 @@ function getDashboardDebtText({
   source: string;
 }) {
   if (count > 0) {
-    return `Tienes ${count} ${count === 1 ? "deuda registrada" : "deudas registradas"}. Usamos estas cuotas para evaluar si una nueva obligacion cabe en tu mes.`;
+    return `Tienes ${count} ${count === 1 ? "deuda registrada" : "deudas registradas"}. Usamos estas cuotas para evaluar si una nueva obligación cabe en tu mes.`;
   }
 
   if (source === "category" && monthlyPaymentTotal > 0) {
-    return `Usamos ${formatCOP(monthlyPaymentTotal)} que registraste en gastos como Deudas. Puedes registrar el detalle para mejorar el calculo.`;
+    return `Usamos ${formatCOP(monthlyPaymentTotal)} que registraste en gastos como Deudas. Puedes registrar el detalle para mejorar el cálculo.`;
+  }
+
+  if (source === "reported") {
+    return monthlyPaymentTotal > 0
+      ? "Esta es una referencia estimada desde el rango que reportaste. Registra cuotas solo si quieres reemplazarla por datos más precisos."
+      : "Conservamos el rango que reportaste; falta una referencia de ingresos para estimar el monto mensual.";
   }
 
   if (level === "none") {
@@ -239,7 +245,7 @@ function getDashboardDebtText({
 
   return monthlyPaymentTotal > 0
     ? "Ya tenemos una referencia de tus pagos de deuda."
-    : "Agrega tus cuotas para que el diagnostico y el evaluador sean mas claros.";
+    : "Agrega tus cuotas para que el diagnóstico y el evaluador sean más claros.";
 }
 
 function isCompletedGoalAllocation(allocation: GoalAllocation) {
@@ -617,7 +623,13 @@ export default function DashboardScreen() {
     }
 
     if (!session) {
-      router.replace("/auth");
+      router.replace({
+        pathname: "/auth",
+        params: {
+          mode: "sign-in",
+          returnTo: "/dashboard"
+        }
+      });
       return;
     }
 
@@ -784,7 +796,9 @@ export default function DashboardScreen() {
       ? `${completedGoalsCount} de ${totalGoalsCount} completadas`
       : null;
   const smallExpensesValue =
-    snapshot.smallExpenses.amount !== null
+    snapshot.sourceMap.smallExpenses === "reported_none"
+      ? "No identificados"
+      : snapshot.smallExpenses.amount !== null
       ? snapshot.sourceMap.smallExpenses === "exact"
         ? formatCOP(snapshot.smallExpenses.amount)
         : `${formatCOP(snapshot.smallExpenses.amount)} aprox.`
@@ -794,7 +808,9 @@ export default function DashboardScreen() {
   const dashboardDebtTone = getDashboardDebtTone(snapshot.debt.level);
   const dashboardDebtValue =
     snapshot.debt.monthlyPaymentTotal > 0
-      ? snapshot.debt.source === "category"
+      ? snapshot.debt.source === "reported"
+        ? `Estimado: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
+        : snapshot.debt.source === "category"
         ? `Referencia: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
         : `Cuotas: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
       : snapshot.debt.label;
@@ -820,8 +836,8 @@ export default function DashboardScreen() {
   if (onboardingSyncStatus === "loading") {
     return (
       <FinancialDataStatusScreen
-        text="Estamos recuperando tu diagnostico y tu plan guardado."
-        title="Cargando tu informacion"
+        text="Estamos recuperando tu diagnóstico y tu plan guardado."
+        title="Cargando tu información"
       />
     );
   }
@@ -829,8 +845,8 @@ export default function DashboardScreen() {
   if (!hasCompletedOnboarding) {
     return (
       <FinancialDataStatusScreen
-        text="Te llevaremos al diagnostico inicial para completar los datos faltantes."
-        title="Completa tu diagnostico"
+        text="Te llevaremos al diagnóstico inicial para completar los datos faltantes."
+        title="Completa tu diagnóstico"
       />
     );
   }
@@ -948,7 +964,10 @@ export default function DashboardScreen() {
           >
             <View style={styles.categoryChipLine}>
               <Text style={styles.rowInlineText}>
-                Intención: {getDefinedLabel(data.smallExpensesIntention, "No definida")}
+                Intención:{" "}
+                {data.hasSmallExpenses === "No"
+                  ? "No aplica"
+                  : getDefinedLabel(data.smallExpensesIntention, "No definida")}
               </Text>
               <Chip label={snapshot.smallExpenses.label} tone="warning" />
               {categoryLabels.map((category) => (
@@ -987,7 +1006,15 @@ export default function DashboardScreen() {
             tone={dashboardDebtTone}
             value={dashboardDebtValue}
           >
-            <Chip label={getDebtRatioLabel(snapshot.debt.debtToIncomeRatio)} tone={dashboardDebtTone} />
+            <Chip
+              label={getDebtRatioLabel(
+                snapshot.debt.debtToIncomeRatio,
+                snapshot.debt.source === "reported"
+                  ? snapshot.debt.reportedPaymentShare
+                  : null
+              )}
+              tone={dashboardDebtTone}
+            />
             {snapshot.debt.remainingTotal !== null ? (
               <Chip label={`Saldo ${formatCOP(snapshot.debt.remainingTotal)}`} tone="warning" />
             ) : null}

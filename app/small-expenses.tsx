@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -161,7 +161,8 @@ const smallExpenseRanges = [
   "Menos de $100.000",
   "$100.000 – $250.000",
   "$250.000 – $500.000",
-  "Más de $500.000"
+  "Más de $500.000",
+  "No sé"
 ] as const;
 
 function normalizeSmallExpenseRange(range: string | null) {
@@ -235,12 +236,17 @@ function BottomNavItem({
 export default function SmallExpensesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string }>();
-  const { onboarding, updateOnboarding } = useOnboarding();
+  const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isSpendingEditMode = source === "spending";
   const isProfileEditMode = source === "profile";
   const isDashboardEditMode = source === "dashboard";
-  const isEditMode = isSpendingEditMode || isProfileEditMode || isDashboardEditMode;
+  const isImprovePlanEditMode = source === "improve-plan";
+  const isEditMode =
+    isSpendingEditMode ||
+    isProfileEditMode ||
+    isDashboardEditMode ||
+    isImprovePlanEditMode;
   const navigate = (route: Route) => router.push(route);
   const [selectedPresence, setSelectedPresence] = useState<string | null>(
     onboarding.hasSmallExpenses
@@ -254,14 +260,30 @@ export default function SmallExpensesScreen() {
   const [selectedIntention, setSelectedIntention] = useState<string | null>(
     onboarding.smallExpensesIntention
   );
+  const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
+
+  useEffect(() => {
+    if (onboardingSyncStatus !== "saved" || hasHydratedStoredAnswers.current) {
+      return;
+    }
+
+    hasHydratedStoredAnswers.current = true;
+    setSelectedPresence(onboarding.hasSmallExpenses);
+    setSelectedCategories(
+      normalizeSmallExpenseCategories(onboarding.smallExpenseCategories)
+    );
+    setSelectedRange(normalizeSmallExpenseRange(onboarding.smallExpensesRange));
+    setSelectedIntention(onboarding.smallExpensesIntention);
+  }, [onboarding, onboardingSyncStatus]);
 
   const needsCategory = selectedPresence === "Sí";
-  const shouldShowCategoryQuestion = selectedPresence !== "No";
+  const shouldShowDetails = selectedPresence !== "No";
   const canContinue = Boolean(
     selectedPresence &&
-      selectedRange &&
-      selectedIntention &&
-      (!needsCategory || selectedCategories.length > 0)
+      (selectedPresence === "No" ||
+        (selectedRange &&
+          selectedIntention &&
+          (!needsCategory || selectedCategories.length > 0)))
   );
 
   const handlePresenceSelect = (presence: string) => {
@@ -269,6 +291,8 @@ export default function SmallExpensesScreen() {
 
     if (presence === "No") {
       setSelectedCategories([]);
+      setSelectedRange(null);
+      setSelectedIntention(null);
     }
   };
 
@@ -281,7 +305,11 @@ export default function SmallExpensesScreen() {
   };
 
   const handleContinue = () => {
-    if (!selectedPresence || !selectedRange || !selectedIntention) {
+    if (!selectedPresence) {
+      return;
+    }
+
+    if (selectedPresence !== "No" && (!selectedRange || !selectedIntention)) {
       return;
     }
 
@@ -295,17 +323,19 @@ export default function SmallExpensesScreen() {
     updateOnboarding({
       hasSmallExpenses: selectedPresence,
       smallExpenseCategories: categoriesToSave,
-      smallExpensesRange: selectedRange,
-      smallExpensesIntention: selectedIntention
+      smallExpensesRange: selectedPresence === "No" ? null : selectedRange,
+      smallExpensesIntention: selectedPresence === "No" ? null : selectedIntention
     });
     router.push(
       isSpendingEditMode
         ? "/spending"
         : isDashboardEditMode
           ? "/dashboard"
-        : isProfileEditMode
-          ? { pathname: "/summary", params: { mode: "edit" } }
-          : "/savings-debts"
+          : isImprovePlanEditMode
+            ? "/improve-plan"
+            : isProfileEditMode
+              ? { pathname: "/summary", params: { mode: "edit" } }
+              : "/savings-debts"
     );
   };
 
@@ -326,28 +356,32 @@ export default function SmallExpensesScreen() {
                     ? "/spending"
                     : isDashboardEditMode
                       ? "/dashboard"
-                      : { pathname: "/summary", params: { mode: "edit" } }
+                      : isImprovePlanEditMode
+                        ? "/improve-plan"
+                        : { pathname: "/summary", params: { mode: "edit" } }
                 )
               }
               subtitle={
                 isSpendingEditMode
-                  ? "Volveras a Gastos."
+                  ? "Volverás a Gastos."
                   : isDashboardEditMode
-                    ? "Volveras al Dashboard."
-                    : "Volveras al perfil financiero."
+                    ? "Volverás al Dashboard."
+                    : isImprovePlanEditMode
+                      ? "Volverás a Mejorar mi plan."
+                      : "Volverás al perfil financiero."
               }
-              title="Editar gastos pequenos"
+              title="Editar gastos pequeños"
             />
           ) : null}
           {!isEditMode ? (
           <StepHeader
-            currentStep={6}
+            currentStep={5}
             nextAccessibilityLabel="Continuar hacia ahorros y deudas"
             nextDisabled={!canContinue}
-            onBack={() => router.push("/expenses")}
+            onBack={() => router.replace("/expenses")}
             onNext={handleContinue}
             title="Gastos hormiga"
-            totalSteps={8}
+            totalSteps={7}
           />
           ) : null}
 
@@ -387,7 +421,7 @@ export default function SmallExpensesScreen() {
             </View>
           </View>
 
-          {shouldShowCategoryQuestion ? (
+          {shouldShowDetails ? (
             <View style={styles.card}>
               <Text style={styles.questionTitle}>¿En qué categorías crees que se van?</Text>
               <Text style={styles.helperText}>
@@ -418,51 +452,53 @@ export default function SmallExpensesScreen() {
             </View>
           )}
 
-          <View style={styles.twoColumnSection}>
-            <View style={styles.card}>
-              <Text style={styles.questionTitle}>
-                ¿Cuánto crees que gastas al mes en estos consumos?
-              </Text>
-              <View style={styles.optionList}>
-                {smallExpenseRanges.map((range) => (
-                  <SelectableCard
-                    key={range}
-                    onPress={() => setSelectedRange(range)}
-                    selected={selectedRange === range}
-                    title={range}
-                  />
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.questionTitle}>¿Qué te gustaría hacer con estos gastos?</Text>
-              <View style={styles.optionList}>
-                {smallExpenseIntentions.map((intention) => {
-                  const Icon = intention.icon;
-
-                  return (
+          {shouldShowDetails ? (
+            <View style={styles.twoColumnSection}>
+              <View style={styles.card}>
+                <Text style={styles.questionTitle}>
+                  ¿Cuánto crees que gastas al mes en estos consumos?
+                </Text>
+                <View style={styles.optionList}>
+                  {smallExpenseRanges.map((range) => (
                     <SelectableCard
-                      key={intention.title}
-                      leading={
-                        <View
-                          style={[
-                            styles.rowIcon,
-                            { backgroundColor: intention.backgroundColor }
-                          ]}
-                        >
-                          <Icon color={intention.color} size={20} strokeWidth={2.5} />
-                        </View>
-                      }
-                      onPress={() => setSelectedIntention(intention.title)}
-                      selected={selectedIntention === intention.title}
-                      title={intention.title}
+                      key={range}
+                      onPress={() => setSelectedRange(range)}
+                      selected={selectedRange === range}
+                      title={range}
                     />
-                  );
-                })}
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.card}>
+                <Text style={styles.questionTitle}>¿Qué te gustaría hacer con estos gastos?</Text>
+                <View style={styles.optionList}>
+                  {smallExpenseIntentions.map((intention) => {
+                    const Icon = intention.icon;
+
+                    return (
+                      <SelectableCard
+                        key={intention.title}
+                        leading={
+                          <View
+                            style={[
+                              styles.rowIcon,
+                              { backgroundColor: intention.backgroundColor }
+                            ]}
+                          >
+                            <Icon color={intention.color} size={20} strokeWidth={2.5} />
+                          </View>
+                        }
+                        onPress={() => setSelectedIntention(intention.title)}
+                        selected={selectedIntention === intention.title}
+                        title={intention.title}
+                      />
+                    );
+                  })}
+                </View>
               </View>
             </View>
-          </View>
+          ) : null}
 
           <View style={styles.actions}>
             <PrimaryButton
