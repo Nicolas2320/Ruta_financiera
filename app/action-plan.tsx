@@ -451,6 +451,7 @@ function ActionCard({
   actionNumber,
   expanded,
   impactItem,
+  onOpenDebts,
   onOpenSimulation,
   onProgressChange,
   onToggleExpanded,
@@ -460,6 +461,7 @@ function ActionCard({
   actionNumber: number;
   expanded: boolean;
   impactItem: MonthlyActionImpactItem | null;
+  onOpenDebts: () => void;
   onOpenSimulation: () => void;
   onProgressChange: (patch: ActionProgressPatch) => void;
   onToggleExpanded: () => void;
@@ -487,6 +489,7 @@ function ActionCard({
   const impactMessage = getActionImpactMessage(impactItem);
   const hasOptions = Boolean(evidenceConfig.options && evidenceConfig.options.length > 0);
   const isScenarioComparisonAction = action.id === "compare-goal-contribution";
+  const isDebtDetailsAction = action.id === "debt-monthly-payment";
   const hasSavedProgress = Boolean(
     progressRecord && (progressRecord.status !== "pending" || progressRecord.evidence)
   );
@@ -607,6 +610,20 @@ function ActionCard({
             ]}
           >
             <Text style={styles.cardSecondaryActionButtonText}>Ver simulación</Text>
+            <ArrowRight color={colors.primary} size={17} strokeWidth={2.6} />
+          </Pressable>
+        ) : null}
+        {isDebtDetailsAction ? (
+          <Pressable
+            accessibilityLabel="Abrir mis deudas"
+            accessibilityRole="button"
+            onPress={onOpenDebts}
+            style={({ pressed }) => [
+              styles.cardSecondaryActionButton,
+              pressed && styles.checkboxPressed
+            ]}
+          >
+            <Text style={styles.cardSecondaryActionButtonText}>Ver mis deudas</Text>
             <ArrowRight color={colors.primary} size={17} strokeWidth={2.6} />
           </Pressable>
         ) : null}
@@ -918,6 +935,8 @@ function ActionPlanContent() {
   const nextPlanHint = getNextPlanAdjustmentHint(impactSummary);
   const realContributionLabel =
     impactSummary.realContributionTotal > 0 ? formatCOP(impactSummary.realContributionTotal) : "$0";
+  const isPlanNavigationPending =
+    planSyncStatus === "loading" || planSyncStatus === "saving";
   const persistGoals = (nextGoals: FinancialGoal[]) => {
     const hasPrimaryGoal = nextGoals.some((goal) => goal.isPrimary);
     const normalizedGoals = nextGoals.map((goal, index) => ({
@@ -1121,6 +1140,7 @@ function ActionPlanContent() {
                   actionNumber={index + 1}
                   expanded={expandedActionId === actionProgressId}
                   impactItem={impactItem}
+                  onOpenDebts={() => router.push("/debts")}
                   onOpenSimulation={() => router.push("/simulation")}
                   onProgressChange={(patch) => {
                     updateActionProgress(actionProgressId, patch);
@@ -1139,10 +1159,16 @@ function ActionPlanContent() {
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel="Ir a mi inicio"
+              accessibilityLabel={
+                isPlanNavigationPending
+                  ? "Guardando el plan antes de abrir el inicio"
+                  : "Ir a mi inicio"
+              }
+              disabled={isPlanNavigationPending}
+              icon={isPlanNavigationPending ? null : undefined}
               iconPosition="right"
               onPress={() => router.push("/dashboard")}
-              title="Ir a mi inicio"
+              title={isPlanNavigationPending ? "Guardando tu plan..." : "Ir a mi inicio"}
             />
             <PrimaryButton
               accessibilityLabel="Volver a la pantalla anterior"

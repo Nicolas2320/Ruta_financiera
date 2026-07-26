@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   calculateFinancialSnapshot,
+  getSuggestedContributionRate,
   getPlanPrecisionStatus,
   parseCOPRange,
   roundDownToNearest,
@@ -21,6 +22,13 @@ describe("financial calculation primitives", () => {
     expect(roundDownToNearest(127_999, 10_000)).toBe(120_000);
     expect(roundDownToNearest(-10, 10_000)).toBe(0);
     expect(roundDownToNearest(100_000, 0)).toBe(0);
+  });
+
+  it("selects a transparent contribution rate from the margin share", () => {
+    expect(getSuggestedContributionRate(100_000, 0.08)).toBe(0.25);
+    expect(getSuggestedContributionRate(500_000, 0.2)).toBe(0.35);
+    expect(getSuggestedContributionRate(1_000_000, 0.3)).toBe(0.45);
+    expect(getSuggestedContributionRate(-100_000, -0.05)).toBeNull();
   });
 
   it.each([
@@ -82,6 +90,8 @@ describe("calculateFinancialSnapshot", () => {
       expensesToIncomeRatio: 0.375,
       marginRate: 0.625,
       savingsCapacityLevel: "high",
+      suggestedContributionRate: 0.45,
+      suggestedContributionBeforeRounding: 1_125_000,
       suggestedMonthlyContribution: 1_120_000
     });
     expect(snapshot.emergencyFund.coverageMonths).toBeCloseTo(0.8333, 3);
@@ -116,6 +126,7 @@ describe("calculateFinancialSnapshot", () => {
     });
 
     expect(snapshot.cashflow.monthlyMargin).toBe(-500_000);
+    expect(snapshot.cashflow.suggestedContributionRate).toBeNull();
     expect(snapshot.cashflow.suggestedMonthlyContribution).toBe(0);
     expect(snapshot.cashflow.savingsCapacityLevel).toBe("negative");
     expect(snapshot.goal.status).toBe("needs_margin");

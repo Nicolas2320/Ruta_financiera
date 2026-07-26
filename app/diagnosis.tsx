@@ -192,7 +192,7 @@ function getSnapshotDisplay({
       label: estimatedLabel,
       value: "No disponible",
       source: "empty",
-      helper: "Aun no tenemos suficiente informacion para estimar este dato."
+      helper: "Aún no tenemos suficiente información para estimar este dato."
     };
   }
 

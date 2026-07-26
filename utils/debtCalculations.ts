@@ -44,7 +44,7 @@ const registeredDebtLabels: Record<DebtLevel, string> = {
   none: "Sin deudas registradas",
   low: "Carga mensual manejable",
   medium: "Carga mensual por vigilar",
-  high: "Presion de deuda alta",
+  high: "Presión de deuda alta",
   unknown: "Falta ingreso para calcular"
 };
 
@@ -320,7 +320,7 @@ export function evaluateNewDebt({
       viability: "missing",
       label: "Faltan ingresos y gastos",
       message:
-        "Completa ingreso y gasto mensual para calcular el margen que quedaria despues de esta cuota.",
+        "Completa ingreso y gasto mensual para calcular el margen que quedaría después de esta cuota.",
       marginAfterNewPayment,
       totalDebtPayment,
       totalDebtToIncomeRatio
@@ -332,7 +332,7 @@ export function evaluateNewDebt({
       viability: "risky",
       label: "Riesgoso",
       message:
-        "Esta cuota podria dejar tu margen negativo o subir demasiado el peso de tus deudas.",
+        "Esta cuota podría dejar tu margen negativo o subir demasiado el peso de tus deudas.",
       marginAfterNewPayment,
       totalDebtPayment,
       totalDebtToIncomeRatio
@@ -347,7 +347,7 @@ export function evaluateNewDebt({
       viability: "tight",
       label: "Ajustado",
       message:
-        "La cuota podria caber, pero dejaria poco espacio para imprevistos, ahorro u otras metas.",
+        "La cuota podría caber, pero dejaría poco espacio para imprevistos, ahorro u otras metas.",
       marginAfterNewPayment,
       totalDebtPayment,
       totalDebtToIncomeRatio

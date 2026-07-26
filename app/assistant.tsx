@@ -382,7 +382,7 @@ function buildAssistantFinancialContext({
       expensesToIncomeRatio: snapshot.cashflow.expensesToIncomeRatio,
       suggestedMonthlyContribution: snapshot.cashflow.suggestedMonthlyContribution,
       suggestedMonthlyContributionMeaning:
-        "Capacidad sugerida desde el margen mensual; no es necesariamente la bolsa manual ni el aporte asignado a una meta."
+        "Aporte sugerido desde el margen mensual; no es necesariamente la bolsa manual ni el aporte asignado a una meta."
     },
     debt: {
       debtToIncomeRatio: snapshot.debt.debtToIncomeRatio,
@@ -454,7 +454,7 @@ function buildAssistantFinancialContext({
       referenceMonthlyContribution,
       referenceMonthlyContributionLabel: "Referencia mensual",
       referenceMonthlyContributionMeaning:
-        "Monto de referencia del plan mensual. Puede incluir capacidad sugerida y ajuste de gastos pequenos; no es lo mismo que Aporte meta.",
+        "Monto de referencia del plan mensual. Puede incluir aporte sugerido y ajuste de gastos pequeños; no es lo mismo que Aporte meta.",
       totalActions: actions.length
     },
     precision: {
@@ -636,7 +636,7 @@ export default function AssistantScreen() {
         setUsageStatusError(
           error instanceof Error
             ? error.message
-            : "No pudimos consultar el limite diario del asistente."
+            : "No pudimos consultar el límite diario del asistente."
         );
       })
       .finally(() => {

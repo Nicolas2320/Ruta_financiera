@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   hasCompletedOnboarding,
+  normalizeDebtRecords,
   type OnboardingData
 } from "../types/financial";
 import { makeGoal, makeOnboarding } from "./fixtures/financial";
@@ -45,5 +46,29 @@ describe("onboarding completion", () => {
         })
       )
     ).toBe(false);
+  });
+});
+
+describe("debt normalization", () => {
+  it("preserves a valid annual interest rate and rejects invalid percentages", () => {
+    const normalized = normalizeDebtRecords([
+      {
+        id: "debt-1",
+        type: "Tarjeta de crédito",
+        monthlyPayment: 200_000,
+        annualInterestRate: "32,5",
+        status: "on_track"
+      },
+      {
+        id: "debt-2",
+        type: "Préstamo",
+        monthlyPayment: 300_000,
+        annualInterestRate: 120,
+        status: "on_track"
+      }
+    ]);
+
+    expect(normalized[0].annualInterestRate).toBe(32.5);
+    expect(normalized[1].annualInterestRate).toBeNull();
   });
 });

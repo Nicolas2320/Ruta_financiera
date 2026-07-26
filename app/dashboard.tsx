@@ -226,11 +226,11 @@ function getDashboardDebtText({
   source: string;
 }) {
   if (count > 0) {
-    return `Tienes ${count} ${count === 1 ? "deuda registrada" : "deudas registradas"}. Usamos estas cuotas para evaluar si una nueva obligacion cabe en tu mes.`;
+    return `Tienes ${count} ${count === 1 ? "deuda registrada" : "deudas registradas"}. Usamos estas cuotas para evaluar si una nueva obligación cabe en tu mes.`;
   }
 
   if (source === "category" && monthlyPaymentTotal > 0) {
-    return `Usamos ${formatCOP(monthlyPaymentTotal)} que registraste en gastos como Deudas. Puedes registrar el detalle para mejorar el calculo.`;
+    return `Usamos ${formatCOP(monthlyPaymentTotal)} que registraste en gastos como Deudas. Puedes registrar el detalle para mejorar el cálculo.`;
   }
 
   if (source === "reported") {
@@ -245,7 +245,7 @@ function getDashboardDebtText({
 
   return monthlyPaymentTotal > 0
     ? "Ya tenemos una referencia de tus pagos de deuda."
-    : "Agrega tus cuotas para que el diagnostico y el evaluador sean mas claros.";
+    : "Agrega tus cuotas para que el diagnóstico y el evaluador sean más claros.";
 }
 
 function isCompletedGoalAllocation(allocation: GoalAllocation) {
@@ -836,8 +836,8 @@ export default function DashboardScreen() {
   if (onboardingSyncStatus === "loading") {
     return (
       <FinancialDataStatusScreen
-        text="Estamos recuperando tu diagnostico y tu plan guardado."
-        title="Cargando tu informacion"
+        text="Estamos recuperando tu diagnóstico y tu plan guardado."
+        title="Cargando tu información"
       />
     );
   }
@@ -845,8 +845,8 @@ export default function DashboardScreen() {
   if (!hasCompletedOnboarding) {
     return (
       <FinancialDataStatusScreen
-        text="Te llevaremos al diagnostico inicial para completar los datos faltantes."
-        title="Completa tu diagnostico"
+        text="Te llevaremos al diagnóstico inicial para completar los datos faltantes."
+        title="Completa tu diagnóstico"
       />
     );
   }

@@ -68,6 +68,7 @@ type DebtTypeOption = {
 };
 
 type DebtFormState = {
+  annualInterestRate: string;
   lender: string;
   monthlyPayment: string;
   name: string;
@@ -85,32 +86,32 @@ type MonthYearValue = {
 const debtTypeOptions: DebtTypeOption[] = [
   {
     icon: CreditCard,
-    label: "Tarjeta de credito",
-    text: "Pago minimo, compras diferidas o saldo usado.",
+    label: "Tarjeta de crédito",
+    text: "Pago mínimo, compras diferidas o saldo usado.",
     tone: "warning"
   },
   {
     icon: Landmark,
-    label: "Prestamo personal",
-    text: "Tambien puede ser libre inversion.",
+    label: "Préstamo personal",
+    text: "También puede ser libre inversión.",
     tone: "primary"
   },
   {
     icon: Car,
-    label: "Vehiculo",
+    label: "Vehículo",
     text: "Carro, moto o transporte a cuotas.",
     tone: "purple"
   },
   {
     icon: GraduationCap,
-    label: "Educacion",
+    label: "Educación",
     text: "Estudio, posgrado, curso o universidad.",
     tone: "support"
   },
   {
     icon: WalletCards,
     label: "Compra a cuotas",
-    text: "Celular, electrodomestico u otra compra.",
+    text: "Celular, electrodoméstico u otra compra.",
     tone: "neutral"
   },
   {
@@ -149,6 +150,7 @@ const debtStatusOptions: Array<{
 ];
 
 const emptyDebtForm: DebtFormState = {
+  annualInterestRate: "",
   lender: "",
   monthlyPayment: "",
   name: "",
@@ -314,7 +316,20 @@ function getViabilityTone(viability: NewDebtViability): Tone {
 }
 
 function getDebtTypeOption(type: string) {
-  return debtTypeOptions.find((option) => option.label === type) ?? debtTypeOptions[0];
+  const normalizedType = type
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return (
+    debtTypeOptions.find(
+      (option) =>
+        option.label
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase() === normalizedType
+    ) ?? debtTypeOptions[0]
+  );
 }
 
 function getFormattedCurrencyInput(value: string) {
@@ -332,8 +347,28 @@ function getFormattedDayInput(value: string) {
   return `${Math.min(parsedValue, 31)}`;
 }
 
+function getFormattedInterestRateInput(value: string) {
+  const normalizedValue = value.replace(",", ".").replace(/[^\d.]/g, "");
+  const [whole = "", ...decimalParts] = normalizedValue.split(".");
+  const decimal = decimalParts.join("").slice(0, 2);
+
+  return decimalParts.length > 0 ? `${whole.slice(0, 3)}.${decimal}` : whole.slice(0, 3);
+}
+
+function parseInterestRateInput(value: string) {
+  const parsedValue = Number(value.replace(",", "."));
+
+  return Number.isFinite(parsedValue) && parsedValue >= 0 && parsedValue <= 100
+    ? parsedValue
+    : null;
+}
+
+function getInterestRateLabel(value: number | null | undefined) {
+  return value !== null && value !== undefined ? `${value}% E.A.` : "No indicada";
+}
+
 function getDebtTitle(debt: DebtRecord) {
-  return debt.name?.trim() || debt.type;
+  return debt.name?.trim() || getDebtTypeOption(debt.type).label;
 }
 
 function getOptionalAmountLabel(value: number | null | undefined) {
@@ -341,7 +376,7 @@ function getOptionalAmountLabel(value: number | null | undefined) {
 }
 
 function getPaymentDayLabel(value: number | null | undefined) {
-  return value ? `Dia ${value}` : "Sin fecha";
+  return value ? `Día ${value}` : "Sin fecha";
 }
 
 function getDebtInsight({
@@ -366,11 +401,11 @@ function getDebtInsight({
   }
 
   if (count === 0) {
-    return "Aun no tenemos una cuota mensual detallada.";
+    return "Aún no tenemos una cuota mensual detallada.";
   }
 
   if (level === "high") {
-    return "Antes de asumir una nueva cuota, conviene revisar que deuda genera mas presion.";
+    return "Antes de asumir una nueva cuota, conviene revisar qué deuda genera más presión.";
   }
 
   if (level === "medium" || level === "unknown") {
@@ -530,6 +565,33 @@ function TextField({
       <InputLabel label={label} optional={optional} />
       <TextInput
         onChangeText={onChangeText}
+        placeholderTextColor={colors.textSubtle}
+        style={styles.textInput}
+        value={value}
+      />
+    </View>
+  );
+}
+
+function PercentageInput({
+  label,
+  value,
+  onChangeText,
+  optional
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  optional?: boolean;
+}) {
+  return (
+    <View style={styles.inputGroup}>
+      <InputLabel label={label} optional={optional} />
+      <TextInput
+        inputMode="decimal"
+        keyboardType="decimal-pad"
+        onChangeText={(text) => onChangeText(getFormattedInterestRateInput(text))}
+        placeholder="Ej. 24,5"
         placeholderTextColor={colors.textSubtle}
         style={styles.textInput}
         value={value}
@@ -783,9 +845,9 @@ function EmptyState({ onPress }: { onPress: () => void }) {
         size="large"
       />
       <View style={styles.emptyStateCopy}>
-        <Text style={styles.emptyStateTitle}>Aun no hay deudas registradas</Text>
+        <Text style={styles.emptyStateTitle}>Aún no hay deudas registradas</Text>
         <Text style={styles.text}>
-          Puedes agregar solo la cuota mensual y un aproximado de lo que falta por pagar.
+          Agrega la cuota mensual y, si los conoces, el saldo, la tasa anual y el estado del pago.
         </Text>
       </View>
       <Pressable
@@ -831,7 +893,7 @@ function DebtCard({
         <View style={styles.debtCardTitleGroup}>
           <Text style={styles.debtCardTitle}>{getDebtTitle(debt)}</Text>
           <Text style={styles.debtCardSubtitle}>
-            {debt.name ? debt.type : "Deuda registrada"}
+            {debt.name ? typeOption.label : "Deuda registrada"}
             {debt.lender ? ` · ${debt.lender}` : ""}
           </Text>
         </View>
@@ -846,9 +908,14 @@ function DebtCard({
           value={getOptionalAmountLabel(debt.remainingAmount)}
         />
         <SummaryMetric
-          label="Dia limite"
+          label="Día límite"
           tone="neutral"
           value={getPaymentDayLabel(debt.paymentDay)}
+        />
+        <SummaryMetric
+          label="Tasa anual"
+          tone="purple"
+          value={getInterestRateLabel(debt.annualInterestRate)}
         />
       </View>
 
@@ -893,7 +960,7 @@ function DebtFormContent({
     <View style={styles.formCard}>
       <View style={styles.formHeader}>
         <Text style={styles.formTitle}>{editingDebtId ? "Editar deuda" : "Agregar una deuda"}</Text>
-        <Text style={styles.text}>Elige la opcion mas parecida al tipo de deuda que tienes.</Text>
+        <Text style={styles.text}>Elige la opción más parecida al tipo de deuda que tienes.</Text>
       </View>
 
       <View style={styles.debtTypeGrid}>
@@ -915,24 +982,30 @@ function DebtFormContent({
           value={debtForm.name}
         />
         <CurrencyInput
-          label="Cuanto falta por pagar"
+          label="Cuánto falta por pagar"
           onChangeText={(value) => onUpdate({ remainingAmount: value })}
           optional
           value={debtForm.remainingAmount}
         />
         <CurrencyInput
-          label="Cuanto pagas al mes"
+          label="Cuánto pagas al mes"
           onChangeText={(value) => onUpdate({ monthlyPayment: value })}
           value={debtForm.monthlyPayment}
         />
         <TextField
-          label="A quien le pagas"
+          label="A quién le pagas"
           onChangeText={(value) => onUpdate({ lender: value })}
           optional
           value={debtForm.lender}
         />
+        <PercentageInput
+          label="Tasa de interés anual (E.A.)"
+          onChangeText={(value) => onUpdate({ annualInterestRate: value })}
+          optional
+          value={debtForm.annualInterestRate}
+        />
         <View style={styles.inputGroup}>
-          <InputLabel label="Dia limite de pago" optional />
+          <InputLabel label="Día límite de pago" optional />
           <TextInput
             keyboardType="number-pad"
             onChangeText={(value) => onUpdate({ paymentDay: getFormattedDayInput(value) })}
@@ -1065,6 +1138,10 @@ export default function DebtsScreen() {
   const startEditDebt = (debt: DebtRecord) => {
     setEditingDebtId(debt.id);
     setDebtForm({
+      annualInterestRate:
+        debt.annualInterestRate !== null && debt.annualInterestRate !== undefined
+          ? `${debt.annualInterestRate}`
+          : "",
       lender: debt.lender ?? "",
       monthlyPayment: formatCOP(debt.monthlyPayment),
       name: debt.name ?? "",
@@ -1074,7 +1151,7 @@ export default function DebtsScreen() {
           ? formatCOP(debt.remainingAmount)
           : "",
       status: debt.status,
-      type: debt.type
+      type: getDebtTypeOption(debt.type).label
     });
     setShowDebtForm(true);
   };
@@ -1104,6 +1181,7 @@ export default function DebtsScreen() {
       lender: debtForm.lender.trim() || null,
       remainingAmount: parseCOPInput(debtForm.remainingAmount),
       monthlyPayment,
+      annualInterestRate: parseInterestRateInput(debtForm.annualInterestRate),
       status: debtForm.status,
       paymentDay: normalizedPaymentDay,
       createdAt: existingDebt?.createdAt ?? now,
@@ -1195,7 +1273,7 @@ export default function DebtsScreen() {
 
           <View style={styles.summaryGrid}>
             <SummaryMetric
-              label="Relacion deudas vs ingresos"
+              label="Relación deudas vs ingresos"
               tone={summaryTone}
               value={getDebtRatioLabel(
                 debtSummary.debtToIncomeRatio,
@@ -1257,12 +1335,12 @@ export default function DebtsScreen() {
           <SectionCard
             icon={<Banknote color={colors.primary} size={20} strokeWidth={2.4} />}
             title="Evaluar nueva cuota"
-            subtitle="Util para estudio, vehiculo u otra obligacion antes de decidir."
+            subtitle="Útil para estudio, vehículo u otra obligación antes de decidir."
           >
             <View style={styles.evaluationIntro}>
               <AlertCircle color={colors.support} size={20} strokeWidth={2.4} />
               <Text style={styles.evaluationIntroText}>
-                Esto no compara bancos ni reemplaza asesoria. Solo estima si una nueva cuota cabe
+                Esto no compara bancos ni reemplaza asesoría. Solo estima si una nueva cuota cabe
                 dentro de tu mes con los datos actuales.
               </Text>
             </View>
@@ -1280,7 +1358,7 @@ export default function DebtsScreen() {
 
             <View style={styles.inputGrid}>
               <CurrencyInput
-                label="Cuanto necesitas"
+                label="Cuánto necesitas"
                 onChangeText={setNewDebtAmount}
                 optional
                 value={newDebtAmount}
@@ -1348,7 +1426,7 @@ export default function DebtsScreen() {
                   }
                 />
                 <SummaryMetric
-                  label="Relacion deudas vs ingresos"
+                  label="Relación deudas vs ingresos"
                   tone={getViabilityTone(newDebtEvaluation.viability)}
                   value={getDebtRatioLabel(newDebtEvaluation.totalDebtToIncomeRatio)}
                 />
@@ -1358,7 +1436,7 @@ export default function DebtsScreen() {
                   value={formatMonthYear(newDebtStart)}
                 />
                 <SummaryMetric
-                  label="Margen despues"
+                  label="Margen después"
                   tone={getViabilityTone(newDebtEvaluation.viability)}
                   value={
                     newDebtEvaluation.marginAfterNewPayment !== null
@@ -1420,8 +1498,8 @@ export default function DebtsScreen() {
                 <Text style={styles.modalTitle}>Eliminar deuda</Text>
                 <Text style={styles.modalText}>
                   {debtPendingDelete
-                    ? `Quieres eliminar "${getDebtTitle(debtPendingDelete)}" de tus deudas?`
-                    : "Quieres eliminar esta deuda de tus deudas?"}
+                    ? `¿Quieres eliminar "${getDebtTitle(debtPendingDelete)}" de tus deudas?`
+                    : "¿Quieres eliminar esta deuda de tus deudas?"}
                 </Text>
               </View>
             </View>

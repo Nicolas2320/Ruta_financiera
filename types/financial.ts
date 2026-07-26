@@ -7,6 +7,7 @@ export type DebtRecord = {
   lender?: string | null;
   remainingAmount?: number | null;
   monthlyPayment: number;
+  annualInterestRate?: number | null;
   status: DebtPaymentStatus;
   paymentDay?: number | null;
   createdAt?: string;
@@ -294,6 +295,22 @@ function normalizePaymentDay(value: unknown) {
   return null;
 }
 
+function normalizeAnnualInterestRate(value: unknown) {
+  if (typeof value === "string" && value.trim().length === 0) {
+    return null;
+  }
+
+  const normalizedValue =
+    typeof value === "string" ? Number(value.replace(",", ".")) : value;
+
+  return typeof normalizedValue === "number" &&
+    Number.isFinite(normalizedValue) &&
+    normalizedValue >= 0 &&
+    normalizedValue <= 100
+    ? normalizedValue
+    : null;
+}
+
 export function normalizeDebtRecords(value: unknown): DebtRecord[] {
   if (!Array.isArray(value)) {
     return [];
@@ -322,6 +339,7 @@ export function normalizeDebtRecords(value: unknown): DebtRecord[] {
       lender: normalizeDebtString(rawDebt.lender),
       remainingAmount,
       monthlyPayment,
+      annualInterestRate: normalizeAnnualInterestRate(rawDebt.annualInterestRate),
       status: normalizeDebtPaymentStatus(rawDebt.status),
       paymentDay: normalizePaymentDay(rawDebt.paymentDay),
       createdAt: normalizeDebtString(rawDebt.createdAt) ?? now,

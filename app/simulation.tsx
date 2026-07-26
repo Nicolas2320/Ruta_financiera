@@ -74,6 +74,9 @@ type Scenario = {
   assumption: string;
   tags: string[];
   tone: Tone;
+  kind?: "contribution" | "deficit-reduction";
+  currentMargin?: number;
+  marginAfterAdjustment?: number;
   unavailableContributionLabel?: string;
   unavailableAdvanceLabel?: string;
   recommended?: boolean;
@@ -322,7 +325,7 @@ function getScenarios(
       assumption: getScenarioDescription(
         assignedGoalContribution !== null && assignedGoalContribution > 0
           ? [getMarginShareDescription("Aporte asignado a esta meta", assignedContribution, metrics)]
-          : [getMarginShareDescription("Capacidad sugerida", assignedContribution, metrics)],
+          : [getMarginShareDescription("Aporte sugerido", assignedContribution, metrics)],
         "Necesitamos una meta con aporte asignado o un margen mensual positivo para calcular este aporte."
       ),
       tags: ["Actual", "Meta"],
@@ -332,39 +335,75 @@ function getScenarios(
     },
     {
       key: "capacity",
-      name: "Capacidad sugerida",
+      name: "Aporte sugerido",
       monthlyContribution: capacityContribution,
       assumption: getScenarioDescription(
         [
           getMarginShareDescription("Referencia calculada desde tu margen", capacityContribution, metrics)
         ],
-        "Referencia de capacidad calculada desde tu margen mensual."
+        metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
+          ? "No sugerimos aportes mientras tu margen mensual sea cero o negativo."
+          : "Referencia de aporte calculada desde tu margen mensual."
       ),
       tags: ["Referencia", "No asigna solo"],
       tone: "support",
-      recommended: assignedGoalContribution === null || assignedGoalContribution <= 0
+      unavailableContributionLabel:
+        metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
+          ? "No sugerido con déficit"
+          : "No disponible",
+      unavailableAdvanceLabel:
+        metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
+          ? "No aplica"
+          : "No disponible",
+      recommended:
+        capacityContribution !== null &&
+        (assignedGoalContribution === null || assignedGoalContribution <= 0)
     }
   ];
 
   if (balancedSmallExpensePart !== null && balancedSmallExpensePart > 0) {
-    scenarios.push({
-      key: "with-small-expenses",
-      name: "Capacidad + ajuste",
-      monthlyContribution: sumAvailableParts([scenarioWithSmallExpenses, balancedSmallExpensePart]),
-      assumption: getScenarioDescription(
-        [
-          getMarginShareDescription("Capacidad sugerida", scenarioWithSmallExpenses, metrics),
-          getSmallExpensesShareDescription(
-            "Parte de gastos pequeños",
-            balancedSmallExpensePart,
-            metrics
-          )
-        ],
-        "Combina la capacidad sugerida con una parte de tus gastos pequeños."
-      ),
-      tags: ["Más exigente", "Revisar"],
-      tone: "warning"
-    });
+    if (metrics.estimatedMargin !== null && metrics.estimatedMargin < 0) {
+      const deficitReduction = Math.min(
+        balancedSmallExpensePart,
+        Math.abs(metrics.estimatedMargin)
+      );
+
+      scenarios.push({
+        key: "with-small-expenses",
+        name: "Reducir el déficit",
+        monthlyContribution: deficitReduction,
+        assumption:
+          "Revisar una parte de tus gastos pequeños podría reducir el déficit mensual. No es dinero disponible para aportar.",
+        tags: ["No es ahorro", "Explorar"],
+        tone: "warning",
+        kind: "deficit-reduction",
+        currentMargin: metrics.estimatedMargin,
+        marginAfterAdjustment: metrics.estimatedMargin + balancedSmallExpensePart,
+        recommended: true
+      });
+    } else {
+      scenarios.push({
+        key: "with-small-expenses",
+        name: "Aporte con ajuste opcional",
+        monthlyContribution: sumAvailableParts([
+          scenarioWithSmallExpenses,
+          balancedSmallExpensePart
+        ]),
+        assumption: getScenarioDescription(
+          [
+            getMarginShareDescription("Aporte sugerido", scenarioWithSmallExpenses, metrics),
+            getSmallExpensesShareDescription(
+              "Parte de gastos pequeños",
+              balancedSmallExpensePart,
+              metrics
+            )
+          ],
+          "Combina el aporte sugerido con una parte opcional de tus gastos pequeños."
+        ),
+        tags: ["Más exigente", "Revisar"],
+        tone: "warning"
+      });
+    }
   }
 
   return scenarios;
@@ -444,7 +483,7 @@ function getInvestmentEducationMessage(onboarding: OnboardingSnapshot) {
     return "Puedes empezar por riesgo, plazo, liquidez y diversificación.";
   }
 
-  return "Si tu base está estable, puedes explorar inversión con calma y educación.";
+  return "Si después confirmas que tu base está estable, puedes explorar inversión con calma y educación.";
 }
 
 function getGoalMonthsLabel(months: number | null, fallback: string) {
@@ -605,7 +644,8 @@ function ScenarioCard({
       : 0;
   const scenarioName = scenario.key === "assigned" ? "Aporte meta" : scenario.name;
   const scenarioTags =
-    scenario.key === "with-small-expenses" ? ["Mas exigente", "Revisar"] : scenario.tags;
+    scenario.tags;
+  const isDeficitReduction = scenario.kind === "deficit-reduction";
 
   return (
     <View
@@ -624,7 +664,9 @@ function ScenarioCard({
 
       <View style={styles.scenarioMainRow}>
         <View style={styles.scenarioAmountBlock}>
-          <Text style={styles.amountLabel}>Aporte mensual</Text>
+          <Text style={styles.amountLabel}>
+            {isDeficitReduction ? "Reducción mensual potencial" : "Aporte mensual"}
+          </Text>
           <Text style={[styles.amountValue, { color: toneColors.text }]}>
             {scenario.monthlyContribution !== null
               ? `${formatCOP(scenario.monthlyContribution)} aprox.`
@@ -643,7 +685,11 @@ function ScenarioCard({
       </View>
 
       <View style={styles.scenarioCompactFooter}>
-        <Text style={styles.scenarioCompactResult}>6 meses: {getAdvanceLabel(scenario, 6)}</Text>
+        <Text style={styles.scenarioCompactResult}>
+          {isDeficitReduction && scenario.marginAfterAdjustment !== undefined
+            ? `Margen después: ${formatSignedCOP(scenario.marginAfterAdjustment)} aprox.`
+            : `6 meses: ${getAdvanceLabel(scenario, 6)}`}
+        </Text>
         <Pressable
           accessibilityRole="button"
           onPress={onToggle}
@@ -660,20 +706,54 @@ function ScenarioCard({
 
       {expanded ? (
         <View style={styles.scenarioDetailBlock}>
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                { backgroundColor: toneColors.text, width: toPercentWidth(relativeWidth) }
-              ]}
-            />
-          </View>
+          {isDeficitReduction ? (
+            <View style={styles.advanceGrid}>
+              <ValuePill
+                label="Déficit actual"
+                tone="warning"
+                value={
+                  scenario.currentMargin !== undefined
+                    ? `${formatSignedCOP(scenario.currentMargin)} aprox.`
+                    : "No disponible"
+                }
+              />
+              <ValuePill
+                label="Reducción potencial"
+                tone="support"
+                value={
+                  scenario.monthlyContribution !== null
+                    ? `${formatCOP(scenario.monthlyContribution)} aprox.`
+                    : "No disponible"
+                }
+              />
+              <ValuePill
+                label="Margen después"
+                tone="warning"
+                value={
+                  scenario.marginAfterAdjustment !== undefined
+                    ? `${formatSignedCOP(scenario.marginAfterAdjustment)} aprox.`
+                    : "No disponible"
+                }
+              />
+            </View>
+          ) : (
+            <>
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { backgroundColor: toneColors.text, width: toPercentWidth(relativeWidth) }
+                  ]}
+                />
+              </View>
 
-          <View style={styles.advanceGrid}>
-            <ValuePill label="3 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 3)} />
-            <ValuePill label="6 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 6)} />
-            <ValuePill label="12 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 12)} />
-          </View>
+              <View style={styles.advanceGrid}>
+                <ValuePill label="3 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 3)} />
+                <ValuePill label="6 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 6)} />
+                <ValuePill label="12 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 12)} />
+              </View>
+            </>
+          )}
 
         </View>
       ) : null}
@@ -753,7 +833,25 @@ export default function SimulationScreen() {
   const capacityContributionLabel =
     snapshot.cashflow.suggestedMonthlyContribution > 0
       ? `${formatCOP(snapshot.cashflow.suggestedMonthlyContribution)} aprox.`
-      : "Por definir";
+      : metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
+        ? "No sugerido con déficit"
+        : "Por definir";
+  const contributionRateLabel =
+    snapshot.cashflow.suggestedContributionRate !== null
+      ? `${Math.round(snapshot.cashflow.suggestedContributionRate * 100)}%`
+      : "No aplica";
+  const marginRateLabel =
+    snapshot.cashflow.marginRate !== null
+      ? `${Math.round(snapshot.cashflow.marginRate * 100)}%`
+      : "No disponible";
+  const contributionRuleText =
+    metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
+      ? "Mientras el margen sea cero o negativo, no sugerimos un aporte. Los ajustes se muestran únicamente como una posible reducción del déficit."
+      : snapshot.cashflow.suggestedContributionRate !== null
+        ? `Tu margen equivale al ${marginRateLabel} de tus ingresos. Usamos el ${contributionRateLabel} de ese margen y redondeamos hacia abajo a los $10.000 más cercanos: ${formatCOP(snapshot.cashflow.suggestedContributionBeforeRounding)} antes del redondeo y ${formatCOP(snapshot.cashflow.suggestedMonthlyContribution)} como referencia final.`
+        : "Necesitamos una referencia de ingresos y gastos para explicar el aporte sugerido.";
+  const contributionBandRuleText =
+    "La regla cambia según cuánto representa el margen sobre tus ingresos: hasta 10% usamos 25% del margen; más de 10% y hasta 25% usamos 35%; por encima de 25% usamos 45%.";
   const goalBudgetLabel =
     goalPlan.monthlyGoalBudget > 0 ? `${formatCOP(goalPlan.monthlyGoalBudget)} aprox.` : "Por definir";
   const goalBudgetModeLabel =
@@ -846,7 +944,7 @@ export default function SimulationScreen() {
               <ValuePill label="Tiempo" tone={goalTone} value={goalMonthsLabel} />
               <ValuePill label={goalBudgetModeLabel} tone="support" value={goalBudgetLabel} />
               <ValuePill
-                label="Capacidad sugerida"
+                label="Aporte sugerido"
                 tone="warning"
                 value={capacityContributionLabel}
               />
@@ -881,12 +979,13 @@ export default function SimulationScreen() {
                     presupuesto total repartido entre metas.
                   </Text>
                   <Text style={styles.scenarioGuideText}>
-                    <Text style={styles.scenarioGuideTerm}>Capacidad sugerida: </Text>
+                    <Text style={styles.scenarioGuideTerm}>Aporte sugerido: </Text>
                     referencia desde tu margen; no cambia tu plan.
                   </Text>
                   <Text style={styles.scenarioGuideText}>
-                    <Text style={styles.scenarioGuideTerm}>Capacidad + ajuste: </Text>
-                    escenario más exigente que suma parte de gastos pequeños.
+                    <Text style={styles.scenarioGuideTerm}>Ajuste de gastos pequeños: </Text>
+                    si tienes déficit, solo muestra cuánto podría reducirse; no representa ahorro ni
+                    dinero disponible.
                   </Text>
                 </View>
               </View>
@@ -934,12 +1033,14 @@ export default function SimulationScreen() {
 
           <SectionCard
             icon={<WalletCards color={colors.primary} size={22} strokeWidth={2.4} />}
-            title="Como se calculo"
+            title="Cómo se calculó"
           >
             <Text style={styles.disclaimerText}>
               Estas simulaciones son estimaciones educativas. No garantizan resultados futuros.
             </Text>
             <Text style={styles.helperText}>{snapshot.precision.message}</Text>
+            <Text style={styles.helperText}>{contributionRuleText}</Text>
+            <Text style={styles.helperText}>{contributionBandRuleText}</Text>
             <Pressable
               accessibilityRole="button"
               onPress={() => setShowCalculationDetails((current) => !current)}
@@ -958,6 +1059,10 @@ export default function SimulationScreen() {
             <View style={styles.valueGrid}>
               <ValuePill label={metrics.incomeDisplay.label} value={metrics.incomeDisplay.value} />
               <ValuePill label={metrics.expenseDisplay.label} value={metrics.expenseDisplay.value} />
+              <ValuePill label="Margen mensual" value={getMarginLabel(metrics)} />
+              <ValuePill label="Margen frente al ingreso" value={marginRateLabel} />
+              <ValuePill label="Porcentaje aplicado al margen" value={contributionRateLabel} />
+              <ValuePill label="Aporte sugerido final" value={capacityContributionLabel} />
               <ValuePill
                 label="Gastos pequeños"
                 tone="warning"

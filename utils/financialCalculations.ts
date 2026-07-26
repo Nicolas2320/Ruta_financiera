@@ -86,6 +86,8 @@ export type FinancialSnapshot = {
     marginRate: number | null;
     savingsCapacityLevel: SavingsCapacityLevel;
     savingsCapacityLabel: string;
+    suggestedContributionRate: number | null;
+    suggestedContributionBeforeRounding: number;
     suggestedMonthlyContribution: number;
   };
   emergencyFund: {
@@ -407,13 +409,23 @@ function getSavingsCapacityLevel(monthlyMargin: number | null, marginRate: numbe
   return "high";
 }
 
-function getSuggestedMonthlyContribution(monthlyMargin: number | null, marginRate: number | null) {
+export function getSuggestedContributionRate(
+  monthlyMargin: number | null,
+  marginRate: number | null
+) {
   if (monthlyMargin === null || marginRate === null || monthlyMargin <= 0) {
+    return null;
+  }
+
+  return marginRate <= 0.1 ? 0.25 : marginRate <= 0.25 ? 0.35 : 0.45;
+}
+
+function getSuggestedMonthlyContribution(monthlyMargin: number | null, contributionRate: number | null) {
+  if (monthlyMargin === null || contributionRate === null || monthlyMargin <= 0) {
     return 0;
   }
 
-  const share = marginRate <= 0.1 ? 0.25 : marginRate <= 0.25 ? 0.35 : 0.45;
-  const contribution = roundDownToNearest(monthlyMargin * share, 10000);
+  const contribution = roundDownToNearest(monthlyMargin * contributionRate, 10000);
 
   return Math.min(contribution, monthlyMargin);
 }
@@ -654,7 +666,15 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const expensesToIncomeRatio = safeDivide(monthlyExpenses, monthlyIncome);
   const marginRate = safeDivide(monthlyMargin, monthlyIncome);
   const savingsCapacityLevel = getSavingsCapacityLevel(monthlyMargin, marginRate);
-  const suggestedMonthlyContribution = getSuggestedMonthlyContribution(monthlyMargin, marginRate);
+  const suggestedContributionRate = getSuggestedContributionRate(monthlyMargin, marginRate);
+  const suggestedContributionBeforeRounding =
+    monthlyMargin !== null && suggestedContributionRate !== null
+      ? monthlyMargin * suggestedContributionRate
+      : 0;
+  const suggestedMonthlyContribution = getSuggestedMonthlyContribution(
+    monthlyMargin,
+    suggestedContributionRate
+  );
 
   const coverageMonths = safeDivide(currentSavings, monthlyExpenses);
   const targetThreeMonths = monthlyExpenses !== null ? monthlyExpenses * 3 : null;
@@ -739,6 +759,8 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
       marginRate,
       savingsCapacityLevel,
       savingsCapacityLabel: savingsCapacityLabels[savingsCapacityLevel],
+      suggestedContributionRate,
+      suggestedContributionBeforeRounding,
       suggestedMonthlyContribution
     },
     emergencyFund: {

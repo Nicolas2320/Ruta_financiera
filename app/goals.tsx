@@ -150,14 +150,14 @@ const customGoalIconOptions: VisualOption[] = [
     backgroundColor: colors.supportSoft
   },
   {
-    title: "Vehiculo",
+    title: "Vehículo",
     iconKey: "custom-vehicle",
     icon: Car,
     color: "#0E7490",
     backgroundColor: "#E6F7FB"
   },
   {
-    title: "Celebracion",
+    title: "Celebración",
     iconKey: "custom-gift",
     icon: Gift,
     color: "#DB2777",

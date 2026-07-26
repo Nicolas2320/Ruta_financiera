@@ -186,14 +186,14 @@ const customGoalIconOptions: GoalVisualOption[] = [
     backgroundColor: colors.supportSoft
   },
   {
-    title: "Vehiculo",
+    title: "Vehículo",
     iconKey: "custom-vehicle",
     icon: Car,
     color: "#0E7490",
     backgroundColor: "#E6F7FB"
   },
   {
-    title: "Celebracion",
+    title: "Celebración",
     iconKey: "custom-gift",
     icon: Gift,
     color: "#DB2777",
@@ -225,9 +225,9 @@ const allGoalVisualOptions = [...goalVisualOptions, ...customGoalIconOptions];
 const goalHorizons = [
   "Menos de 6 meses",
   "6 - 12 meses",
-  "1 - 3 anos",
-  "3 - 5 anos",
-  "Mas de 5 anos",
+  "1 - 3 años",
+  "3 - 5 años",
+  "Más de 5 años",
   "No estoy seguro"
 ];
 const goalPriorities = ["Baja", "Media", "Alta", "Muy alta"];
@@ -1020,8 +1020,8 @@ function GoalCard({
               <Text style={styles.contributionLabel}>Registrar aporte</Text>
               <Text style={styles.registerHint}>
                 {latestContribution
-                  ? `Ultimo: ${formatCOP(latestContribution.amount)} el ${getFormattedDate(latestContribution.date)}`
-                  : "Aun no registras aportes para esta meta."}
+                  ? `Último: ${formatCOP(latestContribution.amount)} el ${getFormattedDate(latestContribution.date)}`
+                  : "Aún no registras aportes para esta meta."}
               </Text>
             </View>
             <Chip label={`${contributionCount} aportes`} tone={contributionCount > 0 ? "support" : "neutral"} />
@@ -1737,7 +1737,7 @@ export default function GoalsOverviewScreen() {
     confirmGoalAction({
       confirmLabel: "Completar",
       message:
-        "La meta se marcara como completada, saldra de la bolsa mensual y podras reactivarla.",
+        "La meta se marcará como completada, saldrá de la bolsa mensual y podrás reactivarla.",
       onConfirm: () => completeGoal(allocation.goal.id),
       title: `Completar ${allocation.goal.title}`
     });
@@ -1747,7 +1747,7 @@ export default function GoalsOverviewScreen() {
     confirmGoalAction({
       confirmLabel: "Eliminar",
       destructive: true,
-      message: "Esta meta se quitara de tu lista y la bolsa mensual se redistribuira entre las metas restantes.",
+      message: "Esta meta se quitará de tu lista y la bolsa mensual se redistribuirá entre las metas restantes.",
       onConfirm: () => removeGoal(allocation.goal.id),
       title: `Eliminar ${allocation.goal.title}`
     });
@@ -1757,7 +1757,7 @@ export default function GoalsOverviewScreen() {
     confirmGoalAction({
       confirmLabel: "Hacer principal",
       message:
-        "Dashboard, simulacion y plan mensual se enfocaran en esta meta como prioridad principal.",
+        "Dashboard, simulación y plan mensual se enfocarán en esta meta como prioridad principal.",
       onConfirm: () => setPrimaryGoal(allocation.goal.id),
       title: `Hacer principal ${allocation.goal.title}`
     });
@@ -1821,10 +1821,10 @@ export default function GoalsOverviewScreen() {
             <View style={styles.primaryCompletedCard}>
               <AlertCircle color="#B45309" size={22} strokeWidth={2.4} />
               <View style={styles.primaryCompletedCopy}>
-                <Text style={styles.primaryCompletedTitle}>Tu meta principal esta completada</Text>
+                <Text style={styles.primaryCompletedTitle}>Tu meta principal está completada</Text>
                 <Text style={styles.primaryCompletedText}>
-                  Puedes mantenerla como referencia historica o elegir otra meta activa para que
-                  Dashboard, simulacion y plan mensual se enfoquen en el siguiente objetivo.
+                  Puedes mantenerla como referencia histórica o elegir otra meta activa para que
+                  el dashboard, la simulación y el plan mensual se enfoquen en el siguiente objetivo.
                 </Text>
                 {nextActivePrimaryCandidate ? (
                   <Pressable
@@ -2028,7 +2028,7 @@ export default function GoalsOverviewScreen() {
           ) : (
             <View style={styles.emptyCard}>
               <Calendar color={colors.primary} size={28} strokeWidth={2.4} />
-              <Text style={styles.emptyTitle}>Aun no tienes metas</Text>
+              <Text style={styles.emptyTitle}>Aún no tienes metas</Text>
               <Text style={styles.emptyText}>
                 Crea una primera meta para calcular aportes sugeridos con tu margen mensual.
               </Text>
