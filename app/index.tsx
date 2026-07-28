@@ -16,6 +16,7 @@ import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 const welcomeRoute = require("../assets/illustrations/welcome-route.png");
 
@@ -73,6 +74,7 @@ const featureAccents = {
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { isPhone, isSmallPhone, screenPadding } = useResponsiveLayout();
   const { session } = useAuth();
   const { hasCompletedOnboarding, onboardingSyncStatus } = useOnboarding();
   const isLoadingProfile = onboardingSyncStatus === "loading";
@@ -88,7 +90,7 @@ export default function WelcomeScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
@@ -100,12 +102,24 @@ export default function WelcomeScreen() {
           </View>
 
           <View style={styles.headlineBlock}>
-            <Text style={styles.titleLine}>Organiza tu dinero</Text>
-            <Text style={styles.titleLine}>y construye un plan</Text>
+            <Text style={[styles.titleLine, isPhone && styles.titleLinePhone]}>
+              Organiza tu dinero
+            </Text>
+            <Text style={[styles.titleLine, isPhone && styles.titleLinePhone]}>
+              y construye un plan
+            </Text>
             <View style={styles.goalLine}>
-              <Text style={styles.titleLine}>para </Text>
+              <Text style={[styles.titleLine, isPhone && styles.titleLinePhone]}>para </Text>
               <View style={styles.goalWordWrap}>
-                <Text style={[styles.titleLine, styles.highlightText]}>tus metas</Text>
+                <Text
+                  style={[
+                    styles.titleLine,
+                    isPhone && styles.titleLinePhone,
+                    styles.highlightText
+                  ]}
+                >
+                  tus metas
+                </Text>
                 <View style={styles.highlightUnderline} />
               </View>
             </View>
@@ -142,7 +156,12 @@ export default function WelcomeScreen() {
 
           <View style={styles.featuresGrid}>
             {features.map((feature) => (
-              <FeatureCard key={feature.title} feature={feature} />
+              <FeatureCard
+                compact={isPhone}
+                feature={feature}
+                key={feature.title}
+                small={isSmallPhone}
+              />
             ))}
           </View>
 
@@ -190,12 +209,27 @@ export default function WelcomeScreen() {
   );
 }
 
-function FeatureCard({ feature }: { feature: Feature }) {
+function FeatureCard({
+  compact = false,
+  feature,
+  small = false
+}: {
+  compact?: boolean;
+  feature: Feature;
+  small?: boolean;
+}) {
   const accent = featureAccents[feature.accent];
   const Icon = feature.icon;
 
   return (
-    <View style={[styles.featureCard, { borderColor: accent.border }]}>
+    <View
+      style={[
+        styles.featureCard,
+        compact && styles.featureCardPhone,
+        small && styles.featureCardSmallPhone,
+        { borderColor: accent.border }
+      ]}
+    >
       <View style={[styles.featureIcon, { backgroundColor: accent.iconBackground }]}>
         <Icon color={accent.iconColor} size={21} strokeWidth={2.5} />
       </View>
@@ -252,6 +286,10 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.display
   },
+  titleLinePhone: {
+    fontSize: typography.heroTitle,
+    lineHeight: typography.lineHeight.heroTitle
+  },
   goalLine: {
     alignItems: "flex-start",
     flexDirection: "row",
@@ -285,7 +323,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     minHeight: 250,
     overflow: "hidden",
-    padding: 14
+    padding: 14,
+    width: "100%"
   },
   routeImage: {
     borderRadius: 22
@@ -354,6 +393,7 @@ const styles = StyleSheet.create({
   },
   featuresGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.sm
   },
   featureCard: {
@@ -364,6 +404,12 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     padding: spacing.sm
+  },
+  featureCardPhone: {
+    flexBasis: "47%"
+  },
+  featureCardSmallPhone: {
+    flexBasis: "100%"
   },
   featureIcon: {
     alignItems: "center",

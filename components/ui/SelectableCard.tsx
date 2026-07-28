@@ -155,9 +155,9 @@ const styles = StyleSheet.create({
   title: {
     color: colors.text,
     flexShrink: 1,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
+    fontSize: typography.option,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.option
   },
   tileTitle: {
     textAlign: "center"

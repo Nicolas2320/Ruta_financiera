@@ -29,7 +29,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -43,6 +42,7 @@ import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { normalizeExpenseCategoryAmounts } from "../types/financial";
 
 const expensesCupReceipt = require("../assets/illustrations/expenses-cup-receipt.png");
@@ -209,8 +209,8 @@ function BottomNavItem({
 export default function ExpensesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string }>();
-  const { width } = useWindowDimensions();
-  const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
+  const { isPhone, screenPadding } = useResponsiveLayout();
+  const { onboarding, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isSpendingEditMode = source === "spending";
   const isProfileEditMode = source === "profile";
@@ -241,7 +241,7 @@ export default function ExpensesScreen() {
   const canContinue = Boolean(
     selectedExpenseRange && selectedCategories.length > 0 && selectedExpenseFeeling
   );
-  const showSideBySide = width >= 390;
+  const showSideBySide = !isPhone;
 
   const toggleCategory = (category: string) => {
     setSelectedCategories((currentCategories) =>
@@ -279,7 +279,7 @@ export default function ExpensesScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>

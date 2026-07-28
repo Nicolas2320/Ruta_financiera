@@ -4,6 +4,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { Bot, Flag, Home, LineChart, PieChart } from "lucide-react-native";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 type IconProps = {
   color?: string;
@@ -34,6 +35,7 @@ let lastActiveIndex = 0;
 
 export function BottomNavigation({ activeRoute }: { activeRoute: NavRoute }) {
   const router = useRouter();
+  const { isSmallPhone } = useResponsiveLayout();
   const activeIndex = Math.max(
     0,
     navItems.findIndex((item) => item.route === activeRoute)
@@ -60,7 +62,7 @@ export function BottomNavigation({ activeRoute }: { activeRoute: NavRoute }) {
   const translateX = Animated.multiply(animatedIndex, itemWidth);
 
   return (
-    <View style={styles.bottomNav}>
+    <View style={[styles.bottomNav, isSmallPhone && styles.bottomNavSmallPhone]}>
       <View
         onLayout={(event) => setNavWidth(event.nativeEvent.layout.width)}
         style={styles.navTrack}
@@ -94,12 +96,21 @@ export function BottomNavigation({ activeRoute }: { activeRoute: NavRoute }) {
               }}
               style={({ pressed }) => [
                 styles.navItem,
+                isSmallPhone && styles.navItemSmallPhone,
                 active && styles.navItemActive,
                 pressed && styles.pressed
               ]}
             >
-              <Icon color={color} size={23} strokeWidth={2.4} />
-              <Text style={[styles.navText, active && styles.navTextActive]}>{item.title}</Text>
+              <Icon color={color} size={isSmallPhone ? 21 : 23} strokeWidth={2.4} />
+              <Text
+                numberOfLines={2}
+                style={[
+                  styles.navText,
+                  active && styles.navTextActive
+                ]}
+              >
+                {item.title}
+              </Text>
             </Pressable>
           );
         })}
@@ -119,6 +130,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     width: "100%"
   },
+  bottomNavSmallPhone: {
+    paddingHorizontal: 4
+  },
   navTrack: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -132,6 +146,11 @@ const styles = StyleSheet.create({
     minHeight: 68,
     paddingHorizontal: spacing.xs,
     paddingTop: spacing.xs
+  },
+  navItemSmallPhone: {
+    gap: 2,
+    minHeight: 62,
+    paddingHorizontal: 2
   },
   navItemActive: {
     transform: [{ scale: 1.03 }]

@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { getOnboardingGoals } from "../types/financial";
 import {
   getCurrentSavingsDisplay,
@@ -184,6 +185,7 @@ function SummarySection({
 
 export default function SummaryScreen() {
   const router = useRouter();
+  const { screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ mode?: string }>();
   const { exactValues, onboarding } = useOnboarding();
   const mode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
@@ -201,7 +203,7 @@ export default function SummaryScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>

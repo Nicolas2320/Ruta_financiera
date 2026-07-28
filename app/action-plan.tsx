@@ -25,6 +25,7 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   getLegacyFieldsFromGoal,
   getOnboardingGoals,
@@ -455,7 +456,8 @@ function ActionCard({
   onOpenSimulation,
   onProgressChange,
   onToggleExpanded,
-  progress
+  progress,
+  compact = false
 }: {
   action: MonthlyAction;
   actionNumber: number;
@@ -466,6 +468,7 @@ function ActionCard({
   onProgressChange: (patch: ActionProgressPatch) => void;
   onToggleExpanded: () => void;
   progress: ActionProgressValue | undefined;
+  compact?: boolean;
 }) {
   const visual = getActionVisual(action.id);
   const Icon = visual.icon;
@@ -543,7 +546,13 @@ function ActionCard({
   };
 
   return (
-    <View style={[styles.actionCard, completed && styles.actionCardCompleted]}>
+    <View
+      style={[
+        styles.actionCard,
+        compact && styles.actionCardPhone,
+        completed && styles.actionCardCompleted
+      ]}
+    >
       <View style={styles.actionTopRow}>
         <View style={styles.actionNumber}>
           <Text style={styles.actionNumberText}>{actionNumber}</Text>
@@ -812,34 +821,7 @@ function ActionCard({
 
 export default function ActionPlanScreen() {
   const router = useRouter();
-  const { isAuthReady, session } = useAuth();
-
-  useEffect(() => {
-    if (isAuthReady && !session) {
-      router.replace({
-        pathname: "/auth",
-        params: {
-          intent: "save-plan",
-          returnTo: "/action-plan"
-        }
-      });
-    }
-  }, [isAuthReady, router, session]);
-
-  if (!isAuthReady || !session) {
-    return (
-      <FinancialDataStatusScreen
-        text="Necesitamos una cuenta para guardar y actualizar tu plan mensual."
-        title="Preparando tu plan"
-      />
-    );
-  }
-
-  return <ActionPlanContent />;
-}
-
-function ActionPlanContent() {
-  const router = useRouter();
+  const { isPhone, screenPadding } = useResponsiveLayout();
   const { exactValues, onboarding, updateOnboarding } = useOnboarding();
   const { completedActions, planSyncError, planSyncStatus, updateActionProgress } = usePlan();
   const [expandedActionId, setExpandedActionId] = useState<string | null>(null);
@@ -994,20 +976,20 @@ function ActionPlanContent() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <View style={styles.screenHeroCard}>
+          <View style={[styles.screenHeroCard, isPhone && styles.cardPhone]}>
             <View style={styles.screenHeroIcon}>
               <CalendarCheck color={colors.primary} size={28} strokeWidth={2.4} />
             </View>
             <View style={styles.screenHeroTextGroup}>
-              <Text style={styles.title}>Plan mensual</Text>
+              <Text style={[styles.title, isPhone && styles.titlePhone]}>Plan mensual</Text>
             </View>
           </View>
 
-          <View style={styles.planHeroCard}>
+          <View style={[styles.planHeroCard, isPhone && styles.cardPhone]}>
             <View style={styles.planHeroHeading}>
               <View style={styles.planHeroIcon}>
                 <ClipboardCheck color={colors.primary} size={24} strokeWidth={2.4} />
@@ -1089,7 +1071,7 @@ function ActionPlanContent() {
             ) : null}
           </View>
 
-          <View style={styles.impactSummaryCard}>
+          <View style={[styles.impactSummaryCard, isPhone && styles.cardPhone]}>
             <View style={styles.impactSummaryHeader}>
               <View style={styles.impactSummaryIcon}>
                 <ChartColumnIncreasing color={colors.primary} size={21} strokeWidth={2.4} />
@@ -1135,6 +1117,7 @@ function ActionPlanContent() {
 
               return (
                 <ActionCard
+                  compact={isPhone}
                   key={actionProgressId}
                   action={action}
                   actionNumber={index + 1}
@@ -1231,6 +1214,13 @@ const styles = StyleSheet.create({
     fontSize: typography.title,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.title
+  },
+  titlePhone: {
+    fontSize: typography.heroTitle,
+    lineHeight: typography.lineHeight.heroTitle
+  },
+  cardPhone: {
+    padding: spacing.md
   },
   subtitle: {
     color: colors.textMuted,
@@ -1400,6 +1390,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.md
+  },
+  actionCardPhone: {
+    paddingHorizontal: spacing.sm
   },
   actionCardCompleted: {
     backgroundColor: "#FBFFFC",

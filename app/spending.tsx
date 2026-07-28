@@ -36,6 +36,7 @@ import {
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { normalizeExpenseCategoryAmounts } from "../types/financial";
 import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
@@ -622,7 +623,8 @@ function SectionCard({
   icon,
   actionLabel,
   onActionPress,
-  children
+  children,
+  compact = false
 }: {
   title: string;
   subtitle?: string;
@@ -630,9 +632,10 @@ function SectionCard({
   actionLabel?: string;
   onActionPress?: () => void;
   children: ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.sectionCard}>
+    <View style={[styles.sectionCard, compact && styles.cardPhone]}>
       <View style={styles.sectionHeader}>
         <IconBubble icon={icon} size="small" />
         <View style={styles.sectionHeaderText}>
@@ -786,7 +789,7 @@ function CategoryAmountRow({
         <View style={[styles.categoryIcon, { backgroundColor: visual.backgroundColor }]}>
           <Icon color={visual.color} size={20} strokeWidth={2.4} />
         </View>
-        <Text numberOfLines={1} style={styles.categoryLabel}>{label}</Text>
+        <Text numberOfLines={2} style={styles.categoryLabel}>{label}</Text>
       </View>
       <View style={styles.categoryInputRow}>
         <Text style={styles.categoryInputLabel}>Monto mensual</Text>
@@ -890,6 +893,7 @@ function BottomNavItem({
 
 export default function SpendingScreen() {
   const router = useRouter();
+  const { isPhone, screenPadding } = useResponsiveLayout();
   const { exactValues, onboarding, updateOnboarding } = useOnboarding();
   const { completedActions } = usePlan();
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
@@ -990,23 +994,23 @@ export default function SpendingScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <View style={styles.headerCard}>
+          <View style={[styles.headerCard, isPhone && styles.cardPhone]}>
             <View style={styles.headerIcon}>
               <ReceiptText color={colors.primary} size={24} strokeWidth={2.4} />
             </View>
             <View style={styles.headerText}>
-              <Text style={styles.title}>Tus gastos</Text>
+              <Text style={[styles.title, isPhone && styles.titlePhone]}>Tus gastos</Text>
             </View>
           </View>
 
           <SpendingSectionTabs activeTab="spending" />
 
           <SpendingSectionContent activeTab="spending">
-          <View style={styles.heroCard}>
+          <View style={[styles.heroCard, isPhone && styles.cardPhone]}>
             <View style={styles.heroTextGroup}>
               <View style={styles.heroTopRow}>
                 <Chip label={getExpenseSourceLabel(snapshot.sourceMap.monthlyExpenses)} tone={hasExactMonthlyExpenses ? "support" : snapshot.sourceMap.monthlyExpenses === "missing" ? "neutral" : "primary"} />
@@ -1019,7 +1023,7 @@ export default function SpendingScreen() {
             </View>
           </View>
 
-          <View style={styles.comparisonCard}>
+          <View style={[styles.comparisonCard, isPhone && styles.cardPhone]}>
             <View style={styles.comparisonHeader}>
               <View style={styles.comparisonTitleGroup}>
                 <IconBubble
@@ -1088,7 +1092,7 @@ export default function SpendingScreen() {
             </View>
           </View>
 
-          <View style={styles.opportunityCard}>
+          <View style={[styles.opportunityCard, isPhone && styles.cardPhone]}>
             <View style={styles.opportunityHeader}>
               <IconBubble
                 icon={<LineChart color={colors.support} size={20} strokeWidth={2.4} />}
@@ -1109,6 +1113,7 @@ export default function SpendingScreen() {
 
           {spendingSignals.length > 0 ? (
             <SectionCard
+              compact={isPhone}
               icon={<CalendarCheck color={colors.primary} size={20} strokeWidth={2.4} />}
               title="Señales del plan mensual"
               subtitle="No reducen tus gastos automáticamente; sirven para revisar el mes."
@@ -1138,6 +1143,7 @@ export default function SpendingScreen() {
           ) : null}
 
           <SectionCard
+            compact={isPhone}
             actionLabel="Ver todas"
             icon={<ReceiptText color={colors.primary} size={20} strokeWidth={2.4} />}
             onActionPress={() => router.push({ pathname: "/expenses", params: { source: "spending" } })}
@@ -1197,6 +1203,7 @@ export default function SpendingScreen() {
           </SectionCard>
 
           <SectionCard
+            compact={isPhone}
             actionLabel="Revisar"
             icon={<Coffee color="#B45309" size={20} strokeWidth={2.4} />}
             onActionPress={() => router.push({ pathname: "/small-expenses", params: { source: "spending" } })}
@@ -1281,6 +1288,10 @@ const styles = StyleSheet.create({
     fontSize: typography.title,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.title
+  },
+  titlePhone: {
+    fontSize: typography.heroTitle,
+    lineHeight: typography.lineHeight.heroTitle
   },
   heroCard: {
     ...shadows.card,
@@ -1543,6 +1554,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.lg
+  },
+  cardPhone: {
+    padding: spacing.md
   },
   sectionHeader: {
     alignItems: "center",

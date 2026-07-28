@@ -41,6 +41,7 @@ import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   createFinancialGoal,
   getLegacyFieldsFromGoal,
@@ -291,6 +292,7 @@ function getInitialAmountSelection(goal: FinancialGoal | null) {
 
 export default function GoalsScreen() {
   const router = useRouter();
+  const { isPhone, isSmallPhone, screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams();
   const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
   const goals = getOnboardingGoals(onboarding);
@@ -444,7 +446,7 @@ export default function GoalsScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
@@ -491,7 +493,11 @@ export default function GoalsScreen() {
                   iconColor={goal.color}
                   onPress={() => handleGoalSelect(goal)}
                   selected={selectedGoal === goal.title}
-                  style={styles.goalOption}
+                  style={[
+                    styles.goalOption,
+                    isPhone && styles.goalOptionPhone,
+                    isSmallPhone && styles.optionSmallPhone
+                  ]}
                   title={goal.title}
                   titleStyle={styles.goalTitle}
                 />
@@ -556,7 +562,11 @@ export default function GoalsScreen() {
                   iconColor={horizon.color}
                   onPress={() => setSelectedHorizon(horizon.title)}
                   selected={selectedHorizon === horizon.title}
-                  style={styles.horizonOption}
+                  style={[
+                    styles.horizonOption,
+                    isPhone && styles.goalOptionPhone,
+                    isSmallPhone && styles.optionSmallPhone
+                  ]}
                   title={horizon.title}
                   titleStyle={styles.compactTitle}
                 />
@@ -593,11 +603,12 @@ export default function GoalsScreen() {
                   iconColor={range.color}
                   onPress={() => handleAmountSelect(range)}
                   selected={selectedAmountRange === range.title}
-                  style={
+                  style={[
                     range.title === manualAmountOptionTitle
                       ? styles.amountOptionFeatured
-                      : styles.amountOption
-                  }
+                      : styles.amountOption,
+                    isSmallPhone && styles.optionSmallPhone
+                  ]}
                   title={range.title}
                   titleStyle={styles.amountTitle}
                 />
@@ -762,6 +773,12 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     minHeight: 110,
     paddingHorizontal: spacing.xs
+  },
+  goalOptionPhone: {
+    flexBasis: "47%"
+  },
+  optionSmallPhone: {
+    flexBasis: "100%"
   },
   goalTitle: {
     fontSize: typography.badge,

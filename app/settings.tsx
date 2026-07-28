@@ -19,9 +19,11 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { screenPadding } = useResponsiveLayout();
   const { isSupabaseConfigured, signOut, user } = useAuth();
   const { onboardingSyncError, onboardingSyncStatus, resetFinancialData } = useOnboarding();
   const { planSyncError, planSyncStatus, resetPlanProgress } = usePlan();
@@ -59,7 +61,10 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.container}>
           <View style={styles.card}>
             <View style={styles.iconWrap}>

@@ -16,7 +16,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
-import { useAuth } from "../context/AuthContext";
 
 const privacyShield = require("../assets/illustrations/privacy-shield.png");
 
@@ -52,14 +51,13 @@ const excludedData: ExcludedDataItem[] = [
 
 export default function PrivacyScreen() {
   const router = useRouter();
-  const { session } = useAuth();
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>

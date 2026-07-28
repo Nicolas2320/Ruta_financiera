@@ -37,6 +37,7 @@ import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 const smallExpensesImage = require("../assets/illustrations/small-expenses.png");
 
@@ -235,6 +236,7 @@ function BottomNavItem({
 
 export default function SmallExpensesScreen() {
   const router = useRouter();
+  const { screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ source?: string }>();
   const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
@@ -344,7 +346,7 @@ export default function SmallExpensesScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>

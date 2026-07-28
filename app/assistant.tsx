@@ -22,6 +22,7 @@ import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   AssistantApiError,
   generateAssistantResponse,
@@ -508,6 +509,7 @@ function MessageBubble({ message }: { message: AssistantMessage }) {
 
 export default function AssistantScreen() {
   const router = useRouter();
+  const { isPhone, screenPadding } = useResponsiveLayout();
   const { completedActions } = usePlan();
   const { exactValues, hasCompletedOnboarding, onboarding } = useOnboarding();
   const [isChatNoteVisible, setIsChatNoteVisible] = useState(false);
@@ -749,18 +751,21 @@ export default function AssistantScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.container}>
-          <View style={styles.header}>
+          <View style={[styles.header, isPhone && styles.cardPhone]}>
             <View style={styles.headerIcon}>
               <Bot color={colors.primary} size={32} strokeWidth={2.4} />
             </View>
             <View style={styles.headerText}>
-              <Text style={styles.title}>Asistente AI</Text>
+              <Text style={[styles.title, isPhone && styles.titlePhone]}>Asistente AI</Text>
             </View>
           </View>
 
-          <View style={styles.assistantIntroCard}>
+          <View style={[styles.assistantIntroCard, isPhone && styles.assistantIntroCardPhone]}>
             <View style={styles.assistantIntroIcon}>
               <MessageCircleQuestion color={colors.primary} size={24} strokeWidth={2.4} />
             </View>
@@ -773,7 +778,7 @@ export default function AssistantScreen() {
           </View>
 
           {!hasCompletedOnboarding ? (
-            <View style={styles.emptyState}>
+            <View style={[styles.emptyState, isPhone && styles.cardPhone]}>
               <View style={styles.emptyStateIcon}>
                 <ClipboardCheck color={colors.primary} size={38} strokeWidth={2.4} />
               </View>
@@ -819,7 +824,7 @@ export default function AssistantScreen() {
             </View>
           </View>
 
-          <View style={styles.chatCard}>
+          <View style={[styles.chatCard, isPhone && styles.cardPhone]}>
             <View style={styles.chatHeader}>
               <View style={styles.chatHeaderText}>
                 <Text style={styles.sectionTitle}>Chat</Text>
@@ -914,7 +919,7 @@ export default function AssistantScreen() {
             </View>
           </View>
 
-          <View style={styles.boundaryCard}>
+          <View style={[styles.boundaryCard, isPhone && styles.boundaryCardPhone]}>
             <ShieldCheck color={colors.support} size={24} strokeWidth={2.4} />
             <Text style={styles.boundaryText}>
               Orientación educativa: no recomienda productos financieros específicos, no promete
@@ -975,6 +980,13 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.title
   },
+  titlePhone: {
+    fontSize: typography.heroTitle,
+    lineHeight: typography.lineHeight.heroTitle
+  },
+  cardPhone: {
+    padding: spacing.md
+  },
   assistantIntroCard: {
     ...shadows.card,
     alignItems: "center",
@@ -985,6 +997,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
     padding: spacing.md
+  },
+  assistantIntroCardPhone: {
+    alignItems: "flex-start"
   },
   assistantIntroIcon: {
     alignItems: "center",
@@ -1328,6 +1343,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
     padding: spacing.md
+  },
+  boundaryCardPhone: {
+    alignItems: "flex-start"
   },
   boundaryText: {
     color: colors.support,

@@ -5,12 +5,12 @@ export const colors = {
   primary: "#155EEF",
   primaryDark: "#0F3EA8",
   primarySoft: "#E7F0FF",
-  support: "#14905D",
+  support: "#0F7A4F",
   supportSoft: "#E8F8EF",
   warningSoft: "#FFF5E7",
   text: "#0F172A",
   textMuted: "#475569",
-  textSubtle: "#64748B",
+  textSubtle: "#5B677A",
   border: "#E2E8F0",
   shadow: "#1E293B"
 };
@@ -38,10 +38,10 @@ export const typography = {
   brand: 21,
   sectionTitle: 20,
   question: 17,
-  option: 15,
+  option: 16,
   button: 16,
   subtitle: 16,
-  body: 15,
+  body: 16,
   caption: 13,
   badge: 12,
   small: 11,
@@ -55,18 +55,18 @@ export const typography = {
     question: 23,
     button: 22,
     subtitle: 24,
-    body: 22,
-    option: 20,
+    body: 24,
+    option: 22,
     caption: 18,
     badge: 17,
     small: 15
   },
   weight: {
     regular: "400",
-    medium: "600",
-    semibold: "700",
-    bold: "800",
-    black: "900"
+    medium: "500",
+    semibold: "600",
+    bold: "700",
+    black: "800"
   } as const
 };
 
