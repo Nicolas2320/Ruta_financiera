@@ -7,6 +7,7 @@ import {
   normalizeCompletedActionsState,
   normalizeDebtRecords,
   normalizeExpenseCategoryAmounts,
+  normalizeFinancialGuidanceMode,
   normalizeFinancialGoals,
   normalizeGoalMonthlyBudget,
   type CompletedActionsState,
@@ -46,6 +47,7 @@ export function normalizeOnboardingData(
     ...(onboarding ?? {}),
     firstName: typeof onboarding?.firstName === "string" ? onboarding.firstName : "",
     lastName: typeof onboarding?.lastName === "string" ? onboarding.lastName : "",
+    financialGuidanceMode: normalizeFinancialGuidanceMode(onboarding?.financialGuidanceMode),
     expenseCategories: Array.isArray(onboarding?.expenseCategories)
       ? onboarding.expenseCategories
       : [],

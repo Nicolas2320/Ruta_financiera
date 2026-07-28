@@ -21,7 +21,6 @@ import {
   WalletCards
 } from "lucide-react-native";
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -32,14 +31,25 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
+import { FinancialEducationModal } from "../components/FinancialEducationModal";
+import { FinancialEducationStory } from "../components/FinancialEducationStory";
 import {
   SpendingSectionContent,
   SpendingSectionTabs
 } from "../components/SpendingSectionTabs";
+import {
+  AppModal,
+  AppModalAction,
+  AppModalActions
+} from "../components/ui/AppModal";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import type { DebtPaymentStatus, DebtRecord } from "../types/financial";
+import {
+  normalizeFinancialGuidanceMode,
+  type DebtPaymentStatus,
+  type DebtRecord
+} from "../types/financial";
 import {
   debtPaymentStatusLabels,
   evaluateNewDebt,
@@ -465,6 +475,7 @@ function SectionCard({
   icon,
   actionLabel,
   onActionPress,
+  headerAction,
   children,
   compact = false
 }: {
@@ -473,6 +484,7 @@ function SectionCard({
   icon: ReactNode;
   actionLabel?: string;
   onActionPress?: () => void;
+  headerAction?: ReactNode;
   children: ReactNode;
   compact?: boolean;
 }) {
@@ -494,6 +506,7 @@ function SectionCard({
             <ChevronRight color={colors.primary} size={20} strokeWidth={2.5} />
           </Pressable>
         ) : null}
+        {headerAction}
       </View>
       {children}
     </View>
@@ -594,7 +607,7 @@ function PercentageInput({
         inputMode="decimal"
         keyboardType="decimal-pad"
         onChangeText={(text) => onChangeText(getFormattedInterestRateInput(text))}
-        placeholder="Ej. 24,5"
+        placeholder="Ej. 24.5"
         placeholderTextColor={colors.textSubtle}
         style={styles.textInput}
         value={value}
@@ -726,22 +739,23 @@ function MonthYearSelectionModal({
   const canSelectPreviousYear = value.year > minimumMonthYear.year;
 
   return (
-    <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.pickerModalPanel}>
-          <View style={styles.modalHeader}>
-            <View style={styles.modalTitleGroup}>
-              <Text style={styles.modalTitle}>Primer mes de pago</Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onClose}
-              style={({ pressed }) => [styles.modalCloseButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.modalCloseText}>Cerrar</Text>
-            </Pressable>
-          </View>
-
+    <AppModal
+      footer={
+        <AppModalActions>
+          <AppModalAction label="Cancelar" onPress={onClose} variant="secondary" />
+          <AppModalAction
+            icon={<CheckCircle2 color={colors.surface} size={19} strokeWidth={2.5} />}
+            label="Usar fecha"
+            onPress={onConfirm}
+          />
+        </AppModalActions>
+      }
+      icon={<CalendarDays color={colors.primary} size={23} strokeWidth={2.4} />}
+      onClose={onClose}
+      size="compact"
+      title="Primer mes de pago"
+      visible={visible}
+    >
           <View style={styles.monthYearPreview}>
             <CalendarDays color={colors.primary} size={22} strokeWidth={2.4} />
             <Text style={styles.monthYearPreviewText}>{formatMonthYear(value)}</Text>
@@ -817,26 +831,7 @@ function MonthYearSelectionModal({
             })}
           </View>
 
-          <View style={styles.modalActions}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onConfirm}
-              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
-            >
-              <CheckCircle2 color={colors.surface} size={20} strokeWidth={2.5} />
-              <Text style={styles.primaryButtonText}>Usar fecha</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onClose}
-              style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.secondaryButtonText}>Cancelar</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
+    </AppModal>
   );
 }
 
@@ -858,8 +853,8 @@ function EmptyState({ onPress }: { onPress: () => void }) {
         onPress={onPress}
         style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
       >
+        <Text style={styles.primaryButtonText}>Agregar deuda</Text>
         <Plus color={colors.surface} size={20} strokeWidth={2.5} />
-        <Text style={styles.primaryButtonText}>Agregar deuda +</Text>
       </Pressable>
     </View>
   );
@@ -945,27 +940,17 @@ function DebtCard({
 }
 
 function DebtFormContent({
-  canSaveDebt,
   debtForm,
-  editingDebtId,
-  onCancel,
-  onSave,
   onUpdate
 }: {
-  canSaveDebt: boolean;
   debtForm: DebtFormState;
-  editingDebtId: string | null;
-  onCancel: () => void;
-  onSave: () => void;
   onUpdate: (patch: Partial<DebtFormState>) => void;
 }) {
   return (
-    <View style={styles.formCard}>
-      <View style={styles.formHeader}>
-        <Text style={styles.formTitle}>{editingDebtId ? "Editar deuda" : "Agregar una deuda"}</Text>
-        <Text style={styles.text}>Elige la opción más parecida al tipo de deuda que tienes.</Text>
-      </View>
-
+    <>
+      <Text style={styles.text}>
+        Elige la opción más parecida al tipo de deuda que tienes.
+      </Text>
       <View style={styles.debtTypeGrid}>
         {debtTypeOptions.map((option) => (
           <DebtTypeButton
@@ -1031,39 +1016,16 @@ function DebtFormContent({
           />
         ))}
       </View>
-
-      <View style={styles.formActions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canSaveDebt }}
-          disabled={!canSaveDebt}
-          onPress={onSave}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            !canSaveDebt && styles.primaryButtonDisabled,
-            pressed && canSaveDebt && styles.pressed
-          ]}
-        >
-          <CheckCircle2 color={colors.surface} size={20} strokeWidth={2.5} />
-          <Text style={styles.primaryButtonText}>
-            {editingDebtId ? "Guardar cambios" : "Guardar deuda"}
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onCancel}
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.secondaryButtonText}>Cancelar</Text>
-        </Pressable>
-      </View>
-    </View>
+    </>
   );
 }
 
 export default function DebtsScreen() {
   const { isPhone, screenPadding } = useResponsiveLayout();
   const { exactValues, onboarding, updateOnboarding } = useOnboarding();
+  const guidanceMode = normalizeFinancialGuidanceMode(
+    onboarding.financialGuidanceMode
+  );
   const debts = onboarding.debts;
   const [showDebtForm, setShowDebtForm] = useState(false);
   const [editingDebtId, setEditingDebtId] = useState<string | null>(null);
@@ -1339,6 +1301,72 @@ export default function DebtsScreen() {
 
           <SectionCard
             compact={isPhone}
+            headerAction={
+              <FinancialEducationModal
+                accessibilityLabel="Explicar cómo se evalúa una nueva cuota"
+                guidanceMode={guidanceMode}
+                icon={<Banknote color={colors.primary} size={23} strokeWidth={2.4} />}
+                title="Cómo evaluamos una nueva cuota"
+              >
+                <FinancialEducationStory
+                  calculationItems={[
+                    {
+                      label: "Cuotas actuales",
+                      value: formatCOP(debtSummary.monthlyPaymentTotal)
+                    },
+                    {
+                      label: "Nueva cuota",
+                      operator: "+",
+                      value:
+                        newDebtPaymentValue !== null
+                          ? formatCOP(newDebtPaymentValue)
+                          : "Por indicar"
+                    },
+                    {
+                      emphasis: true,
+                      label: "Deuda mensual total",
+                      operator: "=",
+                      value:
+                        newDebtEvaluation.totalDebtPayment !== null
+                          ? formatCOP(newDebtEvaluation.totalDebtPayment)
+                          : "Por calcular"
+                    }
+                  ]}
+                  calculationTitle="Qué sumamos antes de evaluar"
+                  definition="Comparamos todas tus cuotas mensuales con tus ingresos y revisamos cuánto margen quedaría después de agregar la nueva cuota."
+                  estimateLabel="Orientación educativa"
+                  guidanceMode={guidanceMode}
+                  plainLanguage={
+                    newDebtEvaluation.marginAfterNewPayment !== null
+                      ? `Después de incluir esta cuota, te quedarían cerca de ${formatSignedCOP(
+                          newDebtEvaluation.marginAfterNewPayment
+                        )} de margen mensual.`
+                      : "Indica una cuota mensual para ver cómo cambiarían tu margen y el peso de tus deudas."
+                  }
+                  plainLanguageBadge={
+                    newDebtEvaluation.totalDebtToIncomeRatio !== null
+                      ? getDebtRatioLabel(
+                          newDebtEvaluation.totalDebtToIncomeRatio
+                        )
+                      : "?"
+                  }
+                  resultDescription={newDebtEvaluation.message}
+                  resultLabel={newDebtEvaluation.label}
+                  resultValue={getDebtRatioLabel(
+                    newDebtEvaluation.totalDebtToIncomeRatio
+                  )}
+                  tone={
+                    newDebtEvaluation.viability === "possible"
+                      ? "positive"
+                      : newDebtEvaluation.viability === "risky"
+                        ? "critical"
+                        : newDebtEvaluation.viability === "tight"
+                          ? "warning"
+                          : "neutral"
+                  }
+                />
+              </FinancialEducationModal>
+            }
             icon={<Banknote color={colors.primary} size={20} strokeWidth={2.4} />}
             title="Evaluar nueva cuota"
             subtitle="Útil para estudio, vehículo u otra obligación antes de decidir."
@@ -1457,31 +1485,38 @@ export default function DebtsScreen() {
         </View>
       </ScrollView>
 
-      <Modal
-        animationType="fade"
-        onRequestClose={cancelDebtForm}
-        transparent
+      <AppModal
+        footer={
+          <AppModalActions>
+            <AppModalAction
+              label="Cancelar"
+              onPress={cancelDebtForm}
+              variant="secondary"
+            />
+            <AppModalAction
+              disabled={!canSaveDebt}
+              icon={
+                <CheckCircle2
+                  color={canSaveDebt ? colors.surface : colors.textSubtle}
+                  size={19}
+                  strokeWidth={2.5}
+                />
+              }
+              label={editingDebtId ? "Guardar cambios" : "Guardar deuda"}
+              onPress={saveDebt}
+            />
+          </AppModalActions>
+        }
+        icon={<CreditCard color={colors.primary} size={23} strokeWidth={2.4} />}
+        onClose={cancelDebtForm}
+        scrollable
+        size="wide"
+        subtitle="Registra la información que tengas clara; los datos marcados son opcionales."
+        title={editingDebtId ? "Editar deuda" : "Agregar una deuda"}
         visible={showDebtForm}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.debtFormModalPanel, isPhone && styles.modalPanelPhone]}>
-            <ScrollView
-              contentContainerStyle={styles.modalScrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              <DebtFormContent
-                canSaveDebt={canSaveDebt}
-                debtForm={debtForm}
-                editingDebtId={editingDebtId}
-                onCancel={cancelDebtForm}
-                onSave={saveDebt}
-                onUpdate={updateDebtForm}
-              />
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+        <DebtFormContent debtForm={debtForm} onUpdate={updateDebtForm} />
+      </AppModal>
 
       <MonthYearSelectionModal
         onChange={setDraftNewDebtStart}
@@ -1491,44 +1526,34 @@ export default function DebtsScreen() {
         visible={isStartPickerOpen}
       />
 
-      <Modal
-        animationType="fade"
-        onRequestClose={() => setDebtPendingDelete(null)}
-        transparent
+      <AppModal
+        footer={
+          <AppModalActions>
+            <AppModalAction
+              label="Cancelar"
+              onPress={() => setDebtPendingDelete(null)}
+              variant="secondary"
+            />
+            <AppModalAction
+              icon={<Trash2 color={colors.surface} size={19} strokeWidth={2.5} />}
+              label="Eliminar deuda"
+              onPress={confirmDeleteDebt}
+              variant="danger"
+            />
+          </AppModalActions>
+        }
+        icon={<Trash2 color={dangerRed} size={22} strokeWidth={2.4} />}
+        onClose={() => setDebtPendingDelete(null)}
+        size="compact"
+        title="Eliminar deuda"
         visible={Boolean(debtPendingDelete)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.confirmModalPanel, isPhone && styles.modalPanelPhone]}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleGroup}>
-                <Text style={styles.modalTitle}>Eliminar deuda</Text>
-                <Text style={styles.modalText}>
-                  {debtPendingDelete
-                    ? `¿Quieres eliminar "${getDebtTitle(debtPendingDelete)}" de tus deudas?`
-                    : "¿Quieres eliminar esta deuda de tus deudas?"}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.modalActions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={confirmDeleteDebt}
-                style={({ pressed }) => [styles.dangerButton, pressed && styles.pressed]}
-              >
-                <Trash2 color={colors.surface} size={20} strokeWidth={2.5} />
-                <Text style={styles.dangerButtonText}>Eliminar</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setDebtPendingDelete(null)}
-                style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
-              >
-                <Text style={styles.secondaryButtonText}>Cancelar</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        <Text style={styles.modalText}>
+          {debtPendingDelete
+            ? `¿Quieres eliminar "${getDebtTitle(debtPendingDelete)}" de tus deudas?`
+            : "¿Quieres eliminar esta deuda de tus deudas?"}
+        </Text>
+      </AppModal>
 
       <BottomNavigation activeRoute="/spending" />
     </SafeAreaView>

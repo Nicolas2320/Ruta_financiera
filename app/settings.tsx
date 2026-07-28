@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   AlertTriangle,
+  BookOpen,
   ChevronRight,
   ClipboardList,
   LineChart,
@@ -14,7 +15,9 @@ import {
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { FinancialGuidancePreference } from "../components/FinancialGuidancePreference";
 import { PrimaryButton } from "../components/PrimaryButton";
+import { getFinancialGuidanceOption } from "../constants/financialEducation";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
@@ -25,11 +28,19 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { screenPadding } = useResponsiveLayout();
   const { isSupabaseConfigured, signOut, user } = useAuth();
-  const { onboardingSyncError, onboardingSyncStatus, resetFinancialData } = useOnboarding();
+  const {
+    onboarding,
+    onboardingSyncError,
+    onboardingSyncStatus,
+    resetFinancialData,
+    updateOnboarding
+  } = useOnboarding();
   const { planSyncError, planSyncStatus, resetPlanProgress } = usePlan();
+  const [isEditingGuidance, setIsEditingGuidance] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [resetFeedback, setResetFeedback] = useState<string | null>(null);
+  const guidanceOption = getFinancialGuidanceOption(onboarding.financialGuidanceMode);
 
   const handleSignOut = async () => {
     await signOut();
@@ -95,6 +106,55 @@ export default function SettingsScreen() {
               <StatusPill label="Onboarding" value={onboardingSyncStatus} />
               <StatusPill label="Plan" value={planSyncStatus} />
             </View>
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.experienceHeader}>
+              <View style={styles.experienceIcon}>
+                <BookOpen color={colors.primary} size={23} strokeWidth={2.4} />
+              </View>
+              <View style={styles.settingsLinkBody}>
+                <Text style={styles.settingsLinkTitle}>Acompañamiento de resultados</Text>
+                <Text style={styles.settingsLinkText}>
+                  Define cuánta explicación quieres ver en tu diagnóstico y simulación.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.guidanceSummary}>
+              <View style={styles.settingsLinkBody}>
+                <Text style={styles.guidanceSummaryLabel}>Modo actual</Text>
+                <Text style={styles.guidanceSummaryValue}>{guidanceOption.label}</Text>
+              </View>
+              <Pressable
+                accessibilityLabel={
+                  isEditingGuidance
+                    ? "Cerrar opciones de acompañamiento"
+                    : "Cambiar acompañamiento de resultados"
+                }
+                accessibilityRole="button"
+                accessibilityState={{ expanded: isEditingGuidance }}
+                onPress={() => setIsEditingGuidance((current) => !current)}
+                style={({ pressed }) => [
+                  styles.guidanceChangeButton,
+                  pressed && styles.pressed
+                ]}
+              >
+                <Text style={styles.guidanceChangeButtonText}>
+                  {isEditingGuidance ? "Cerrar" : "Cambiar"}
+                </Text>
+              </Pressable>
+            </View>
+
+            {isEditingGuidance ? (
+              <FinancialGuidancePreference
+                onChange={(financialGuidanceMode) => {
+                  updateOnboarding({ financialGuidanceMode });
+                  setIsEditingGuidance(false);
+                }}
+                value={onboarding.financialGuidanceMode}
+              />
+            ) : null}
           </View>
 
           <Pressable
@@ -346,6 +406,57 @@ const styles = StyleSheet.create({
     textTransform: "uppercase"
   },
   statusValue: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  experienceHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.md
+  },
+  experienceIcon: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    height: 48,
+    justifyContent: "center",
+    width: 48
+  },
+  guidanceSummary: {
+    alignItems: "center",
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  guidanceSummaryLabel: {
+    color: colors.textSubtle,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.small,
+    textTransform: "uppercase"
+  },
+  guidanceSummaryValue: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  guidanceChangeButton: {
+    alignItems: "center",
+    borderColor: colors.primary,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 40,
+    paddingHorizontal: spacing.md
+  },
+  guidanceChangeButtonText: {
     color: colors.primary,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,

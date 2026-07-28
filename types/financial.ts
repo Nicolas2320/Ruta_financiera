@@ -1,5 +1,15 @@
 export type DebtPaymentStatus = "on_track" | "sometimes_heavy" | "overdue" | "not_sure";
 
+export const financialGuidanceModes = ["guided", "brief", "direct"] as const;
+
+export type FinancialGuidanceMode = (typeof financialGuidanceModes)[number];
+
+export function normalizeFinancialGuidanceMode(value: unknown): FinancialGuidanceMode {
+  return financialGuidanceModes.includes(value as FinancialGuidanceMode)
+    ? (value as FinancialGuidanceMode)
+    : "brief";
+}
+
 export type DebtRecord = {
   id: string;
   type: string;
@@ -17,6 +27,7 @@ export type DebtRecord = {
 export type OnboardingData = {
   firstName: string;
   lastName: string;
+  financialGuidanceMode: FinancialGuidanceMode;
   ageRange: string | null;
   country: string | null;
   city: string;
@@ -214,6 +225,7 @@ export type ExactFinancialValues = Partial<Record<ExactFinancialValueKey, number
 export const initialOnboarding: OnboardingData = {
   firstName: "",
   lastName: "",
+  financialGuidanceMode: "brief",
   ageRange: null,
   country: null,
   city: "",

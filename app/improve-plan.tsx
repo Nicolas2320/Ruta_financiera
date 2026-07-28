@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -14,10 +14,17 @@ import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
+import { FinancialEducationCarousel } from "../components/FinancialEducationCarousel";
+import { FinancialEducationModal } from "../components/FinancialEducationModal";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import type { ExactFinancialValueKey, ExactFinancialValues } from "../types/financial";
+import {
+  normalizeFinancialGuidanceMode,
+  type ExactFinancialValueKey,
+  type ExactFinancialValues,
+  type FinancialGuidanceMode
+} from "../types/financial";
 import {
   formatCOP,
   getPlanPrecisionStatus,
@@ -38,6 +45,11 @@ type FieldConfig = {
   icon: ComponentType<IconProps>;
   iconColor: string;
   iconBackground: string;
+  education: {
+    avoid: string;
+    definition: string;
+    examples: string[];
+  };
 };
 
 type InputValues = Record<ExactFinancialValueKey, string>;
@@ -49,7 +61,17 @@ const fields: FieldConfig[] = [
     helper: "Tu ingreso promedio mensual. Puedes usar un valor aproximado.",
     icon: Banknote,
     iconColor: colors.support,
-    iconBackground: colors.supportSoft
+    iconBackground: colors.supportSoft,
+    education: {
+      definition:
+        "Es el dinero que normalmente recibes durante un mes y que puedes usar para cubrir gastos o metas.",
+      examples: [
+        "Salario neto después de descuentos.",
+        "Promedio mensual de ingresos variables o independientes."
+      ],
+      avoid:
+        "No incluyas préstamos, reembolsos ni ingresos excepcionales que no esperas recibir cada mes."
+    }
   },
   {
     id: "monthlyExpenses",
@@ -57,7 +79,17 @@ const fields: FieldConfig[] = [
     helper: "Lo que normalmente gastas al mes.",
     icon: ReceiptText,
     iconColor: "#B45309",
-    iconBackground: colors.warningSoft
+    iconBackground: colors.warningSoft,
+    education: {
+      definition:
+        "Es el total aproximado que utilizas en un mes para vivienda, alimentación, transporte, servicios, deudas y otros consumos.",
+      examples: [
+        "Suma gastos fijos y un promedio de los variables.",
+        "Puedes apoyarte en uno o varios extractos recientes."
+      ],
+      avoid:
+        "No sumes como gasto una transferencia entre tus propias cuentas ni vuelvas a contar una compra ya incluida en una categoría."
+    }
   },
   {
     id: "currentSavings",
@@ -65,7 +97,17 @@ const fields: FieldConfig[] = [
     helper: "Dinero disponible fuera del ahorro específico de tus metas.",
     icon: PiggyBank,
     iconColor: colors.primary,
-    iconBackground: colors.primarySoft
+    iconBackground: colors.primarySoft,
+    education: {
+      definition:
+        "Es el dinero que ya tienes disponible como respaldo general y que aún no está reservado para una meta concreta.",
+      examples: [
+        "Saldo de una cuenta o bolsillo destinado a imprevistos.",
+        "Efectivo disponible que consideras parte de tu ahorro."
+      ],
+      avoid:
+        "No incluyas el ahorro ya registrado dentro de una meta ni dinero que necesitas para pagar gastos del mes."
+    }
   },
   {
     id: "smallExpenses",
@@ -73,9 +115,75 @@ const fields: FieldConfig[] = [
     helper: "Monto aproximado que se va en consumos pequeños frecuentes.",
     icon: Coffee,
     iconColor: "#7C3AED",
-    iconBackground: "#F1E8FF"
+    iconBackground: "#F1E8FF",
+    education: {
+      definition:
+        "Son consumos de bajo valor que se repiten y pueden pasar desapercibidos al revisar el presupuesto.",
+      examples: [
+        "Café, domicilios, snacks, compras rápidas o suscripciones pequeñas.",
+        "Usa un promedio mensual; no necesitas registrar cada compra."
+      ],
+      avoid:
+        "No incluyas aquí servicios, arriendo, transporte habitual u otros gastos que ya formen parte de tu gasto mensual."
+    }
   }
 ];
+
+function getFieldEducationSlides(
+  field: FieldConfig,
+  guidanceMode: FinancialGuidanceMode
+): ReactNode[] {
+  const definitionSlide = (
+    <View style={styles.educationSlide}>
+      <Text style={styles.educationTitle}>Qué significa</Text>
+      <View style={styles.educationDefinitionCard}>
+        <Text style={styles.educationText}>{field.education.definition}</Text>
+      </View>
+    </View>
+  );
+  const examplesSlide = (
+    <View style={styles.educationSlide}>
+      <Text style={styles.educationTitle}>Qué puedes incluir</Text>
+      <View style={styles.educationExamples}>
+        {field.education.examples.map((example) => (
+          <View key={example} style={styles.educationExampleRow}>
+            <View style={styles.educationDot} />
+            <Text style={styles.educationText}>{example}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+  const avoidSlide = (
+    <View style={styles.educationSlide}>
+      <Text style={styles.educationTitle}>Evita duplicar información</Text>
+      <View style={styles.educationWarningCard}>
+        <Text style={styles.educationText}>{field.education.avoid}</Text>
+      </View>
+    </View>
+  );
+
+  if (guidanceMode === "guided") {
+    return [definitionSlide, examplesSlide, avoidSlide];
+  }
+
+  if (guidanceMode === "brief") {
+    return [
+      definitionSlide,
+      <View style={styles.educationSlide}>
+        {examplesSlide}
+        {avoidSlide}
+      </View>
+    ];
+  }
+
+  return [
+    <View style={styles.educationSlide}>
+      {definitionSlide}
+      {avoidSlide}
+    </View>
+  ];
+}
 
 function getInitialInputValues(exactValues: ExactFinancialValues): InputValues {
   return fields.reduce<InputValues>(
@@ -137,6 +245,9 @@ export default function ImprovePlanScreen() {
   const router = useRouter();
   const { screenPadding } = useResponsiveLayout();
   const { exactValues, onboarding, onboardingSyncError, saveExactValues } = useOnboarding();
+  const guidanceMode = normalizeFinancialGuidanceMode(
+    onboarding.financialGuidanceMode
+  );
   const reportedNoSmallExpenses = onboarding.hasSmallExpenses === "No";
   const effectiveExactValues = useMemo(
     () =>
@@ -260,6 +371,7 @@ export default function ImprovePlanScreen() {
               <CurrencyField
                 key={field.id}
                 field={field}
+                guidanceMode={guidanceMode}
                 onChangeText={(value) => handleInputChange(field.id, value)}
                 value={inputValues[field.id]}
               />
@@ -337,10 +449,12 @@ export default function ImprovePlanScreen() {
 
 function CurrencyField({
   field,
+  guidanceMode,
   value,
   onChangeText
 }: {
   field: FieldConfig;
+  guidanceMode: FinancialGuidanceMode;
   value: string;
   onChangeText: (value: string) => void;
 }) {
@@ -353,7 +467,25 @@ function CurrencyField({
       </View>
       <View style={styles.fieldBody}>
         <View style={styles.fieldLabelRow}>
-          <Text style={styles.fieldLabel}>{field.label}</Text>
+          <View style={styles.fieldLabelMain}>
+            <Text style={styles.fieldLabel}>{field.label}</Text>
+            <FinancialEducationModal
+              accessibilityLabel={`Explicar ${field.label.toLowerCase()}`}
+              guidanceMode={guidanceMode}
+              icon={
+                <Icon color={field.iconColor} size={23} strokeWidth={2.4} />
+              }
+              iconBackgroundColor={field.iconBackground}
+              title={field.label}
+              triggerSize="compact"
+            >
+              <FinancialEducationCarousel
+                closeLabel="Cerrar"
+                resetKey={`${field.id}-${guidanceMode}`}
+                slides={getFieldEducationSlides(field, guidanceMode)}
+              />
+            </FinancialEducationModal>
+          </View>
           <Text style={styles.optionalText}>Opcional</Text>
         </View>
         <Text style={styles.fieldHelper}>{field.helper}</Text>
@@ -530,6 +662,13 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     justifyContent: "space-between"
   },
+  fieldLabelMain: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minWidth: 180
+  },
   fieldLabel: {
     color: colors.text,
     flexShrink: 1,
@@ -548,6 +687,55 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.caption,
     fontWeight: typography.weight.medium,
+    lineHeight: typography.lineHeight.caption
+  },
+  educationSlide: {
+    gap: spacing.md
+  },
+  educationTitle: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  educationDefinitionCard: {
+    backgroundColor: colors.primarySoft,
+    borderColor: "#CFE0FF",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing.md
+  },
+  educationExamples: {
+    gap: spacing.sm
+  },
+  educationExampleRow: {
+    alignItems: "flex-start",
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.sm
+  },
+  educationDot: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    height: 8,
+    marginTop: 8,
+    width: 8
+  },
+  educationWarningCard: {
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing.md
+  },
+  educationText: {
+    color: colors.textMuted,
+    flex: 1,
+    fontSize: typography.caption,
     lineHeight: typography.lineHeight.caption
   },
   input: {

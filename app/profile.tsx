@@ -5,6 +5,7 @@ import { Globe, MapPin, UserRound } from "lucide-react-native";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { FinancialGuidancePreference } from "../components/FinancialGuidancePreference";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { ContextHeader } from "../components/ui/ContextHeader";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
@@ -13,6 +14,7 @@ import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import type { FinancialGuidanceMode } from "../types/financial";
 
 const profileContext = require("../assets/illustrations/profile-context.png");
 
@@ -31,6 +33,9 @@ export default function ProfileScreen() {
   const [selectedAgeRange, setSelectedAgeRange] = useState<string | null>(onboarding.ageRange);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(onboarding.country);
   const [city, setCity] = useState(onboarding.city);
+  const [financialGuidanceMode, setFinancialGuidanceMode] = useState<FinancialGuidanceMode>(
+    onboarding.financialGuidanceMode
+  );
   const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
 
   useEffect(() => {
@@ -44,6 +49,7 @@ export default function ProfileScreen() {
     setSelectedAgeRange(onboarding.ageRange);
     setSelectedCountry(onboarding.country);
     setCity(onboarding.city);
+    setFinancialGuidanceMode(onboarding.financialGuidanceMode);
   }, [onboarding, onboardingSyncStatus]);
 
   const canContinue = Boolean(firstName.trim() && selectedAgeRange && selectedCountry);
@@ -58,7 +64,8 @@ export default function ProfileScreen() {
       lastName: lastName.trim(),
       ageRange: selectedAgeRange,
       country: selectedCountry,
-      city: city.trim()
+      city: city.trim(),
+      financialGuidanceMode
     });
     router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/income");
   };
@@ -184,6 +191,21 @@ export default function ProfileScreen() {
                 value={city}
               />
             </View>
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.guidanceHeader}>
+              <Text style={styles.questionTitle}>
+                ¿Cómo prefieres que te expliquemos tus resultados?
+              </Text>
+              <Text style={styles.guidanceHelper}>
+                Puedes cambiar esta preferencia después desde Configuración.
+              </Text>
+            </View>
+            <FinancialGuidancePreference
+              onChange={setFinancialGuidanceMode}
+              value={financialGuidanceMode}
+            />
           </View>
 
           <View style={styles.actions}>
@@ -329,6 +351,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm,
     justifyContent: "space-between"
+  },
+  guidanceHeader: {
+    gap: spacing.xs
+  },
+  guidanceHelper: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
   },
   optionalText: {
     color: colors.textSubtle,

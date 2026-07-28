@@ -19,6 +19,7 @@ type SelectableCardProps = {
   showControl?: boolean;
   style?: StyleProp<ViewStyle>;
   titleStyle?: StyleProp<TextStyle>;
+  subtitleStyle?: StyleProp<TextStyle>;
 };
 
 export function SelectableCard({
@@ -32,7 +33,8 @@ export function SelectableCard({
   controlSize = "default",
   showControl = true,
   style,
-  titleStyle
+  titleStyle,
+  subtitleStyle
 }: SelectableCardProps) {
   const isTile = variant === "tile";
   const isCenter = variant === "center";
@@ -66,7 +68,7 @@ export function SelectableCard({
         >
           {title}
         </Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        {subtitle ? <Text style={[styles.subtitle, subtitleStyle]}>{subtitle}</Text> : null}
       </View>
 
       {showControl ? (
@@ -202,6 +204,7 @@ const styles = StyleSheet.create({
   },
   middleRightControlShell: {
     bottom: 0,
+    position: "absolute",
     right: 5,
     top: 0,
     width: 40

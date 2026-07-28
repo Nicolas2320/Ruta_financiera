@@ -29,6 +29,8 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
+import { FinancialEducationModal } from "../components/FinancialEducationModal";
+import { FinancialEducationStory } from "../components/FinancialEducationStory";
 import {
   SpendingSectionContent,
   SpendingSectionTabs
@@ -37,7 +39,10 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import { normalizeExpenseCategoryAmounts } from "../types/financial";
+import {
+  normalizeExpenseCategoryAmounts,
+  normalizeFinancialGuidanceMode
+} from "../types/financial";
 import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
 import {
@@ -895,6 +900,9 @@ export default function SpendingScreen() {
   const router = useRouter();
   const { isPhone, screenPadding } = useResponsiveLayout();
   const { exactValues, onboarding, updateOnboarding } = useOnboarding();
+  const guidanceMode = normalizeFinancialGuidanceMode(
+    onboarding.financialGuidanceMode
+  );
   const { completedActions } = usePlan();
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
@@ -1032,6 +1040,71 @@ export default function SpendingScreen() {
                   tone={expensesAreHigh ? "warning" : "primary"}
                 />
                 <Text style={styles.comparisonTitle}>Relación gastos vs ingresos</Text>
+                <FinancialEducationModal
+                  accessibilityLabel="Explicar la relación entre gastos e ingresos"
+                  guidanceMode={guidanceMode}
+                  icon={<PieChart color={colors.primary} size={23} strokeWidth={2.4} />}
+                  title="Cómo leer tus gastos frente a tus ingresos"
+                >
+                  <FinancialEducationStory
+                    calculationItems={[
+                      {
+                        label: "Gastos mensuales",
+                        value:
+                          metrics.expenseMidpoint !== null
+                            ? formatCOP(metrics.expenseMidpoint)
+                            : "Por calcular"
+                      },
+                      {
+                        label: "Ingresos mensuales",
+                        operator: "÷",
+                        value:
+                          metrics.incomeMidpoint !== null
+                            ? formatCOP(metrics.incomeMidpoint)
+                            : "Por calcular"
+                      },
+                      {
+                        emphasis: true,
+                        label: "Relación",
+                        operator: "=",
+                        value: getPercentageLabel(
+                          metrics.expensePercentage,
+                          hasExactMonthlyAmounts
+                        )
+                      }
+                    ]}
+                    calculationTitle="Cómo obtenemos el porcentaje"
+                    definition="Esta relación indica qué parte de tus ingresos mensuales se utiliza para cubrir gastos. No califica cada compra; ayuda a entender cuánto margen queda."
+                    guidanceMode={guidanceMode}
+                    plainLanguage={
+                      metrics.expensePercentage !== null
+                        ? `De cada $100 que ingresan, aproximadamente $${Math.round(
+                            metrics.expensePercentage
+                          )} se destinan a gastos.`
+                        : "Necesitamos una referencia de ingresos y gastos para calcular esta relación."
+                    }
+                    plainLanguageBadge={
+                      metrics.expensePercentage !== null
+                        ? `$${Math.round(metrics.expensePercentage)}`
+                        : "—"
+                    }
+                    resultDescription={getQuickReadText(metrics)}
+                    resultLabel="Parte del ingreso usada en gastos"
+                    resultValue={getPercentageLabel(
+                      metrics.expensePercentage,
+                      hasExactMonthlyAmounts
+                    )}
+                    tone={
+                      expensesMayExceedIncome
+                        ? "critical"
+                        : expensesAreHigh
+                          ? "warning"
+                          : metrics.expensePercentage !== null
+                            ? "positive"
+                            : "neutral"
+                    }
+                  />
+                </FinancialEducationModal>
               </View>
               <View
                 style={[
