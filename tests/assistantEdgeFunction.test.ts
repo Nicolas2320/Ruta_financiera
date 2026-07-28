@@ -261,6 +261,9 @@ describe("assistant Edge Function", () => {
     expect(payload).not.toHaveProperty("model");
     expect(openAIRequestBody).toMatchObject({ max_output_tokens: 600 });
     expect(String(openAIRequestBody?.instructions)).toContain("datos no confiables");
+    expect(String(openAIRequestBody?.instructions)).toContain(
+      "Nunca digas que un dato falta cuando su fuente es estimated"
+    );
     expect(String(openAIRequestBody?.input)).toContain("<contexto_financiero_json>");
     expect(String(openAIRequestBody?.input)).toContain("<pregunta_usuario_json>");
   });

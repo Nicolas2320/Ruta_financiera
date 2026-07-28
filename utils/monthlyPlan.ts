@@ -101,9 +101,9 @@ const monthlyFocusByPriority: Record<PriorityKey, MonthlyFocus> = {
       "Crear una base para imprevistos puede darte más estabilidad antes de avanzar a metas grandes."
   },
   review_small_expenses: {
-    title: "Revisar gastos pequenos",
+    title: "Revisar gastos pequeños",
     text:
-      "Puedes redirigir una parte de tus pequenos consumos hacia tu meta sin eliminarlos todos."
+      "Puedes redirigir una parte de tus pequeños consumos hacia tu meta sin eliminarlos todos."
   },
   advance_goal: {
     title: "Avanzar hacia tu meta",
@@ -131,7 +131,7 @@ function getGoalContributionImpact(goalContext?: MonthlyGoalContext) {
     return `Aporte asignado a esta meta: ${formatCOP(contribution)} aprox.`;
   }
 
-  return "Esta meta aun no tiene un aporte mensual asignado.";
+  return "Esta meta aún no tiene un aporte mensual asignado.";
 }
 
 function getGoalAwareFocus(
@@ -182,7 +182,7 @@ function getGoalAwareActions(
         ...action,
         title: `Revisar el objetivo de ${goalTitle}`,
         description: "Compara el monto objetivo con el aporte mensual asignado.",
-        why: "Ajustar monto, plazo o aporte puede hacer la meta mas sostenible."
+        why: "Ajustar monto, plazo o aporte puede hacer la meta más sostenible."
       };
     }
 
@@ -194,12 +194,121 @@ function getGoalAwareActions(
         estimatedImpact:
           goalContext?.estimatedMonthsToGoal !== null &&
           goalContext?.estimatedMonthsToGoal !== undefined
-            ? `Elige un escenario para ${goalTitle}. Con el aporte asignado, podria tomar cerca de ${goalContext.estimatedMonthsToGoal} meses.`
-            : `Elige un escenario para ${goalTitle} sin cambiar tu aporte automaticamente.`
+            ? `Elige un escenario para ${goalTitle}. Con el aporte asignado, podría tomar cerca de ${goalContext.estimatedMonthsToGoal} meses.`
+            : `Elige un escenario para ${goalTitle} sin cambiar tu aporte automáticamente.`
       };
     }
 
     return action;
+  });
+}
+
+function getDebtTitle(debt: DebtRecord) {
+  const debtTypeLabels: Record<string, string> = {
+    "Tarjeta de credito": "Tarjeta de crédito",
+    "Prestamo personal": "Préstamo personal",
+    Vehiculo: "Vehículo",
+    Educacion: "Educación"
+  };
+
+  return debt.name?.trim() || debtTypeLabels[debt.type] || debt.type;
+}
+
+export function getPriorityDebt(debts: DebtRecord[]) {
+  return [...debts].sort((left, right) => {
+    const overdueDifference =
+      Number(right.status === "overdue") - Number(left.status === "overdue");
+
+    if (overdueDifference !== 0) {
+      return overdueDifference;
+    }
+
+    const pressureDifference =
+      Number(right.status === "sometimes_heavy") -
+      Number(left.status === "sometimes_heavy");
+
+    if (pressureDifference !== 0) {
+      return pressureDifference;
+    }
+
+    const interestDifference =
+      (right.annualInterestRate ?? -1) - (left.annualInterestRate ?? -1);
+
+    if (interestDifference !== 0) {
+      return interestDifference;
+    }
+
+    const paymentDifference = right.monthlyPayment - left.monthlyPayment;
+
+    if (paymentDifference !== 0) {
+      return paymentDifference;
+    }
+
+    return (right.remainingAmount ?? 0) - (left.remainingAmount ?? 0);
+  })[0] ?? null;
+}
+
+function getDebtPriorityReason(debt: DebtRecord) {
+  if (debt.status === "overdue") {
+    return "La marcaste con pagos atrasados, por eso conviene revisarla antes que las demás.";
+  }
+
+  if (debt.status === "sometimes_heavy") {
+    return "Indicaste que algunos meses esta cuota se siente pesada.";
+  }
+
+  if (debt.annualInterestRate !== null && debt.annualInterestRate !== undefined) {
+    return `Tiene la tasa anual más alta que registraste: ${debt.annualInterestRate}% E.A.`;
+  }
+
+  return "Es la cuota mensual más alta entre las deudas registradas.";
+}
+
+function personalizeDebtActions(actions: MonthlyAction[], debts: DebtRecord[]) {
+  const priorityDebt = getPriorityDebt(debts);
+
+  return actions.map((action) => {
+    if (action.id === "debt-monthly-payment") {
+      return debts.length === 0
+        ? {
+            ...action,
+            title: "Agregar el detalle de tus deudas",
+            description:
+              "Registra saldo, cuota mensual, tasa anual si la conoces y estado del pago.",
+            why: "Con esos datos la app podrá proponerte una primera deuda para revisar.",
+            estimatedImpact: "Puedes empezar solo con la cuota mensual y completar lo demás después."
+          }
+        : {
+            ...action,
+            title: "Confirmar cuotas y saldos registrados",
+            description: `Tienes ${debts.length} ${debts.length === 1 ? "deuda registrada" : "deudas registradas"}. Revisa que sus datos sigan vigentes.`,
+            estimatedImpact: "Los cambios actualizarán la prioridad inicial de tu plan."
+          };
+    }
+
+    if (action.id !== "debt-pressure-source" || !priorityDebt) {
+      return action;
+    }
+
+    const details = [
+      `cuota ${formatCOP(priorityDebt.monthlyPayment)}`,
+      priorityDebt.remainingAmount !== null && priorityDebt.remainingAmount !== undefined
+        ? `saldo ${formatCOP(priorityDebt.remainingAmount)}`
+        : null,
+      priorityDebt.annualInterestRate !== null &&
+      priorityDebt.annualInterestRate !== undefined
+        ? `tasa ${priorityDebt.annualInterestRate}% E.A.`
+        : null
+    ].filter((detail): detail is string => detail !== null);
+
+    return {
+      ...action,
+      title: `Revisar primero: ${getDebtTitle(priorityDebt)}`,
+      description: getDebtPriorityReason(priorityDebt),
+      why:
+        "Es una prioridad inicial basada únicamente en los datos registrados; puedes cambiarla si conoces otras condiciones.",
+      estimatedImpact: details.join(" · ")
+    };
   });
 }
 
@@ -316,12 +425,20 @@ export function getMonthlyFocus(
 }
 
 export function getMonthlyActions(
-  _data: MonthlyPlanData,
+  data: MonthlyPlanData,
   metrics: MonthlyPlanMetrics,
   priorityKey = metrics.snapshot.priority.key,
   goalContext?: MonthlyGoalContext
 ): MonthlyAction[] {
-  return getGoalAwareActions(generateMonthlyActions(metrics.snapshot, priorityKey), priorityKey, goalContext);
+  const actions = getGoalAwareActions(
+    generateMonthlyActions(metrics.snapshot, priorityKey),
+    priorityKey,
+    goalContext
+  );
+
+  return priorityKey === "debt_pressure"
+    ? personalizeDebtActions(actions, data.debts)
+    : actions;
 }
 
 export function getMonthlyPlanProgressKey(

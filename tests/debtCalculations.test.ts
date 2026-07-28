@@ -4,6 +4,7 @@ import {
   evaluateNewDebt,
   getDebtMonthlyPaymentTotal,
   getDebtRemainingTotal,
+  getReportedDebtPaymentRatio,
   getRegisteredDebtSummary
 } from "../utils/debtCalculations";
 import { makeDebt } from "./fixtures/financial";
@@ -56,6 +57,40 @@ describe("registered debt calculations", () => {
       debtToIncomeRatio: 0.2,
       level: "high",
       shouldPrioritizeDebt: true
+    });
+  });
+
+  it("keeps a reported debt range as an estimate instead of showing zero", () => {
+    const summary = getRegisteredDebtSummary({
+      debts: [],
+      debtPaymentShare: "20% – 40%",
+      expenseCategoryAmounts: {},
+      monthlyIncome: 2_000_000
+    });
+
+    expect(getReportedDebtPaymentRatio("20% – 40%")).toBe(0.3);
+    expect(summary).toMatchObject({
+      source: "reported",
+      monthlyPaymentTotal: 600_000,
+      debtToIncomeRatio: 0.3,
+      reportedPaymentShare: "20% – 40%",
+      level: "high",
+      shouldPrioritizeDebt: true
+    });
+  });
+
+  it("prefers registered debt over an earlier reported range", () => {
+    const summary = getRegisteredDebtSummary({
+      debts: [makeDebt({ monthlyPayment: 320_000 })],
+      debtPaymentShare: "Más del 40%",
+      expenseCategoryAmounts: {},
+      monthlyIncome: 4_000_000
+    });
+
+    expect(summary).toMatchObject({
+      source: "registered",
+      monthlyPaymentTotal: 320_000,
+      debtToIncomeRatio: 0.08
     });
   });
 });

@@ -38,7 +38,9 @@ function getSupabaseClient() {
   return supabase;
 }
 
-function normalizeOnboarding(onboarding: Partial<OnboardingData> | null | undefined) {
+export function normalizeOnboardingData(
+  onboarding: Partial<OnboardingData> | null | undefined
+) {
   const normalizedBase: OnboardingData = {
     ...initialOnboarding,
     ...(onboarding ?? {}),
@@ -94,7 +96,7 @@ export async function fetchFinancialProfile(userId: string): Promise<FinancialPr
 
   return {
     profileExists: Boolean(data),
-    onboarding: normalizeOnboarding(data?.onboarding),
+    onboarding: normalizeOnboardingData(data?.onboarding),
     completedActions: normalizeCompletedActions(data?.completed_actions),
     exactValues: normalizeExactValues(data?.exact_values)
   };
@@ -106,6 +108,27 @@ export async function saveOnboardingData(userId: string, onboarding: OnboardingD
     {
       user_id: userId,
       onboarding,
+      updated_at: new Date().toISOString()
+    },
+    { onConflict: "user_id" }
+  );
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function saveFinancialProfileDraft(
+  userId: string,
+  onboarding: OnboardingData,
+  exactValues: ExactFinancialValues
+) {
+  const client = getSupabaseClient();
+  const { error } = await client.from(FINANCIAL_PROFILES_TABLE).upsert(
+    {
+      user_id: userId,
+      onboarding,
+      exact_values: normalizeExactValues(exactValues),
       updated_at: new Date().toISOString()
     },
     { onConflict: "user_id" }

@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -208,7 +208,7 @@ export default function SavingsDebtsScreen() {
   const router = useRouter();
   const { screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ source?: string }>();
-  const { onboarding, updateOnboarding } = useOnboarding();
+  const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isProfileEditMode = source === "profile";
   const [selectedSavingsRange, setSelectedSavingsRange] = useState<string | null>(
@@ -227,6 +227,23 @@ export default function SavingsDebtsScreen() {
   const [selectedInvestmentSituation, setSelectedInvestmentSituation] = useState<string | null>(
     onboarding.investmentSituation
   );
+  const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
+
+  useEffect(() => {
+    if (onboardingSyncStatus !== "saved" || hasHydratedStoredAnswers.current) {
+      return;
+    }
+
+    hasHydratedStoredAnswers.current = true;
+    setSelectedSavingsRange(onboarding.savingsRange);
+    setSelectedEmergencyCoverage(onboarding.emergencyCoverage);
+    setSelectedDebtSituation(onboarding.debtSituation);
+    setSelectedDebtPaymentShare(
+      onboarding.debtPaymentShare ??
+        (onboarding.debtSituation === "No tengo deudas" ? "No pago deudas" : null)
+    );
+    setSelectedInvestmentSituation(onboarding.investmentSituation);
+  }, [onboarding, onboardingSyncStatus]);
 
   const canContinue = Boolean(
     selectedSavingsRange &&
@@ -291,13 +308,13 @@ export default function SavingsDebtsScreen() {
           ) : null}
           {!isProfileEditMode ? (
             <StepHeader
-              currentStep={7}
+              currentStep={6}
               nextAccessibilityLabel="Continuar hacia meta financiera"
               nextDisabled={!canContinue}
-              onBack={() => router.push("/small-expenses")}
+              onBack={() => router.replace("/small-expenses")}
               onNext={handleContinue}
               title="Ahorros y deudas"
-              totalSteps={8}
+              totalSteps={7}
             />
           ) : null}
 

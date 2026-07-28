@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Globe, MapPin, UserRound } from "lucide-react-native";
@@ -23,7 +23,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ source?: string }>();
-  const { onboarding, updateOnboarding } = useOnboarding();
+  const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isProfileEditMode = source === "profile";
   const [firstName, setFirstName] = useState(onboarding.firstName);
@@ -31,6 +31,20 @@ export default function ProfileScreen() {
   const [selectedAgeRange, setSelectedAgeRange] = useState<string | null>(onboarding.ageRange);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(onboarding.country);
   const [city, setCity] = useState(onboarding.city);
+  const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
+
+  useEffect(() => {
+    if (onboardingSyncStatus !== "saved" || hasHydratedStoredAnswers.current) {
+      return;
+    }
+
+    hasHydratedStoredAnswers.current = true;
+    setFirstName(onboarding.firstName);
+    setLastName(onboarding.lastName);
+    setSelectedAgeRange(onboarding.ageRange);
+    setSelectedCountry(onboarding.country);
+    setCity(onboarding.city);
+  }, [onboarding, onboardingSyncStatus]);
 
   const canContinue = Boolean(firstName.trim() && selectedAgeRange && selectedCountry);
 
@@ -68,13 +82,13 @@ export default function ProfileScreen() {
           ) : null}
           {!isProfileEditMode ? (
             <StepHeader
-              currentStep={3}
+              currentStep={2}
               nextAccessibilityLabel="Continuar hacia preguntas de ingresos"
               nextDisabled={!canContinue}
-              onBack={() => router.push("/privacy")}
+              onBack={() => router.replace("/privacy")}
               onNext={handleContinue}
               title="Perfil básico"
-              totalSteps={8}
+              totalSteps={7}
             />
           ) : null}
 

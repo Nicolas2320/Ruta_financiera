@@ -36,9 +36,20 @@ export type AssistantFinancialContext = {
     suggestedMonthlyContributionMeaning?: string;
   };
   debt: {
+    debtToIncomeRatio: number | null;
     label: string;
     level: string;
+    monthlyPaymentTotal: number;
+    reportedPaymentShare: string | null;
     shouldPrioritizeDebt: boolean;
+    source: string;
+  };
+  dataSources: {
+    currentSavings: string;
+    debt: string;
+    monthlyExpenses: string;
+    monthlyIncome: string;
+    smallExpenses: string;
   };
   emergencyFund: {
     coverageMonths: number | null;

@@ -18,11 +18,13 @@ export default function RootLayout() {
                   headerShown: false
                 }}
               >
+                <Stack.Screen name="index" options={{ animation: "none" }} />
                 <Stack.Screen name="dashboard" options={{ animation: "none" }} />
                 <Stack.Screen name="spending" options={{ animation: "none" }} />
                 <Stack.Screen name="debts" options={{ animation: "none" }} />
                 <Stack.Screen name="goals-overview" options={{ animation: "none" }} />
                 <Stack.Screen name="simulation" options={{ animation: "none" }} />
+                <Stack.Screen name="plan-preview" options={{ animation: "none" }} />
                 <Stack.Screen name="assistant" options={{ animation: "none" }} />
               </Stack>
             </FinancialDataGate>

@@ -7,9 +7,13 @@ const contextMocks = vi.hoisted(() => ({
     isSupabaseConfigured: true,
     user: { id: "user-1" } as { id: string } | null
   },
+  clearGuestFinancialDraft: vi.fn(),
   fetchFinancialProfile: vi.fn(),
+  loadGuestFinancialDraft: vi.fn(),
   saveCompletedActions: vi.fn(),
   saveExactValues: vi.fn(),
+  saveFinancialProfileDraft: vi.fn(),
+  saveGuestFinancialDraft: vi.fn(),
   saveOnboardingData: vi.fn()
 }));
 
@@ -21,7 +25,14 @@ vi.mock("../lib/financialProfile", () => ({
   fetchFinancialProfile: contextMocks.fetchFinancialProfile,
   saveCompletedActions: contextMocks.saveCompletedActions,
   saveExactValues: contextMocks.saveExactValues,
+  saveFinancialProfileDraft: contextMocks.saveFinancialProfileDraft,
   saveOnboardingData: contextMocks.saveOnboardingData
+}));
+
+vi.mock("../lib/guestFinancialDraft", () => ({
+  clearGuestFinancialDraft: contextMocks.clearGuestFinancialDraft,
+  loadGuestFinancialDraft: contextMocks.loadGuestFinancialDraft,
+  saveGuestFinancialDraft: contextMocks.saveGuestFinancialDraft
 }));
 
 import {
@@ -58,6 +69,20 @@ function createProfile(firstName: string, completedActionId: string) {
   };
 }
 
+function createGuestDraft(firstName: string) {
+  return {
+    exactValues: {
+      monthlyIncome: 3200000
+    },
+    onboarding: {
+      ...initialOnboarding,
+      firstName
+    },
+    updatedAt: "2026-07-23T10:00:00.000Z",
+    version: 1 as const
+  };
+}
+
 function Probe() {
   latestFinancialProfile = useFinancialProfile();
   latestOnboarding = useOnboarding();
@@ -78,9 +103,9 @@ function ProviderTree() {
 }
 
 async function flushEffects() {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 8; index += 1) {
+    await Promise.resolve();
+  }
 }
 
 async function mountProviders() {
@@ -123,12 +148,20 @@ beforeEach(() => {
   contextMocks.auth.isAuthReady = true;
   contextMocks.auth.isSupabaseConfigured = true;
   contextMocks.auth.user = { id: "user-1" };
+  contextMocks.clearGuestFinancialDraft.mockReset();
   contextMocks.fetchFinancialProfile.mockReset();
+  contextMocks.loadGuestFinancialDraft.mockReset();
   contextMocks.saveCompletedActions.mockReset();
   contextMocks.saveExactValues.mockReset();
+  contextMocks.saveFinancialProfileDraft.mockReset();
+  contextMocks.saveGuestFinancialDraft.mockReset();
   contextMocks.saveOnboardingData.mockReset();
+  contextMocks.clearGuestFinancialDraft.mockResolvedValue(undefined);
+  contextMocks.loadGuestFinancialDraft.mockResolvedValue(null);
   contextMocks.saveCompletedActions.mockResolvedValue(undefined);
   contextMocks.saveExactValues.mockResolvedValue(undefined);
+  contextMocks.saveFinancialProfileDraft.mockResolvedValue(undefined);
+  contextMocks.saveGuestFinancialDraft.mockResolvedValue(undefined);
   contextMocks.saveOnboardingData.mockResolvedValue(undefined);
 });
 
@@ -193,8 +226,60 @@ describe("FinancialProfileProvider", () => {
 
     expect(contextMocks.fetchFinancialProfile).not.toHaveBeenCalled();
     expect(getFinancialProfile().financialProfileLoadStatus).toBe("not-configured");
-    expect(getOnboarding().onboardingSyncStatus).toBe("not-configured");
+    expect(getOnboarding().onboardingSyncStatus).toBe("saved");
     expect(getPlan().planSyncStatus).toBe("not-configured");
+  });
+
+  it("restores the guest diagnosis without requesting a remote profile", async () => {
+    contextMocks.auth.user = null;
+    contextMocks.loadGuestFinancialDraft.mockResolvedValue(createGuestDraft("Invitada"));
+
+    await mountProviders();
+
+    expect(contextMocks.fetchFinancialProfile).not.toHaveBeenCalled();
+    expect(contextMocks.loadGuestFinancialDraft).toHaveBeenCalledOnce();
+    expect(getOnboarding()).toMatchObject({
+      onboardingSyncStatus: "saved",
+      exactValues: { monthlyIncome: 3200000 }
+    });
+    expect(getOnboarding().onboarding.firstName).toBe("Invitada");
+    expect(getOnboarding().financialProfileExists).toBe(false);
+  });
+
+  it("migrates the guest diagnosis when the new account has no financial profile", async () => {
+    const guestDraft = createGuestDraft("Invitada");
+    contextMocks.loadGuestFinancialDraft.mockResolvedValue(guestDraft);
+    contextMocks.fetchFinancialProfile.mockResolvedValue({
+      profileExists: false,
+      onboarding: initialOnboarding,
+      completedActions: {},
+      exactValues: {}
+    });
+
+    await mountProviders();
+
+    expect(contextMocks.saveFinancialProfileDraft).toHaveBeenCalledWith(
+      "user-1",
+      guestDraft.onboarding,
+      guestDraft.exactValues
+    );
+    expect(contextMocks.clearGuestFinancialDraft).toHaveBeenCalledOnce();
+    expect(getOnboarding().financialProfileExists).toBe(true);
+    expect(getOnboarding().onboarding.firstName).toBe("Invitada");
+    expect(getOnboarding().onboardingSyncStatus).toBe("saved");
+  });
+
+  it("keeps an existing account profile instead of overwriting it with the guest draft", async () => {
+    contextMocks.loadGuestFinancialDraft.mockResolvedValue(createGuestDraft("Invitada"));
+    contextMocks.fetchFinancialProfile.mockResolvedValue(
+      createProfile("Cuenta existente", "action-1")
+    );
+
+    await mountProviders();
+
+    expect(contextMocks.saveFinancialProfileDraft).not.toHaveBeenCalled();
+    expect(getOnboarding().onboarding.firstName).toBe("Cuenta existente");
+    expect(contextMocks.clearGuestFinancialDraft).toHaveBeenCalledOnce();
   });
 
   it("ignores a stale response after the authenticated user changes", async () => {

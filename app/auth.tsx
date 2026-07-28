@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, type Route as ExpoRoute } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { KeyRound, LogIn, Mail, Route, ShieldCheck, UserPlus } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -14,7 +14,6 @@ type AuthMode = "sign-in" | "sign-up";
 
 export default function AuthScreen() {
   const router = useRouter();
-  const { screenPadding } = useResponsiveLayout();
   const {
     authError,
     isAuthReady,
@@ -23,7 +22,9 @@ export default function AuthScreen() {
     signInWithPassword,
     signUpWithPassword
   } = useAuth();
-  const [mode, setMode] = useState<AuthMode>("sign-in");
+  const [mode, setMode] = useState<AuthMode>(
+    isSavePlanFlow || requestedMode === "sign-up" ? "sign-up" : "sign-in"
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -53,11 +54,21 @@ export default function AuthScreen() {
     }
 
     if (!isSignIn && !result.session) {
-      setFeedback("Usuario creado. Revisa el correo si tu proyecto exige confirmacion.");
+      setFeedback(
+        isSavePlanFlow
+          ? "Cuenta creada. Revisa tu correo para confirmarla. Tu diagnóstico seguirá guardado en este dispositivo."
+          : "Cuenta creada. Revisa tu correo para confirmarla y después inicia sesión."
+      );
       return;
     }
 
-    router.replace(isSignIn ? "/" : "/privacy");
+    router.replace(
+      isSavePlanFlow || requestedReturnTo
+        ? returnTo
+        : isSignIn
+          ? "/"
+          : "/privacy"
+    );
   };
 
   return (
@@ -88,26 +99,21 @@ export default function AuthScreen() {
 
             <View style={styles.titleGroup}>
               <Text style={styles.title}>
-                {isSignIn ? "Iniciar sesion" : "Crear usuario de prueba"}
+                {isSignIn
+                  ? "Iniciar sesión"
+                  : isSavePlanFlow
+                    ? "Guarda tu ruta financiera"
+                    : "Crear una cuenta"}
               </Text>
               <Text style={styles.subtitle}>
                 {isSignIn
-                  ? "Entra para recuperar la informacion guardada."
-                  : "Usaremos este usuario para validar la persistencia en Supabase."}
+                  ? isSavePlanFlow
+                    ? "Entra para continuar con los datos guardados en tu cuenta. Si ya tenías un plan, lo conservaremos."
+                    : "Entra para recuperar la información guardada."
+                  : isSavePlanFlow
+                    ? "Ya viste tu diagnóstico y simulación. Crea una cuenta para guardar tus respuestas y abrir tu plan mensual."
+                    : "Crea tu cuenta y después comenzaremos tu diagnóstico."}
               </Text>
-            </View>
-
-            <View style={styles.modeSwitch}>
-              <ModeButton
-                active={isSignIn}
-                label="Entrar"
-                onPress={() => setMode("sign-in")}
-              />
-              <ModeButton
-                active={!isSignIn}
-                label="Crear"
-                onPress={() => setMode("sign-up")}
-              />
             </View>
 
             <View style={styles.form}>
@@ -130,11 +136,11 @@ export default function AuthScreen() {
               <View style={styles.inputWrap}>
                 <KeyRound color={colors.textSubtle} size={20} strokeWidth={2.3} />
                 <TextInput
-                  accessibilityLabel="Contrasena"
+                  accessibilityLabel="Contraseña"
                   autoCapitalize="none"
                   autoComplete={isSignIn ? "current-password" : "new-password"}
                   onChangeText={setPassword}
-                  placeholder="Minimo 6 caracteres"
+                  placeholder="Mínimo 6 caracteres"
                   placeholderTextColor={colors.textSubtle}
                   returnKeyType="done"
                   secureTextEntry
@@ -161,18 +167,37 @@ export default function AuthScreen() {
             {session ? (
               <View style={styles.trustMessage}>
                 <ShieldCheck color={colors.support} size={18} strokeWidth={2.4} />
-                <Text style={styles.supportText}>Sesion activa: {session.user.email}</Text>
+                <Text style={styles.supportText}>Sesión activa: {session.user.email}</Text>
               </View>
             ) : null}
 
             <PrimaryButton
-              accessibilityLabel={isSignIn ? "Iniciar sesion" : "Crear usuario de prueba"}
+              accessibilityLabel={isSignIn ? "Iniciar sesión" : "Crear una cuenta"}
               disabled={!canSubmit || isSubmitting}
               icon={isSignIn ? LogIn : UserPlus}
               iconPosition="right"
               onPress={handleSubmit}
-              title={isSubmitting ? "Validando..." : isSignIn ? "Entrar" : "Crear usuario"}
+              title={isSubmitting ? "Validando..." : isSignIn ? "Entrar" : "Crear cuenta"}
             />
+
+            <Pressable
+              accessibilityLabel={
+                isSignIn ? "Crear una cuenta" : "Iniciar sesión en una cuenta existente"
+              }
+              accessibilityRole="button"
+              onPress={() => {
+                setFeedback(null);
+                setMode(isSignIn ? "sign-up" : "sign-in");
+              }}
+              style={({ pressed }) => [styles.modePrompt, pressed && styles.pressed]}
+            >
+              <Text style={styles.modePromptText}>
+                {isSignIn ? "¿No tienes una cuenta? " : "¿Ya tienes una cuenta? "}
+                <Text style={styles.modePromptLink}>
+                  {isSignIn ? "Crear una" : "Iniciar sesión"}
+                </Text>
+              </Text>
+            </Pressable>
 
             <PrimaryButton
               accessibilityLabel="Volver a la pantalla anterior"
@@ -186,33 +211,6 @@ export default function AuthScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function ModeButton({
-  active,
-  label,
-  onPress
-}: {
-  active: boolean;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.modeButton,
-        active && styles.modeButtonActive,
-        pressed && styles.pressed
-      ]}
-    >
-      <Text style={[styles.modeButtonText, active && styles.modeButtonTextActive]}>
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -283,36 +281,6 @@ const styles = StyleSheet.create({
     fontSize: typography.subtitle,
     lineHeight: typography.lineHeight.subtitle
   },
-  modeSwitch: {
-    backgroundColor: colors.surfaceMuted,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.xs,
-    padding: spacing.xs
-  },
-  modeButton: {
-    alignItems: "center",
-    borderRadius: radius.sm,
-    flex: 1,
-    justifyContent: "center",
-    minHeight: 42
-  },
-  modeButtonActive: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1
-  },
-  modeButtonText: {
-    color: colors.textSubtle,
-    fontSize: typography.button,
-    fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.button
-  },
-  modeButtonTextActive: {
-    color: colors.primary
-  },
   form: {
     gap: spacing.sm
   },
@@ -363,6 +331,22 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
+  },
+  modePrompt: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 36,
+    paddingHorizontal: spacing.sm
+  },
+  modePromptText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption,
+    textAlign: "center"
+  },
+  modePromptLink: {
+    color: colors.primary,
+    fontWeight: typography.weight.black
   },
   secondaryButton: {
     backgroundColor: colors.surface,

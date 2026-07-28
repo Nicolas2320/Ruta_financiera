@@ -19,9 +19,14 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   calculateFinancialSnapshot,
-  type FinancialSnapshot
+  type FinancialSnapshot,
+  type SnapshotSource
 } from "../utils/financialCalculations";
-import { formatCOP, type FinancialRangeEstimate } from "../utils/financialRanges";
+import {
+  formatCOP,
+  formatSignedCOP,
+  type FinancialRangeEstimate
+} from "../utils/financialRanges";
 import type { ExactFinancialValues } from "../types/financial";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
@@ -151,7 +156,7 @@ function getDebtPaymentLabel(debtPaymentShare: string | null) {
   return `${debtPaymentShare} de ingresos`;
 }
 
-function toFinancialDisplaySource(source: "exact" | "estimated" | "missing"): FinancialDisplay["source"] {
+function toFinancialDisplaySource(source: SnapshotSource): FinancialDisplay["source"] {
   if (source === "exact") {
     return "exact";
   }
@@ -171,15 +176,24 @@ function getSnapshotDisplay({
 }: {
   exactLabel: string;
   estimatedLabel: string;
-  source: "exact" | "estimated" | "missing";
+  source: SnapshotSource;
   value: number | null;
 }): FinancialDisplay {
+  if (source === "withheld") {
+    return {
+      label: estimatedLabel,
+      value: "No compartido",
+      source: "empty",
+      helper: "Elegiste no compartir este dato."
+    };
+  }
+
   if (value === null) {
     return {
       label: estimatedLabel,
       value: "No disponible",
       source: "empty",
-      helper: "Aun no tenemos suficiente informacion para estimar este dato."
+      helper: "Aún no tenemos suficiente información para estimar este dato."
     };
   }
 
@@ -246,12 +260,10 @@ function getFinancialMetrics(
   let estimatedMarginLabel = "No disponible";
 
   if (estimatedMargin !== null) {
-    estimatedMarginLabel =
-      estimatedMargin > 0
-        ? incomeDisplay.source === "exact" && expenseDisplay.source === "exact"
-          ? formatCOP(estimatedMargin)
-          : `${formatCOP(estimatedMargin)} aprox.`
-        : "Margen ajustado";
+    const isExact = incomeDisplay.source === "exact" && expenseDisplay.source === "exact";
+    estimatedMarginLabel = isExact
+      ? formatSignedCOP(estimatedMargin)
+      : `${formatSignedCOP(estimatedMargin)} aprox.`;
   }
 
   const smallExpensesMetricLabel =
@@ -261,7 +273,9 @@ function getFinancialMetrics(
         ? formatCOP(smallExpenseMidpoint)
         : onboarding.smallExpensesRange ?? "No disponible";
   const smallExpensesDetail =
-    smallExpensePercentage !== null
+    onboarding.hasSmallExpenses === "No"
+      ? "No usamos gastos pequeños para estimar aportes o escenarios."
+      : smallExpensePercentage !== null
       ? snapshot.sourceMap.smallExpenses === "exact"
         ? `Dato exacto: cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
         : `Cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
@@ -296,6 +310,35 @@ function getFinancialMetrics(
     emergencyLabel: onboarding.emergencyCoverage ?? "No disponible",
     canEstimateMonthlyFlow: estimatedMargin !== null && expensePercentage !== null
   };
+}
+
+function getDeclaredGoalContext(
+  onboarding: OnboardingSnapshot,
+  metrics: FinancialMetrics,
+  priority: MainPriority
+) {
+  const goalName = metrics.snapshot.goal.name;
+
+  if (!goalName || priority.key === "debt") {
+    return null;
+  }
+
+  const normalizedGoal = goalName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (!normalizedGoal.includes("deuda")) {
+    return null;
+  }
+
+  const withheldDebtData =
+    onboarding.debtSituation === "Prefiero no responder" ||
+    onboarding.debtPaymentShare === "Prefiero no responder";
+
+  return withheldDebtData
+    ? `Tu meta declarada sigue siendo “${goalName}”. Como preferiste no compartir algunos datos de deuda, esta prioridad organiza el paso previo sin reemplazar tu meta.`
+    : `Tu meta declarada sigue siendo “${goalName}”. Esta prioridad funciona como un paso previo para construir un plan de pago sostenible.`;
 }
 
 function getMainPriority(metrics: FinancialMetrics): MainPriority {
@@ -575,6 +618,10 @@ export default function DiagnosisScreen() {
     [exactValues, onboarding]
   );
   const priority = useMemo(() => getMainPriority(metrics), [metrics]);
+  const declaredGoalContext = useMemo(
+    () => getDeclaredGoalContext(onboarding, metrics, priority),
+    [metrics, onboarding, priority]
+  );
   const smallExpensesMessages = useMemo(
     () => getSmallExpensesMessages(onboarding, metrics),
     [onboarding, metrics]
@@ -594,9 +641,11 @@ export default function DiagnosisScreen() {
       value: metrics.estimatedMarginLabel,
       detail:
         metrics.estimatedMargin !== null
-          ? metrics.incomeDisplay.source === "exact" && metrics.expenseDisplay.source === "exact"
-            ? "Calculado con tus datos ingresados."
-            : "Calculado con datos ingresados y rangos disponibles."
+          ? metrics.estimatedMargin < 0
+            ? "Tus gastos estimados superan tus ingresos; el signo negativo muestra cuánto falta en el mes."
+            : metrics.incomeDisplay.source === "exact" && metrics.expenseDisplay.source === "exact"
+              ? "Calculado con tus datos ingresados."
+              : "Calculado con datos ingresados y rangos disponibles."
           : "Requiere datos de ingresos y gastos."
     },
     {
@@ -665,6 +714,7 @@ export default function DiagnosisScreen() {
           >
             <Text style={styles.highlightTitle}>{priority.title}</Text>
             <Text style={styles.text}>{priority.text}</Text>
+            {declaredGoalContext ? <Text style={styles.text}>{declaredGoalContext}</Text> : null}
           </InfoCard>
 
           <InfoCard
@@ -695,6 +745,11 @@ export default function DiagnosisScreen() {
                   <ValueRow label="Margen mensual" value={metrics.estimatedMarginLabel} />
                   <ValueRow label="Gastos frente a ingresos" value={metrics.expensePercentageLabel} />
                 </View>
+
+                <Text style={styles.text}>
+                  Margen mensual = ingresos − gastos. Si el valor es negativo, indica cuánto
+                  superarían tus gastos a tus ingresos en un mes.
+                </Text>
 
                 <View
                   style={[
