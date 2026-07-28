@@ -192,6 +192,64 @@ Reglas:
 - No crear estilos de boton aislados si el comportamiento ya existe.
 - El boton principal debe estar al final de la pantalla y ser facil de tocar.
 
+## Modales y ayudas contextuales
+
+Todos los modales deben construirse con `AppModal`. No se deben crear overlays,
+cards, encabezados o botones de modal directamente dentro de una pantalla.
+
+Anatomia comun:
+
+- Overlay oscuro suave.
+- Card blanca con `radius.lg`, borde sutil y `shadows.card`.
+- Icono contextual opcional dentro de un cuadro azul suave.
+- Titulo y subtitulo alineados a la izquierda.
+- Boton circular `X` en la esquina superior derecha.
+- Cuerpo con `ScrollView` cuando el contenido pueda crecer.
+- Pie separado por un borde superior cuando existan acciones.
+- En telefono se presenta como panel inferior; en tablet y web aparece centrado.
+
+Variantes:
+
+| Variante | Cierre | Acciones |
+| --- | --- | --- |
+| Educativa simple | `X` disponible siempre | Puede no tener pie |
+| Educativa con pasos | `X` disponible siempre | `Anterior`, indicador central y `Siguiente` o `Cerrar` |
+| Formulario | `X` y `Cancelar` | Accion principal a la derecha |
+| Confirmacion | `X` equivale a cancelar | `Cancelar` y confirmar |
+| Destructiva | `X` equivale a cancelar | Accion destructiva en rojo |
+
+Reglas:
+
+- No usar botones de texto como `Cerrar` dentro del encabezado.
+- No mezclar radios o alturas diferentes entre acciones del mismo modal.
+- El encabezado y el pie deben permanecer visibles cuando el cuerpo se desplaza.
+- Usar `AppModalAction` para mantener altura, radio, color y estados deshabilitados.
+- El contenido puede cambiar segun la variante; el contenedor visual no.
+- El tirador del panel inferior en telefono siempre debe ser interactivo, nunca
+  decorativo.
+- Al arrastrar el tirador hacia abajo, el panel debe seguir el gesto. Un arrastre
+  corto vuelve suavemente a su posicion; uno suficientemente largo o rapido cierra
+  el panel.
+- El gesto de cierre se inicia desde el tirador para no interferir con el
+  desplazamiento vertical de formularios y explicaciones.
+- Cerrar un editor con `X`, el fondo o el tirador descarta el borrador sin
+  guardarlo y sin mostrar una confirmacion adicional.
+- Reservar las confirmaciones para decisiones que si cambian la estructura del
+  plan, como sustituir el tipo de la meta principal.
+
+Ayudas financieras:
+
+- Usar `FinancialEducationModal` para conceptos, formulas o datos que admitan
+  varias interpretaciones.
+- Ubicar el boton de ayuda en el encabezado de una card cuando explique el
+  bloque completo.
+- Usar el trigger compacto junto a la etiqueta cuando explique un solo campo.
+- No agregar ayuda a cada cifra. Priorizar terminos financieros, resultados
+  calculados y datos que puedan duplicarse o registrarse de forma incorrecta.
+- Una explicacion puntual usa una pagina. Un resultado con formula, lectura y
+  contexto puede usar carrusel.
+- La preferencia `Breve (Recomendado)` debe ser el modo predeterminado.
+
 ## Headers de pasos
 
 Usar `StepHeader` en pantallas de onboarding.

@@ -33,13 +33,19 @@ import {
   Target,
   Trash2,
   UserRound,
-  Wallet,
-  X
+  Wallet
 } from "lucide-react-native";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
+import { FinancialEducationModal } from "../components/FinancialEducationModal";
+import { FinancialEducationStory } from "../components/FinancialEducationStory";
+import {
+  AppModal,
+  AppModalAction,
+  AppModalActions
+} from "../components/ui/AppModal";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
@@ -49,6 +55,7 @@ import {
   getLegacyFieldsFromGoal,
   getOnboardingGoals,
   isActionProgressCompleted,
+  normalizeFinancialGuidanceMode,
   type FinancialGoal
 } from "../types/financial";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
@@ -98,9 +105,11 @@ type GoalVisualOption = {
 };
 
 type PendingConfirmation = {
+  cancelLabel?: string;
   confirmLabel: string;
   destructive?: boolean;
   message: string;
+  onCancel?: () => void;
   onConfirm: () => void;
   title: string;
 };
@@ -730,6 +739,7 @@ function GoalCard({
   onDelete,
   onIncrease,
   onRegisterContribution,
+  onRequestConfirmation,
   onSetPrimary,
   onPause,
   onReset,
@@ -747,6 +757,7 @@ function GoalCard({
   onDelete: () => void;
   onIncrease: () => void;
   onRegisterContribution: (amount: number) => void;
+  onRequestConfirmation: (confirmation: PendingConfirmation) => void;
   onSetPrimary: () => void;
   onPause: () => void;
   onReset: () => void;
@@ -819,17 +830,24 @@ function GoalCard({
     !isPausedGoal &&
     Boolean(onAssignCurrentSavings);
 
-  useEffect(() => {
+  const resetEditorFields = () => {
     const nextGoalOptionKey = getGoalOptionKey(allocation.goal);
     const nextGoalVisual = getGoalVisual(allocation.goal);
+
     setSelectedGoalOptionKey(nextGoalOptionKey);
     setSelectedIconKey(allocation.goal.iconKey ?? nextGoalVisual.iconKey);
     setTitleInput(allocation.goal.title);
-    setTargetInput(getCurrencyInputValue(allocation.goal.targetAmount ?? allocation.targetAmount));
+    setTargetInput(
+      getCurrencyInputValue(allocation.goal.targetAmount ?? allocation.targetAmount)
+    );
     setCurrentInput(getCurrencyInputValue(allocation.currentAmount));
-    setContributionInput("");
     setSelectedHorizon(allocation.goal.horizon ?? "");
     setSelectedPriority(allocation.goal.priority ?? "");
+  };
+
+  useEffect(() => {
+    resetEditorFields();
+    setContributionInput("");
   }, [
     allocation.currentAmount,
     allocation.goal.horizon,
@@ -850,6 +868,33 @@ function GoalCard({
   ) => {
     const parsedValue = getParsedCurrencyInput(value);
     setter(parsedValue === null ? "" : formatCOP(parsedValue));
+  };
+
+  const persistGoalDetails = ({
+    currentAmount,
+    goalUpdates,
+    nextStatus
+  }: {
+    currentAmount: number;
+    goalUpdates: Partial<FinancialGoal>;
+    nextStatus: FinancialGoal["status"];
+  }) => {
+    onUpdateGoal(goalUpdates);
+
+    if (
+      allocation.goal.status === "completed" &&
+      nextStatus === "completed" &&
+      reactivationMessage !== null
+    ) {
+      setReactivationMessage(
+        `Para reactivar esta meta, el monto objetivo debe ser mayor que el ahorro actual (${formatCOP(currentAmount)}).`
+      );
+      setIsEditing(true);
+      return;
+    }
+
+    setReactivationMessage(null);
+    setIsEditing(false);
   };
 
   const handleSaveDetails = () => {
@@ -888,21 +933,33 @@ function GoalCard({
       goalUpdates.manualMonthlyContribution = null;
     }
 
-    onUpdateGoal(goalUpdates);
+    const changesPrimaryGoalType =
+      allocation.goal.isPrimary === true &&
+      selectedGoalOptionKey !== getGoalOptionKey(allocation.goal);
 
-    if (
-      allocation.goal.status === "completed" &&
-      nextStatus === "completed" &&
-      reactivationMessage !== null
-    ) {
-      setReactivationMessage(
-        `Para reactivar esta meta, el monto objetivo debe ser mayor que el ahorro actual (${formatCOP(currentAmount)}).`
-      );
+    if (changesPrimaryGoalType) {
+      setIsEditing(false);
+      onRequestConfirmation({
+        cancelLabel: "Volver",
+        confirmLabel: "Cambiar meta",
+        message: `Tu meta principal pasará de “${allocation.goal.title}” a “${cleanTitle}”. Esto puede cambiar cómo se recomienda distribuir tu bolsa mensual. No moveremos tus ahorros registrados.`,
+        onCancel: () => setIsEditing(true),
+        onConfirm: () =>
+          persistGoalDetails({
+            currentAmount,
+            goalUpdates,
+            nextStatus
+          }),
+        title: "¿Cambiar la meta principal?"
+      });
       return;
     }
 
-    setReactivationMessage(null);
-    setIsEditing(false);
+    persistGoalDetails({
+      currentAmount,
+      goalUpdates,
+      nextStatus
+    });
   };
 
   const handleRegisterContribution = () => {
@@ -927,6 +984,7 @@ function GoalCard({
   };
 
   const openReactivationEditor = () => {
+    resetEditorFields();
     setReactivationMessage(
       "Para reactivar esta meta, aumenta el monto objetivo por encima del ahorro actual o ajusta el ahorro guardado."
     );
@@ -934,11 +992,13 @@ function GoalCard({
   };
 
   const openDetailsEditor = () => {
+    resetEditorFields();
     setReactivationMessage(null);
     setIsEditing(true);
   };
 
   const closeDetailsEditor = () => {
+    resetEditorFields();
     setReactivationMessage(null);
     setIsEditing(false);
   };
@@ -1233,29 +1293,29 @@ function GoalCard({
         )}
       </View>
 
-      <Modal
-        animationType="fade"
-        onRequestClose={closeDetailsEditor}
-        transparent
+      <AppModal
+        footer={
+          <AppModalActions>
+            <AppModalAction
+              label="Cancelar"
+              onPress={closeDetailsEditor}
+              variant="secondary"
+            />
+            <AppModalAction
+              icon={<CheckCircle2 color={colors.surface} size={19} strokeWidth={2.4} />}
+              label="Guardar cambios"
+              onPress={handleSaveDetails}
+            />
+          </AppModalActions>
+        }
+        icon={<Target color={colors.primary} size={23} strokeWidth={2.4} />}
+        onClose={closeDetailsEditor}
+        scrollable
+        size="wide"
+        subtitle={allocation.goal.title}
+        title="Editar meta"
         visible={isEditing}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, compact && styles.modalCardPhone]}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Editar meta</Text>
-              </View>
-              <IconButton
-                accessibilityLabel="Cerrar edición"
-                icon={<X color={colors.primary} size={18} strokeWidth={2.6} />}
-                onPress={closeDetailsEditor}
-              />
-            </View>
-
-            <ScrollView
-              contentContainerStyle={styles.modalScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
               <View style={styles.editGroup}>
                 <Text style={styles.inputLabel}>Tipo de meta</Text>
                 <ScrollView
@@ -1317,12 +1377,12 @@ function GoalCard({
 
               <View style={styles.inputGrid}>
                 <CurrencyInputField
-                  label="Monto objetivo"
+                  label="¿Cuánto quieres reunir en total?"
                   onChangeText={(value) => handleCurrencyInputChange(value, setTargetInput)}
                   value={targetInput}
                 />
                 <CurrencyInputField
-                  label="Ahorro actual"
+                  label="Dinero ya separado para esta meta"
                   onChangeText={(value) => handleCurrencyInputChange(value, setCurrentInput)}
                   value={currentInput}
                 />
@@ -1334,7 +1394,7 @@ function GoalCard({
                 </View>
               ) : null}
               <View style={styles.editGroup}>
-                <Text style={styles.inputLabel}>Horizonte</Text>
+                <Text style={styles.inputLabel}>¿Cuándo quieres alcanzarla?</Text>
                 <View style={styles.choiceRow}>
                   {goalHorizons.map((horizon) => (
                     <ChoicePill
@@ -1347,7 +1407,7 @@ function GoalCard({
                 </View>
               </View>
               <View style={styles.editGroup}>
-                <Text style={styles.inputLabel}>Importancia</Text>
+                <Text style={styles.inputLabel}>Prioridad frente a tus otras metas</Text>
                 <View style={styles.choiceRow}>
                   {goalPriorities.map((priority) => (
                     <ChoicePill
@@ -1359,75 +1419,63 @@ function GoalCard({
                   ))}
                 </View>
               </View>
-            </ScrollView>
-
-            <View style={styles.modalActions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={handleSaveDetails}
-                style={({ pressed }) => [styles.saveButton, pressed && styles.pressed]}
-              >
-                <CheckCircle2 color={colors.surface} size={18} strokeWidth={2.4} />
-                <Text style={styles.saveButtonText}>Guardar cambios</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={closeDetailsEditor}
-                style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}
-              >
-                <Text style={styles.cancelButtonText}>Cancelar</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-      <Modal
-        animationType="fade"
-        onRequestClose={() => setExcessContribution(null)}
-        transparent
+              <View style={styles.editSummary}>
+                <View style={styles.editSummaryIcon}>
+                  <Sparkles color={colors.support} size={18} strokeWidth={2.4} />
+                </View>
+                <View style={styles.editSummaryCopy}>
+                  <Text style={styles.editSummaryTitle}>Qué pasará al guardar</Text>
+                  <Text style={styles.editSummaryText}>
+                    Recalcularemos el aporte recomendado y el tiempo estimado. Si
+                    tienes varias metas, el tipo y la prioridad pueden cambiar cómo
+                    se reparte la bolsa. No moveremos dinero.
+                  </Text>
+                </View>
+              </View>
+      </AppModal>
+      <AppModal
+        footer={
+          <AppModalActions>
+            <AppModalAction
+              label="Editar monto"
+              onPress={() => setExcessContribution(null)}
+              variant="secondary"
+            />
+            <AppModalAction
+              label="Aumentar objetivo"
+              onPress={() => {
+                setExcessContribution(null);
+                setReactivationMessage(
+                  "Aumenta el monto objetivo si quieres registrar un aporte mayor sin completar esta meta."
+                );
+                setIsEditing(true);
+              }}
+              variant="secondary"
+            />
+            <AppModalAction
+              label={`Registrar ${
+                excessContribution
+                  ? formatCOP(excessContribution.remainingAmount)
+                  : "$0"
+              } y completar`}
+              onPress={registerRemainingContribution}
+            />
+          </AppModalActions>
+        }
+        icon={<AlertCircle color="#B45309" size={23} strokeWidth={2.4} />}
+        onClose={() => setExcessContribution(null)}
+        title="Este aporte supera lo necesario"
         visible={excessContribution !== null}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>Este aporte supera lo necesario</Text>
-            <Text style={styles.confirmMessage}>
-              Solo faltan {excessContribution ? formatCOP(excessContribution.remainingAmount) : "$0"} para completar
-              esta meta. Escribiste {excessContribution ? formatCOP(excessContribution.amount) : "$0"}.
-            </Text>
-            <View style={styles.confirmActions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setExcessContribution(null)}
-                style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}
-              >
-                <Text style={styles.cancelButtonText}>Editar monto</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  setExcessContribution(null);
-                  setReactivationMessage(
-                    "Aumenta el monto objetivo si quieres registrar un aporte mayor sin completar esta meta."
-                  );
-                  setIsEditing(true);
-                }}
-                style={({ pressed }) => [styles.confirmButtonSecondary, pressed && styles.pressed]}
-              >
-                <Text style={styles.confirmButtonSecondaryText}>Aumentar objetivo</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={registerRemainingContribution}
-                style={({ pressed }) => [styles.confirmButton, pressed && styles.pressed]}
-              >
-                <Text style={styles.confirmButtonText}>
-                  Registrar {excessContribution ? formatCOP(excessContribution.remainingAmount) : "$0"} y completar
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        <Text style={styles.confirmMessage}>
+          Solo faltan{" "}
+          {excessContribution
+            ? formatCOP(excessContribution.remainingAmount)
+            : "$0"}{" "}
+          para completar esta meta. Escribiste{" "}
+          {excessContribution ? formatCOP(excessContribution.amount) : "$0"}.
+        </Text>
+      </AppModal>
     </View>
   );
 }
@@ -1437,6 +1485,9 @@ export default function GoalsOverviewScreen() {
   const { isPhone, screenPadding } = useResponsiveLayout();
   const navigate = (route: Route) => router.push(route);
   const { exactValues, onboarding, updateOnboarding } = useOnboarding();
+  const guidanceMode = normalizeFinancialGuidanceMode(
+    onboarding.financialGuidanceMode
+  );
   const { completedActions, updateActionProgress } = usePlan();
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
@@ -1714,7 +1765,9 @@ export default function GoalsOverviewScreen() {
   };
 
   const closeConfirmation = () => {
+    const cancelAction = pendingConfirmation?.onCancel;
     setPendingConfirmation(null);
+    cancelAction?.();
   };
 
   const runPendingConfirmation = () => {
@@ -1865,10 +1918,86 @@ export default function GoalsOverviewScreen() {
                     : "Sin aporte asignado"}
                 </Text>
               </View>
-              <Chip
-                label={remainingLabel}
-                tone={goalPlan.isOverBudget ? "danger" : goalPlan.remainingBudget > 0 ? "support" : "primary"}
-              />
+              <View style={styles.budgetHeaderActions}>
+                <FinancialEducationModal
+                  accessibilityLabel="Explicar la bolsa para metas"
+                  guidanceMode={guidanceMode}
+                  icon={<Wallet color={colors.primary} size={23} strokeWidth={2.4} />}
+                  title="Cómo funciona tu bolsa para metas"
+                >
+                  <FinancialEducationStory
+                    calculationItems={[
+                      {
+                        label: "Bolsa mensual",
+                        value: budgetLabel
+                      },
+                      {
+                        label: "Aportes asignados",
+                        operator: "−",
+                        value: formatCOP(goalPlan.monthlyContributionTotal)
+                      },
+                      {
+                        emphasis: true,
+                        label: goalPlan.isOverBudget ? "Exceso" : "Disponible",
+                        operator: "=",
+                        value: formatCOP(Math.abs(goalPlan.remainingBudget))
+                      }
+                    ]}
+                    calculationTitle="Cómo se reparte tu bolsa"
+                    definition="La bolsa para metas es el presupuesto mensual que puedes distribuir entre una o varias metas. Sale de tu margen mensual recomendado o del monto manual que definas."
+                    estimateLabel={
+                      goalPlan.monthlyGoalBudgetMode === "manual"
+                        ? "Bolsa definida por ti"
+                        : "Bolsa recomendada desde tu margen"
+                    }
+                    guidanceMode={guidanceMode}
+                    plainLanguage={
+                      goalPlan.monthlyContributionTotal > 0
+                        ? `Has repartido ${formatCOP(
+                            goalPlan.monthlyContributionTotal
+                          )} de una bolsa de ${formatCOP(
+                            goalPlan.monthlyGoalBudget
+                          )}. Lo disponible es presupuesto todavía sin asignar dentro del plan; no es saldo en tu cuenta y la app no mueve dinero.`
+                        : `Tienes una referencia de ${formatCOP(
+                            goalPlan.monthlyGoalBudget
+                          )} para tus metas, pero todavía no has indicado cuánto irá a cada una. Esta referencia no es dinero en tu cuenta y la app no mueve dinero.`
+                    }
+                    plainLanguageBadge={
+                      goalPlan.monthlyContributionTotal > 0 ? "✓" : "$0"
+                    }
+                    resultDescription={
+                      goalPlan.isOverBudget
+                        ? "Tus aportes asignados superan la bolsa mensual definida."
+                        : goalPlan.monthlyContributionTotal > 0
+                          ? "La cifra asignada es la suma de los aportes mensuales de tus metas."
+                          : "Aún no has repartido tu bolsa mensual entre las metas."
+                    }
+                    resultLabel={
+                      goalPlan.monthlyContributionTotal > 0
+                        ? "Aportes mensuales asignados"
+                        : "Sin aporte asignado"
+                    }
+                    resultValue={formatCOP(goalPlan.monthlyContributionTotal)}
+                    tone={
+                      goalPlan.isOverBudget
+                        ? "critical"
+                        : goalPlan.monthlyContributionTotal > 0
+                          ? "positive"
+                          : "neutral"
+                    }
+                  />
+                </FinancialEducationModal>
+                <Chip
+                  label={remainingLabel}
+                  tone={
+                    goalPlan.isOverBudget
+                      ? "danger"
+                      : goalPlan.remainingBudget > 0
+                        ? "support"
+                        : "primary"
+                  }
+                />
+              </View>
             </View>
 
             <View style={styles.progressTrack}>
@@ -2033,6 +2162,7 @@ export default function GoalsOverviewScreen() {
                     })
                   }
                   onRegisterContribution={(amount) => registerGoalContribution(allocation.goal.id, amount)}
+                  onRequestConfirmation={confirmGoalAction}
                   onReset={() => setGoalContribution(allocation.goal.id, null)}
                   onSetPrimary={() => confirmSetPrimaryGoal(allocation)}
                   onUpdateGoal={(updates) => updateGoal(allocation.goal.id, updates)}
@@ -2052,39 +2182,35 @@ export default function GoalsOverviewScreen() {
         </View>
       </ScrollView>
 
-      <Modal
-        animationType="fade"
-        onRequestClose={closeConfirmation}
-        transparent
+      <AppModal
+        footer={
+          <AppModalActions>
+            <AppModalAction
+              label={pendingConfirmation?.cancelLabel ?? "Cancelar"}
+              onPress={closeConfirmation}
+              variant="secondary"
+            />
+            <AppModalAction
+              label={pendingConfirmation?.confirmLabel ?? "Confirmar"}
+              onPress={runPendingConfirmation}
+              variant={pendingConfirmation?.destructive ? "danger" : "primary"}
+            />
+          </AppModalActions>
+        }
+        icon={
+          pendingConfirmation?.destructive ? (
+            <Trash2 color="#DC2626" size={22} strokeWidth={2.4} />
+          ) : (
+            <CheckCircle2 color={colors.primary} size={22} strokeWidth={2.4} />
+          )
+        }
+        onClose={closeConfirmation}
+        size="compact"
+        title={pendingConfirmation?.title ?? "Confirmar acción"}
         visible={pendingConfirmation !== null}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>{pendingConfirmation?.title}</Text>
-            <Text style={styles.confirmMessage}>{pendingConfirmation?.message}</Text>
-            <View style={styles.confirmActions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={closeConfirmation}
-                style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}
-              >
-                <Text style={styles.cancelButtonText}>Cancelar</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={runPendingConfirmation}
-                style={({ pressed }) => [
-                  styles.confirmButton,
-                  pendingConfirmation?.destructive && styles.confirmButtonDanger,
-                  pressed && styles.pressed
-                ]}
-              >
-                <Text style={styles.confirmButtonText}>{pendingConfirmation?.confirmLabel}</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        <Text style={styles.confirmMessage}>{pendingConfirmation?.message}</Text>
+      </AppModal>
 
       <BottomNavigation activeRoute="/goals-overview" />
       <View style={styles.hidden}>
@@ -2319,6 +2445,11 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm,
     justifyContent: "space-between"
+  },
+  budgetHeaderActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm
   },
   sectionKicker: {
     color: colors.textMuted,
@@ -2937,6 +3068,40 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  editSummary: {
+    alignItems: "flex-start",
+    backgroundColor: colors.supportSoft,
+    borderColor: "#BFE8D0",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.sm
+  },
+  editSummaryIcon: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    height: 36,
+    justifyContent: "center",
+    width: 36
+  },
+  editSummaryCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0
+  },
+  editSummaryTitle: {
+    color: colors.support,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  editSummaryText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
     lineHeight: typography.lineHeight.caption
   },
   choiceRow: {

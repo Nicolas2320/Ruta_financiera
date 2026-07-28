@@ -7,7 +7,6 @@ import {
   ChartColumnIncreasing,
   ChevronDown,
   ChevronUp,
-  CircleQuestionMark,
   ClipboardCheck,
   Flag,
   Home,
@@ -23,6 +22,12 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
+import { FinancialEducationCarousel } from "../components/FinancialEducationCarousel";
+import { FinancialEducationModal } from "../components/FinancialEducationModal";
+import {
+  FinancialEducationStory,
+  type FinancialEducationStoryTone
+} from "../components/FinancialEducationStory";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useAuth } from "../context/AuthContext";
@@ -36,7 +41,9 @@ import {
 } from "../utils/financialCalculations";
 import { formatCOP, formatSignedCOP } from "../utils/financialRanges";
 import { formatGoalContribution, getGoalPlanFromOnboarding } from "../utils/goalPlanning";
-import type { ExactFinancialValues } from "../types/financial";
+import type {
+  ExactFinancialValues
+} from "../types/financial";
 import { getMonthlyPlanPeriodKey } from "../utils/monthlyPlan";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
@@ -774,12 +781,12 @@ export default function SimulationScreen() {
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isFlowMode = source === "flow";
   const [expandedScenarioKey, setExpandedScenarioKey] = useState<string | null | undefined>(undefined);
-  const [showCalculationDetails, setShowCalculationDetails] = useState(false);
-  const [showScenarioGuide, setShowScenarioGuide] = useState(false);
   const navigate = (route: Route) => router.push(route);
   const { session } = useAuth();
   const { exactValues, onboarding } = useOnboarding();
   const { completedActions } = usePlan();
+  const guidanceMode = onboarding.financialGuidanceMode;
+
   const metrics = useMemo(
     () => getSimulationBase(onboarding, exactValues),
     [exactValues, onboarding]
@@ -859,6 +866,22 @@ export default function SimulationScreen() {
         : "Necesitamos una referencia de ingresos y gastos para explicar el aporte sugerido.";
   const contributionBandRuleText =
     "La regla cambia según cuánto representa el margen sobre tus ingresos: hasta 10% usamos 25% del margen; más de 10% y hasta 25% usamos 35%; por encima de 25% usamos 45%.";
+  const contributionTone: FinancialEducationStoryTone =
+    metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
+      ? "critical"
+      : snapshot.cashflow.suggestedMonthlyContribution > 0
+        ? "positive"
+        : "neutral";
+  const contributionPlainLanguage =
+    snapshot.cashflow.suggestedContributionRate !== null
+      ? `De cada $100 de margen, usamos $${Math.round(
+          snapshot.cashflow.suggestedContributionRate * 100
+        )} como referencia para tu aporte mensual.`
+      : "Necesitamos una referencia de ingresos y gastos para traducir tu margen en un aporte.";
+  const contributionResultLabel =
+    metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
+      ? "Aporte no sugerido con déficit"
+      : "Aporte mensual sugerido";
   const goalBudgetLabel =
     goalPlan.monthlyGoalBudget > 0 ? `${formatCOP(goalPlan.monthlyGoalBudget)} aprox.` : "Por definir";
   const goalBudgetModeLabel =
@@ -875,6 +898,163 @@ export default function SimulationScreen() {
     metrics.expensePercentage !== null && metrics.expensePercentage >= 85 ? "warning" : "primary";
   const marginTone: Tone =
     metrics.estimatedMargin !== null && metrics.estimatedMargin > 0 ? "support" : "warning";
+  const scenarioOverviewSlide = (
+    <View style={styles.educationSlideContent}>
+      <Text style={styles.scenarioGuideTitle}>Qué estás comparando</Text>
+      <Text style={styles.scenarioGuideText}>
+        Cada escenario muestra una forma distinta de avanzar hacia tu meta. Solo compara
+        posibilidades educativas: no mueve dinero ni modifica tu plan.
+      </Text>
+      <View style={styles.valueGrid}>
+        <ValuePill label="Aporte meta" tone="support" value={simulatedGoalContributionLabel} />
+        <ValuePill label="Aporte sugerido" tone="warning" value={capacityContributionLabel} />
+      </View>
+    </View>
+  );
+  const scenarioTermsSlide = (
+    <View style={styles.educationSlideContent}>
+      <Text style={styles.scenarioGuideTitle}>De dónde sale cada monto</Text>
+      <View style={styles.scenarioEducationList}>
+        <View style={styles.scenarioEducationItem}>
+          <Text style={styles.scenarioGuideTerm}>Aporte meta</Text>
+          <Text style={styles.scenarioGuideText}>Lo asignado a tu meta principal.</Text>
+        </View>
+        <View style={styles.scenarioEducationItem}>
+          <Text style={styles.scenarioGuideTerm}>Bolsa manual o recomendada</Text>
+          <Text style={styles.scenarioGuideText}>
+            El presupuesto total que se reparte entre tus metas.
+          </Text>
+        </View>
+        <View style={styles.scenarioEducationItem}>
+          <Text style={styles.scenarioGuideTerm}>Aporte sugerido</Text>
+          <Text style={styles.scenarioGuideText}>
+            Una referencia calculada desde tu margen; no cambia tu plan.
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+  const scenarioAdjustmentSlide = (
+    <View style={styles.educationSlideContent}>
+      <Text style={styles.scenarioGuideTitle}>Ajuste de gastos pequeños</Text>
+      <View style={styles.scenarioEducationWarning}>
+        <Text style={styles.scenarioGuideText}>
+          Si tienes déficit, este escenario solo muestra cuánto podría reducirse al revisar
+          gastos pequeños.
+        </Text>
+        <Text style={styles.scenarioGuideTerm}>
+          No representa ahorro ni dinero disponible.
+        </Text>
+      </View>
+    </View>
+  );
+  const scenarioSlides =
+    guidanceMode === "guided"
+      ? [scenarioOverviewSlide, scenarioTermsSlide, scenarioAdjustmentSlide]
+      : guidanceMode === "brief"
+        ? [
+            scenarioOverviewSlide,
+            <View style={styles.educationSlideContent}>
+              {scenarioTermsSlide}
+              {scenarioAdjustmentSlide}
+            </View>
+          ]
+        : [
+            <View style={styles.educationSlideContent}>
+              {scenarioTermsSlide}
+              {scenarioAdjustmentSlide}
+            </View>
+          ];
+  const simulatedGoalOverviewSlide = (
+    <View style={styles.educationSlideContent}>
+      <Text style={styles.scenarioGuideTitle}>Qué representa esta simulación</Text>
+      <Text style={styles.scenarioGuideText}>
+        Proyecta una ruta posible hacia tu meta usando los datos actuales. No separa
+        dinero ni cambia los aportes de tu plan.
+      </Text>
+      <View style={styles.valueGrid}>
+        <ValuePill
+          label="Objetivo"
+          tone={goalTone}
+          value={
+            simulatedGoalTargetAmount !== null
+              ? `${formatCOP(simulatedGoalTargetAmount)} aprox.`
+              : "Por definir"
+          }
+        />
+        <ValuePill
+          label="Restante"
+          tone="primary"
+          value={
+            simulatedGoalRemainingAmount !== null
+              ? `${formatCOP(simulatedGoalRemainingAmount)} aprox.`
+              : "Por calcular"
+          }
+        />
+      </View>
+    </View>
+  );
+  const simulatedGoalTermsSlide = (
+    <View style={styles.educationSlideContent}>
+      <Text style={styles.scenarioGuideTitle}>Cómo leer los demás datos</Text>
+      <View style={styles.scenarioEducationList}>
+        <View style={styles.scenarioEducationItem}>
+          <Text style={styles.scenarioGuideTerm}>Tiempo</Text>
+          <Text style={styles.scenarioGuideText}>
+            Meses aproximados para cubrir lo restante con el aporte asignado.
+          </Text>
+        </View>
+        <View style={styles.scenarioEducationItem}>
+          <Text style={styles.scenarioGuideTerm}>{goalBudgetModeLabel}</Text>
+          <Text style={styles.scenarioGuideText}>
+            Presupuesto mensual disponible para repartir entre tus metas.
+          </Text>
+        </View>
+        <View style={styles.scenarioEducationItem}>
+          <Text style={styles.scenarioGuideTerm}>Aporte sugerido</Text>
+          <Text style={styles.scenarioGuideText}>
+            Referencia calculada desde tu margen; no reemplaza el aporte que tú
+            decidas asignar.
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+  const simulatedGoalCautionSlide = (
+    <View style={styles.educationSlideContent}>
+      <Text style={styles.scenarioGuideTitle}>Recuerda que puede cambiar</Text>
+      <View style={styles.scenarioEducationWarning}>
+        <Text style={styles.scenarioGuideText}>
+          El tiempo estimado cambia si ajustas el objetivo, registras un ahorro o
+          modificas el aporte mensual.
+        </Text>
+        <Text style={styles.scenarioGuideTerm}>
+          Es una orientación educativa, no una garantía.
+        </Text>
+      </View>
+    </View>
+  );
+  const simulatedGoalSlides =
+    guidanceMode === "guided"
+      ? [
+          simulatedGoalOverviewSlide,
+          simulatedGoalTermsSlide,
+          simulatedGoalCautionSlide
+        ]
+      : guidanceMode === "brief"
+        ? [
+            simulatedGoalOverviewSlide,
+            <View style={styles.educationSlideContent}>
+              {simulatedGoalTermsSlide}
+              {simulatedGoalCautionSlide}
+            </View>
+          ]
+        : [
+            <View style={styles.educationSlideContent}>
+              {simulatedGoalTermsSlide}
+              {simulatedGoalCautionSlide}
+            </View>
+          ];
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -927,6 +1107,20 @@ export default function SimulationScreen() {
 
           <SectionCard
             compact={isPhone}
+            headerAction={
+              <FinancialEducationModal
+                accessibilityLabel="Explicar la meta simulada"
+                guidanceMode={guidanceMode}
+                icon={<Target color={colors.primary} size={23} strokeWidth={2.4} />}
+                title="Cómo leer tu meta simulada"
+              >
+                <FinancialEducationCarousel
+                  closeLabel="Cerrar"
+                  resetKey={`simulated-goal-${guidanceMode}`}
+                  slides={simulatedGoalSlides}
+                />
+              </FinancialEducationModal>
+            }
             icon={<Target color={colors.primary} size={22} strokeWidth={2.4} />}
             title="Meta simulada"
           >
@@ -962,43 +1156,22 @@ export default function SimulationScreen() {
           <SectionCard
             compact={isPhone}
             headerAction={
-              <Pressable
+              <FinancialEducationModal
                 accessibilityLabel="Explicar escenarios"
-                accessibilityRole="button"
-                accessibilityState={{ expanded: showScenarioGuide }}
-                onPress={() => setShowScenarioGuide((current) => !current)}
-                style={({ pressed }) => [styles.infoButton, pressed && styles.pressed]}
+                guidanceMode={guidanceMode}
+                icon={<ClipboardCheck color={colors.primary} size={23} strokeWidth={2.4} />}
+                title="Cómo leer estos escenarios"
               >
-                <CircleQuestionMark color={colors.primary} size={20} strokeWidth={2.5} />
-              </Pressable>
+                <FinancialEducationCarousel
+                  closeLabel="Cerrar"
+                  resetKey={`scenarios-${guidanceMode}`}
+                  slides={scenarioSlides}
+                />
+              </FinancialEducationModal>
             }
             icon={<ClipboardCheck color={colors.primary} size={22} strokeWidth={2.4} />}
             title="Escenarios"
           >
-            {showScenarioGuide ? (
-              <View style={styles.scenarioGuideBox}>
-                <Text style={styles.scenarioGuideTitle}>Cómo leer estos montos</Text>
-                <View style={styles.scenarioGuideList}>
-                  <Text style={styles.scenarioGuideText}>
-                    <Text style={styles.scenarioGuideTerm}>Aporte meta: </Text>
-                    lo asignado a la meta principal.
-                  </Text>
-                  <Text style={styles.scenarioGuideText}>
-                    <Text style={styles.scenarioGuideTerm}>Bolsa manual o recomendada: </Text>
-                    presupuesto total repartido entre metas.
-                  </Text>
-                  <Text style={styles.scenarioGuideText}>
-                    <Text style={styles.scenarioGuideTerm}>Aporte sugerido: </Text>
-                    referencia desde tu margen; no cambia tu plan.
-                  </Text>
-                  <Text style={styles.scenarioGuideText}>
-                    <Text style={styles.scenarioGuideTerm}>Ajuste de gastos pequeños: </Text>
-                    si tienes déficit, solo muestra cuánto podría reducirse; no representa ahorro ni
-                    dinero disponible.
-                  </Text>
-                </View>
-              </View>
-            ) : null}
             <View style={styles.scenariosList}>
               {scenarios.map((scenario) => (
                 <ScenarioCard
@@ -1043,44 +1216,69 @@ export default function SimulationScreen() {
 
           <SectionCard
             compact={isPhone}
+            headerAction={
+              <FinancialEducationModal
+                accessibilityLabel="Explicar los cálculos de la simulación"
+                guidanceMode={guidanceMode}
+                icon={<WalletCards color={colors.primary} size={23} strokeWidth={2.4} />}
+                title="Cómo calculamos tu aporte sugerido"
+              >
+                <FinancialEducationStory
+                  calculationItems={[
+                    {
+                      label: "Margen mensual",
+                      value:
+                        metrics.estimatedMargin !== null
+                          ? formatSignedCOP(metrics.estimatedMargin)
+                          : getMarginLabel(metrics)
+                    },
+                    {
+                      label: "Porcentaje usado",
+                      operator: "×",
+                      value: contributionRateLabel
+                    },
+                    {
+                      emphasis: true,
+                      label: "Aporte sugerido",
+                      operator: "=",
+                      value:
+                        snapshot.cashflow.suggestedMonthlyContribution > 0
+                          ? formatCOP(snapshot.cashflow.suggestedMonthlyContribution)
+                          : capacityContributionLabel
+                    }
+                  ]}
+                  calculationTitle="Cómo estimamos el aporte"
+                  closeLabel="Cerrar"
+                  definition={`${contributionRuleText} ${contributionBandRuleText}`}
+                  estimateLabel={snapshot.precision.label}
+                  guidanceMode={guidanceMode}
+                  plainLanguage={contributionPlainLanguage}
+                  plainLanguageBadge={
+                    snapshot.cashflow.suggestedContributionRate !== null
+                      ? `$${Math.round(snapshot.cashflow.suggestedContributionRate * 100)}`
+                      : "Aporte"
+                  }
+                  resultDescription="Es una referencia educativa calculada desde tu margen; no modifica tu plan."
+                  resultLabel={contributionResultLabel}
+                  resultValue={
+                    snapshot.cashflow.suggestedMonthlyContribution > 0
+                      ? formatCOP(snapshot.cashflow.suggestedMonthlyContribution)
+                      : capacityContributionLabel
+                  }
+                  tone={contributionTone}
+                />
+              </FinancialEducationModal>
+            }
             icon={<WalletCards color={colors.primary} size={22} strokeWidth={2.4} />}
-            title="Cómo se calculó"
+            title="Tus cálculos"
           >
             <Text style={styles.disclaimerText}>
               Estas simulaciones son estimaciones educativas. No garantizan resultados futuros.
             </Text>
-            <Text style={styles.helperText}>{snapshot.precision.message}</Text>
-            <Text style={styles.helperText}>{contributionRuleText}</Text>
-            <Text style={styles.helperText}>{contributionBandRuleText}</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setShowCalculationDetails((current) => !current)}
-              style={({ pressed }) => [styles.detailToggle, styles.calculationToggle, pressed && styles.pressed]}
-            >
-              <Text style={styles.detailToggleText}>
-                {showCalculationDetails ? "Ocultar datos usados" : "Ver datos usados"}
-              </Text>
-              {showCalculationDetails ? (
-                <ChevronUp color={colors.primary} size={18} strokeWidth={2.5} />
-              ) : (
-                <ChevronDown color={colors.primary} size={18} strokeWidth={2.5} />
-              )}
-            </Pressable>
-            {showCalculationDetails ? (
             <View style={styles.valueGrid}>
-              <ValuePill label={metrics.incomeDisplay.label} value={metrics.incomeDisplay.value} />
-              <ValuePill label={metrics.expenseDisplay.label} value={metrics.expenseDisplay.value} />
               <ValuePill label="Margen mensual" value={getMarginLabel(metrics)} />
-              <ValuePill label="Margen frente al ingreso" value={marginRateLabel} />
-              <ValuePill label="Porcentaje aplicado al margen" value={contributionRateLabel} />
               <ValuePill label="Aporte sugerido final" value={capacityContributionLabel} />
-              <ValuePill
-                label="Gastos pequeños"
-                tone="warning"
-                value={getSmallExpenseLabel(onboarding, metrics)}
-              />
             </View>
-            ) : null}
           </SectionCard>
 
           <View style={styles.actions}>
@@ -1243,16 +1441,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.sectionTitle
   },
-  infoButton: {
-    alignItems: "center",
-    backgroundColor: colors.primarySoft,
-    borderColor: "#CFE0FF",
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    height: 38,
-    justifyContent: "center",
-    width: 38
-  },
   iconBubble: {
     alignItems: "center",
     borderRadius: radius.pill,
@@ -1301,22 +1489,33 @@ const styles = StyleSheet.create({
   scenariosList: {
     gap: spacing.md
   },
-  scenarioGuideBox: {
-    backgroundColor: colors.surface,
-    borderColor: "#CFE0FF",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: spacing.sm,
-    padding: spacing.md
-  },
   scenarioGuideTitle: {
     color: colors.text,
     fontSize: typography.body,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.body
   },
-  scenarioGuideList: {
-    gap: spacing.xs
+  educationSlideContent: {
+    gap: spacing.md
+  },
+  scenarioEducationList: {
+    gap: spacing.sm
+  },
+  scenarioEducationItem: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.sm
+  },
+  scenarioEducationWarning: {
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
   },
   scenarioGuideText: {
     color: colors.textMuted,
@@ -1456,9 +1655,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
   },
-  calculationToggle: {
-    marginTop: -spacing.xs
-  },
   insightsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1491,12 +1687,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.body,
     lineHeight: typography.lineHeight.body
-  },
-  helperText: {
-    color: colors.textSubtle,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.caption
   },
   disclaimerText: {
     backgroundColor: colors.supportSoft,

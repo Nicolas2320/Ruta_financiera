@@ -13,14 +13,20 @@ import {
   PiggyBank,
   Search,
   ShieldCheck,
+  Sparkles,
   Target,
   Wallet
 } from "lucide-react-native";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
 import { FinancialDataStatusScreen } from "../components/FinancialDataStatusScreen";
+import {
+  AppModal,
+  AppModalAction,
+  AppModalActions
+} from "../components/ui/AppModal";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
@@ -145,43 +151,43 @@ const amountEvidenceByActionId: Record<string, Omit<EvidenceConfig, "type">> = {
   "debt-monthly-payment": {
     title: "Registra el pago mensual",
     prompt: "Anota cuánto pagas aproximadamente al mes por tus deudas.",
-    placeholder: "Ej. 350000",
+    placeholder: "",
     resultLabel: "Pago mensual identificado"
   },
   "weekly-limit": {
     title: "Define el límite",
     prompt: "Escribe el límite semanal que vas a probar.",
-    placeholder: "Ej. 80000",
+    placeholder: "E",
     resultLabel: "Límite semanal definido"
   },
   "small-automatic-separation": {
     title: "Registra lo que separaste",
     prompt: "Anota la cantidad mínima que apartaste o vas a apartar al recibir ingresos.",
-    placeholder: "Ej. 50000",
+    placeholder: "",
     resultLabel: "Monto separado"
   },
   "initial-emergency-contribution": {
     title: "Registra el aporte",
     prompt: "Anota cuánto separaste para tu fondo de emergencia.",
-    placeholder: "Ej. 100000",
+    placeholder: "",
     resultLabel: "Aporte a emergencia"
   },
   "small-expense-limit": {
     title: "Define el límite mensual",
     prompt: "Escribe el límite que vas a probar para esta categoría.",
-    placeholder: "Ej. 120000",
+    placeholder: "",
     resultLabel: "Límite mensual definido"
   },
   "redirect-small-expenses": {
     title: "Registra lo redirigido",
     prompt: "Anota cuánto vas a mover desde gastos pequeños hacia tu meta.",
-    placeholder: "Ej. 40000",
+    placeholder: "",
     resultLabel: "Monto redirigido"
   },
   "set-goal-contribution": {
     title: "Registra el aporte",
     prompt: "Anota cuánto separaste o te comprometes a separar para esta meta.",
-    placeholder: "Ej. 150000",
+    placeholder: "",
     resultLabel: "Aporte a meta"
   }
 };
@@ -364,7 +370,7 @@ function getStatusLabel(status: ActionProgressStatus) {
 
 function getEvidenceInputLabel(config: EvidenceConfig) {
   if (config.type === "amount") {
-    return "Monto en COP";
+    return "Monto";
   }
 
   if (config.options && config.options.length > 0) {
@@ -594,8 +600,13 @@ function ActionCard({
       </View>
 
       <View style={styles.actionReference}>
-        <Text style={styles.actionReferenceLabel}>Guía</Text>
-        <Text style={styles.actionReferenceText}>{action.estimatedImpact}</Text>
+        <View style={styles.actionReferenceIcon}>
+          <Sparkles color="#7C3AED" size={19} strokeWidth={2.5} />
+        </View>
+        <View style={styles.actionReferenceCopy}>
+          <Text style={styles.actionReferenceLabel}>Guía</Text>
+          <Text style={styles.actionReferenceText}>{action.estimatedImpact}</Text>
+        </View>
       </View>
 
       <View style={styles.actionFooter}>
@@ -649,48 +660,56 @@ function ActionCard({
         </Pressable>
       </View>
 
-      <Modal
-        animationType="fade"
-        onRequestClose={closeModal}
-        transparent
+      <AppModal
+        closeAccessibilityLabel="Cerrar registro de avance"
+        footer={
+          <AppModalActions>
+            <AppModalAction
+              label="Cancelar"
+              onPress={closeModal}
+              variant="secondary"
+            />
+            <AppModalAction
+              disabled={!hasEvidence}
+              icon={
+                <Check
+                  color={hasEvidence ? colors.surface : colors.textSubtle}
+                  size={18}
+                  strokeWidth={2.8}
+                />
+              }
+              label="Guardar avance"
+              onPress={saveProgress}
+            />
+          </AppModalActions>
+        }
+        icon={<ClipboardCheck color={colors.primary} size={23} strokeWidth={2.4} />}
+        onClose={closeModal}
+        scrollable
+        subtitle={action.title}
+        title="Registro de avance"
         visible={expanded}
       >
-        <View style={styles.modalOverlay}>
-          <Pressable
-            accessibilityLabel="Cerrar registro"
-            accessibilityRole="button"
-            onPress={closeModal}
-            style={styles.modalBackdrop}
-          />
-          <ScrollView
-            alwaysBounceVertical={false}
-            contentContainerStyle={styles.modalScrollContent}
-            keyboardShouldPersistTaps="handled"
+
+        <View style={styles.microActionHero}>
+          <View
+            style={[
+              styles.microActionPromptIcon,
+              { backgroundColor: visual.backgroundColor }
+            ]}
           >
-            <View style={styles.modalCard}>
-              <View style={styles.modalHeader}>
-                <View style={styles.modalHeaderText}>
-                  <Text style={styles.modalTitle}>Registro de avance</Text>
-                  <Text style={styles.modalSubtitle}>{action.title}</Text>
-                </View>
-                <Pressable
-                  accessibilityLabel="Cerrar registro"
-                  accessibilityRole="button"
-                  onPress={closeModal}
-                  style={({ pressed }) => [styles.modalCloseButton, pressed && styles.checkboxPressed]}
-                >
-                  <Text style={styles.modalCloseButtonText}>Cerrar</Text>
-                </Pressable>
-              </View>
+            <Icon color={visual.color} size={24} strokeWidth={2.4} />
+          </View>
+          <View style={styles.microActionHeader}>
+            <Text style={styles.microActionKicker}>TU DECISIÓN DE ESTE MES</Text>
+            <Text style={styles.microActionTitle}>{evidencePrompt}</Text>
+            <Text style={styles.microActionSubtitle}>
+              Al guardarla, esta acción quedará completada para este mes.
+            </Text>
+          </View>
+        </View>
 
-              <View style={styles.microActionHeader}>
-                <Text style={styles.microActionTitle}>{evidencePrompt}</Text>
-                <Text style={styles.microActionSubtitle}>
-                  Al guardar, esta acción quedará como completada para este mes.
-                </Text>
-              </View>
-
-              <View style={styles.microActionField}>
+        <View style={styles.microActionField}>
                 <Text style={styles.microActionLabel}>{inputLabel}</Text>
                 {hasOptions ? (
                   <View style={styles.optionGrid}>
@@ -748,30 +767,6 @@ function ActionCard({
                 </View>
               ) : null}
 
-              <View style={styles.microActionControls}>
-                <Pressable
-                  accessibilityLabel={`Guardar avance de ${action.title}`}
-                  accessibilityRole="button"
-                  disabled={!hasEvidence}
-                  onPress={saveProgress}
-                  style={({ pressed }) => [
-                    styles.saveActionButton,
-                    !hasEvidence && styles.actionButtonDisabled,
-                    pressed && hasEvidence && styles.checkboxPressed
-                  ]}
-                >
-                  <Check color={hasEvidence ? colors.surface : colors.textSubtle} size={17} strokeWidth={2.8} />
-                  <Text
-                    style={[
-                      styles.saveActionButtonText,
-                      !hasEvidence && styles.actionButtonDisabledText
-                    ]}
-                  >
-                    Guardar avance
-                  </Text>
-                </Pressable>
-              </View>
-
               {hasSavedProgress ? (
                 <View style={styles.deleteArea}>
                   {confirmingDelete ? (
@@ -811,10 +806,7 @@ function ActionCard({
                   )}
                 </View>
               ) : null}
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
+      </AppModal>
     </View>
   );
 }
@@ -1537,26 +1529,38 @@ const styles = StyleSheet.create({
     color: colors.textSubtle
   },
   actionReference: {
-    alignItems: "center",
-    backgroundColor: colors.surfaceMuted,
+    alignItems: "flex-start",
+    backgroundColor: "#F6F1FF",
+    borderColor: "#D8C7FF",
     borderRadius: radius.md,
+    borderWidth: 1,
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  actionReferenceIcon: {
+    alignItems: "center",
+    backgroundColor: "#E9DDFF",
+    borderRadius: radius.pill,
+    height: 36,
+    justifyContent: "center",
+    width: 36
+  },
+  actionReferenceCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0
   },
   actionReferenceLabel: {
-    color: colors.textSubtle,
+    color: "#6D28D9",
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
   },
   actionReferenceText: {
-    color: colors.support,
-    flexShrink: 1,
+    color: colors.text,
     fontSize: typography.caption,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
   },
   actionFooter: {
@@ -1697,7 +1701,32 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.caption
   },
   microActionHeader: {
+    flex: 1,
     gap: spacing.xs
+  },
+  microActionHero: {
+    alignItems: "flex-start",
+    backgroundColor: colors.primarySoft,
+    borderColor: "#CFE0FF",
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  microActionPromptIcon: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    height: 44,
+    justifyContent: "center",
+    width: 44
+  },
+  microActionKicker: {
+    color: colors.primary,
+    fontSize: typography.badge,
+    fontWeight: typography.weight.black,
+    letterSpacing: 0.4,
+    lineHeight: typography.lineHeight.badge
   },
   microActionTitle: {
     color: colors.text,

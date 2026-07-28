@@ -13,6 +13,11 @@ import {
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { FinancialEducationModal } from "../components/FinancialEducationModal";
+import {
+  FinancialEducationStory,
+  type FinancialEducationStoryTone
+} from "../components/FinancialEducationStory";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
@@ -560,17 +565,20 @@ function getMetricTone(label: string, metrics: FinancialMetrics, onboarding: Onb
 function InfoCard({
   title,
   children,
-  icon
+  icon,
+  headerAction
 }: {
   title: string;
   children: ReactNode;
   icon?: ReactNode;
+  headerAction?: ReactNode;
 }) {
   return (
     <View style={styles.sectionCard}>
       <View style={styles.sectionHeader}>
         {icon ? <View style={styles.sectionIcon}>{icon}</View> : null}
         <Text style={styles.sectionTitle}>{title}</Text>
+        {headerAction}
       </View>
       <View style={styles.sectionContent}>{children}</View>
     </View>
@@ -613,6 +621,7 @@ export default function DiagnosisScreen() {
   const router = useRouter();
   const { screenPadding } = useResponsiveLayout();
   const { exactValues, onboarding } = useOnboarding();
+  const guidanceMode = onboarding.financialGuidanceMode;
   const metrics = useMemo(
     () => getFinancialMetrics(onboarding, exactValues),
     [exactValues, onboarding]
@@ -635,6 +644,32 @@ export default function DiagnosisScreen() {
   const expensesAreHigh = metrics.expensePercentage !== null && metrics.expensePercentage >= 85;
   const hasPositiveMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin > 0;
   const hasNoMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0;
+  const flowEducationTone: FinancialEducationStoryTone =
+    metrics.estimatedMargin === null
+      ? "neutral"
+      : metrics.estimatedMargin < 0
+        ? "critical"
+        : metrics.estimatedMargin === 0
+          ? "warning"
+          : "positive";
+  const flowResultLabel =
+    metrics.estimatedMargin === null
+      ? "Margen por calcular"
+      : metrics.estimatedMargin < 0
+        ? "Déficit mensual estimado"
+        : metrics.estimatedMargin === 0
+          ? "Sin margen estimado"
+          : "Margen mensual disponible";
+  const flowResultDescription =
+    metrics.expensePercentage !== null
+      ? `Tus gastos representan aproximadamente el ${metrics.expensePercentage}% de tus ingresos.`
+      : "Comparamos tus ingresos y gastos mensuales.";
+  const flowPlainLanguage =
+    metrics.expensePercentage !== null
+      ? metrics.expensePercentage > 100
+        ? `Por cada $100 que entra, salen cerca de $${metrics.expensePercentage}.`
+        : `Por cada $100 que entra, aproximadamente $${metrics.expensePercentage} se utiliza en gastos.`
+      : "Compara lo que entra durante el mes con lo que utilizas para cubrir gastos.";
   const indicators = [
     {
       label: "Margen mensual",
@@ -673,8 +708,62 @@ export default function DiagnosisScreen() {
     metrics.snapshot.emergencyFund.coverageMonths !== null
       ? `${metrics.snapshot.emergencyFund.label}. Con estos datos, tu ahorro cubre cerca de ${metrics.snapshot.emergencyFund.coverageMonths.toFixed(1).replace(".0", "")} meses de gasto mensual.`
       : metrics.snapshot.emergencyFund.label;
+  const emergencyCoverageLabel =
+    metrics.snapshot.emergencyFund.coverageMonths !== null
+      ? `${metrics.snapshot.emergencyFund.coverageMonths
+          .toFixed(1)
+          .replace(".0", "")} meses`
+      : "Por calcular";
+  const emergencyTone: FinancialEducationStoryTone =
+    metrics.snapshot.emergencyFund.status === "solid" ||
+    metrics.snapshot.emergencyFund.status === "strong"
+      ? "positive"
+      : metrics.snapshot.emergencyFund.status === "building"
+        ? "neutral"
+        : metrics.snapshot.emergencyFund.status === "none" ||
+            metrics.snapshot.emergencyFund.status === "starter"
+          ? "warning"
+          : "neutral";
+  const emergencyPlainLanguage =
+    metrics.snapshot.emergencyFund.coverageMonths === null
+      ? "Necesitamos tu ahorro actual y tus gastos mensuales para estimar cuántos meses podrías cubrir."
+      : metrics.snapshot.emergencyFund.coverageMonths < 1
+        ? "Tu ahorro todavía no cubriría un mes completo de gastos."
+        : `Si tus ingresos se interrumpieran, tu ahorro podría cubrir cerca de ${emergencyCoverageLabel}.`;
   const debtMessage = getDebtMessage(onboarding);
   const debtActionMessage = getDebtActionMessage(onboarding);
+  const debtLevelLabel =
+    metrics.snapshot.debt.level === "none"
+      ? "Sin presión de deuda reportada"
+      : metrics.snapshot.debt.level === "low"
+        ? "Presión de deuda baja"
+        : metrics.snapshot.debt.level === "medium"
+          ? "Presión de deuda moderada"
+          : metrics.snapshot.debt.level === "high"
+            ? "Presión de deuda alta"
+            : "Presión de deuda por evaluar";
+  const debtTone: FinancialEducationStoryTone =
+    metrics.snapshot.debt.level === "none" || metrics.snapshot.debt.level === "low"
+      ? "positive"
+      : metrics.snapshot.debt.level === "medium"
+        ? "warning"
+        : metrics.snapshot.debt.level === "high"
+          ? "critical"
+          : "neutral";
+  const debtRatioLabel =
+    metrics.snapshot.debt.debtToIncomeRatio !== null
+      ? `${Math.round(metrics.snapshot.debt.debtToIncomeRatio * 100)}% del ingreso`
+      : metrics.debtPaymentLabel;
+  const debtPlainLanguage =
+    metrics.snapshot.debt.level === "none"
+      ? "No reportaste pagos de deuda que presionen tu presupuesto mensual."
+      : metrics.snapshot.debt.level === "low"
+        ? "Tus pagos de deuda parecen ocupar una parte manejable de tu presupuesto."
+        : metrics.snapshot.debt.level === "medium"
+          ? "Tus deudas necesitan considerarse antes de aumentar otros compromisos mensuales."
+          : metrics.snapshot.debt.level === "high"
+            ? "Una parte importante de tu presupuesto podría estar comprometida por pagos de deuda."
+            : "Necesitamos conocer tu situación y el peso mensual de los pagos para estimar esta presión.";
   const shouldShowDebtDetailsCta =
     metrics.snapshot.debt.level === "medium" ||
     metrics.snapshot.debt.level === "high" ||
@@ -734,6 +823,57 @@ export default function DiagnosisScreen() {
           </InfoCard>
 
           <InfoCard
+            headerAction={
+              metrics.canEstimateMonthlyFlow ? (
+                <FinancialEducationModal
+                  accessibilityLabel="Explicar el flujo mensual"
+                  guidanceMode={guidanceMode}
+                  icon={<PiggyBank color={colors.primary} size={23} strokeWidth={2.4} />}
+                  title="Tu flujo mensual"
+                >
+                  <FinancialEducationStory
+                    calculationItems={[
+                      {
+                        label: "Ingresos",
+                        value:
+                          metrics.incomeValue !== null
+                            ? formatCOP(metrics.incomeValue)
+                            : metrics.incomeDisplay.value
+                      },
+                      {
+                        label: "Gastos",
+                        operator: "−",
+                        value:
+                          metrics.expenseValue !== null
+                            ? formatCOP(metrics.expenseValue)
+                            : metrics.expenseDisplay.value
+                      },
+                      {
+                        emphasis: true,
+                        label: "Margen",
+                        operator: "=",
+                        value:
+                          metrics.estimatedMargin !== null
+                            ? formatSignedCOP(metrics.estimatedMargin)
+                            : metrics.estimatedMarginLabel
+                      }
+                    ]}
+                    closeLabel="Cerrar"
+                    definition="El margen mensual es lo que queda al restar los gastos de los ingresos. La relación gastos/ingresos muestra qué parte de tus ingresos utilizas en gastos."
+                    guidanceMode={guidanceMode}
+                    plainLanguage={flowPlainLanguage}
+                    resultDescription={flowResultDescription}
+                    resultLabel={flowResultLabel}
+                    resultValue={
+                      metrics.estimatedMargin !== null
+                        ? formatSignedCOP(metrics.estimatedMargin)
+                        : metrics.estimatedMarginLabel
+                    }
+                    tone={flowEducationTone}
+                  />
+                </FinancialEducationModal>
+              ) : undefined
+            }
             icon={<PiggyBank color={colors.primary} size={18} strokeWidth={2.4} />}
             title="Lectura de tu flujo mensual"
           >
@@ -746,10 +886,12 @@ export default function DiagnosisScreen() {
                   <ValueRow label="Gastos frente a ingresos" value={metrics.expensePercentageLabel} />
                 </View>
 
-                <Text style={styles.text}>
-                  Margen mensual = ingresos − gastos. Si el valor es negativo, indica cuánto
-                  superarían tus gastos a tus ingresos en un mes.
-                </Text>
+                {metrics.estimatedMargin !== null && metrics.estimatedMargin < 0 ? (
+                  <Text style={styles.warningText}>
+                    Tus gastos superan tus ingresos. El signo negativo muestra cuánto faltaría en
+                    un mes.
+                  </Text>
+                ) : null}
 
                 <View
                   style={[
@@ -800,6 +942,56 @@ export default function DiagnosisScreen() {
           </InfoCard>
 
           <InfoCard
+            headerAction={
+              <FinancialEducationModal
+                accessibilityLabel="Explicar el fondo de emergencia"
+                guidanceMode={guidanceMode}
+                icon={<ShieldCheck color={colors.primary} size={23} strokeWidth={2.4} />}
+                title="Tu fondo de emergencia"
+              >
+                <FinancialEducationStory
+                  calculationItems={[
+                    {
+                      label: "Ahorro actual",
+                      value:
+                        metrics.currentSavingsValue !== null
+                          ? formatCOP(metrics.currentSavingsValue)
+                          : metrics.currentSavingsDisplay.value
+                    },
+                    {
+                      label: "Gastos mensuales",
+                      operator: "÷",
+                      value:
+                        metrics.expenseValue !== null
+                          ? formatCOP(metrics.expenseValue)
+                          : metrics.expenseDisplay.value
+                    },
+                    {
+                      emphasis: true,
+                      label: "Cobertura",
+                      operator: "=",
+                      value: emergencyCoverageLabel
+                    }
+                  ]}
+                  calculationTitle="Cómo estimamos tu cobertura"
+                  closeLabel="Cerrar"
+                  definition="El fondo de emergencia indica cuántos meses de gastos podrías cubrir con el ahorro que tienes disponible."
+                  guidanceMode={guidanceMode}
+                  plainLanguage={emergencyPlainLanguage}
+                  plainLanguageBadge={
+                    metrics.snapshot.emergencyFund.coverageMonths !== null
+                      ? `${metrics.snapshot.emergencyFund.coverageMonths
+                          .toFixed(1)
+                          .replace(".0", "")}m`
+                      : "Meses"
+                  }
+                  resultDescription={metrics.snapshot.emergencyFund.label}
+                  resultLabel="Cobertura de emergencia"
+                  resultValue={emergencyCoverageLabel}
+                  tone={emergencyTone}
+                />
+              </FinancialEducationModal>
+            }
             icon={<ShieldCheck color={colors.primary} size={18} strokeWidth={2.4} />}
             title="Fondo de emergencia"
           >
@@ -818,6 +1010,53 @@ export default function DiagnosisScreen() {
           </InfoCard>
 
           <InfoCard
+            headerAction={
+              <FinancialEducationModal
+                accessibilityLabel="Explicar la presión de deuda"
+                guidanceMode={guidanceMode}
+                icon={<Landmark color={colors.primary} size={23} strokeWidth={2.4} />}
+                title="Presión de tus deudas"
+              >
+                <FinancialEducationStory
+                  calculationItems={[
+                    {
+                      label: "Situación declarada",
+                      value: onboarding.debtSituation ?? "No disponible"
+                    },
+                    {
+                      label: "Peso mensual",
+                      operator: "+",
+                      value: metrics.debtPaymentLabel
+                    },
+                    {
+                      emphasis: true,
+                      label: "Resultado",
+                      operator: "=",
+                      value: debtLevelLabel
+                    }
+                  ]}
+                  calculationTitle="Qué usamos para evaluarla"
+                  closeLabel="Cerrar"
+                  definition="La presión de deuda combina la dificultad de pago declarada con la parte del ingreso destinada cada mes a deudas."
+                  estimateLabel={
+                    metrics.snapshot.debt.source === "none"
+                      ? "Según tus respuestas"
+                      : "Con tus deudas registradas"
+                  }
+                  guidanceMode={guidanceMode}
+                  plainLanguage={debtPlainLanguage}
+                  plainLanguageBadge={
+                    metrics.snapshot.debt.debtToIncomeRatio !== null
+                      ? `${Math.round(metrics.snapshot.debt.debtToIncomeRatio * 100)}%`
+                      : "Deuda"
+                  }
+                  resultDescription={metrics.snapshot.debt.label}
+                  resultLabel={debtLevelLabel}
+                  resultValue={debtRatioLabel}
+                  tone={debtTone}
+                />
+              </FinancialEducationModal>
+            }
             icon={<Landmark color={colors.primary} size={18} strokeWidth={2.4} />}
             title="Deudas e inversiones"
           >
@@ -972,6 +1211,12 @@ const styles = StyleSheet.create({
   text: {
     color: colors.textMuted,
     fontSize: typography.body,
+    lineHeight: typography.lineHeight.body
+  },
+  warningText: {
+    color: "#9A5B20",
+    fontSize: typography.body,
+    fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.body
   },
   metricsGrid: {
