@@ -31,6 +31,7 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { getNextPlanAdjustmentHint } from "../utils/actionProgressImpact";
 import { getDebtRatioLabel } from "../utils/debtCalculations";
 import { formatCOP } from "../utils/financialRanges";
@@ -325,7 +326,8 @@ function MonthlyPlanCard({
   primaryGoalTitle,
   progressPercentage,
   realContribution,
-  title
+  title,
+  compact = false
 }: {
   actionCount: number;
   completed: boolean;
@@ -336,9 +338,10 @@ function MonthlyPlanCard({
   progressPercentage: number;
   realContribution: string;
   title: string;
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.monthlyPlanCard}>
+    <View style={[styles.monthlyPlanCard, compact && styles.cardPhone]}>
       <View style={styles.monthlyPlanBody}>
         <Text style={styles.heroTitle}>{title}</Text>
         {primaryGoalTitle ? (
@@ -401,14 +404,16 @@ function MonthlyPlanCard({
 function PanelCard({
   title,
   subtitle,
-  children
+  children,
+  compact = false
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.panelCard}>
+    <View style={[styles.panelCard, compact && styles.cardPhone]}>
       <View style={styles.panelHeader}>
         <Text style={styles.panelTitle}>{title}</Text>
         {subtitle ? <Text style={styles.panelSubtitle}>{subtitle}</Text> : null}
@@ -512,7 +517,8 @@ function RowCard({
   tone = "primary",
   actionLabel,
   onPress,
-  children
+  children,
+  compact = false
 }: {
   icon: ReactNode;
   title: string;
@@ -522,9 +528,10 @@ function RowCard({
   actionLabel?: string;
   onPress?: () => void;
   children?: ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.rowCard}>
+    <View style={[styles.rowCard, compact && styles.rowCardPhone]}>
       <IconBubble icon={icon} size="medium" tone={tone} />
       <View style={styles.rowCardBody}>
         <Text style={styles.rowCardTitle}>{title}</Text>
@@ -544,7 +551,7 @@ function RowCard({
           <ChevronRight color={colors.primary} size={20} strokeWidth={2.5} />
         </Pressable>
       ) : (
-        <ChevronRight color={colors.textSubtle} size={24} strokeWidth={2.2} />
+        compact ? null : <ChevronRight color={colors.textSubtle} size={24} strokeWidth={2.2} />
       )}
     </View>
   );
@@ -555,13 +562,15 @@ function QuickAccessCard({
   route,
   icon,
   tone,
-  onNavigate
+  onNavigate,
+  compact = false
 }: {
   title: string;
   route: Route;
   icon: ReactNode;
   tone: Tone;
   onNavigate: (route: Route) => void;
+  compact?: boolean;
 }) {
   return (
     <Pressable
@@ -569,7 +578,7 @@ function QuickAccessCard({
       onPress={() => onNavigate(route)}
       style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
     >
-      <IconBubble icon={icon} size="large" tone={tone} />
+      <IconBubble icon={icon} size={compact ? "medium" : "large"} tone={tone} />
       <Text style={styles.quickTitle}>{title}</Text>
     </Pressable>
   );
@@ -606,6 +615,7 @@ function BottomNavItem({
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const { isPhone, screenPadding } = useResponsiveLayout();
   const { isAuthReady, session } = useAuth();
   const { exactValues, hasCompletedOnboarding, onboarding, onboardingSyncStatus } =
     useOnboarding();
@@ -840,19 +850,20 @@ export default function DashboardScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
           <View style={styles.header}>
             <View style={styles.headerText}>
-              <Text style={styles.title}>{greetingTitle}</Text>
+              <Text style={[styles.title, isPhone && styles.titlePhone]}>{greetingTitle}</Text>
             </View>
             <CircleButton onPress={() => router.push("/settings")} />
           </View>
 
           <MonthlyPlanCard
             actionCount={actionCount}
+            compact={isPhone}
             completed={completedCount === actionCount}
             completedCount={completedCount}
             insight={impactDetail}
@@ -864,7 +875,7 @@ export default function DashboardScreen() {
           />
 
           <View style={styles.twoColumnGrid}>
-            <PanelCard title="Resumen financiero estimado">
+            <PanelCard compact={isPhone} title="Resumen financiero estimado">
               <View style={styles.metricsGrid}>
                 <MetricCard
                   icon={<PiggyBank color={colors.support} size={23} strokeWidth={2.4} />}
@@ -912,6 +923,7 @@ export default function DashboardScreen() {
             </PanelCard>
 
             <PanelCard
+              compact={isPhone}
               subtitle={precisionStatus.message}
               title="Mejorar mi plan financiero"
             >
@@ -924,6 +936,7 @@ export default function DashboardScreen() {
           </View>
 
           <RowCard
+            compact={isPhone}
             icon={<ShieldCheck color={colors.support} size={36} strokeWidth={2.4} />}
             text={emergencyStatus.text}
             title="Fondo de emergencia"
@@ -938,6 +951,7 @@ export default function DashboardScreen() {
           </RowCard>
 
           <RowCard
+            compact={isPhone}
             actionLabel="Revisar gastos"
             icon={<Coffee color="#B45309" size={36} strokeWidth={2.4} />}
             onPress={() => router.push({ pathname: "/small-expenses", params: { source: "dashboard" } })}
@@ -958,6 +972,7 @@ export default function DashboardScreen() {
           </RowCard>
 
           <RowCard
+            compact={isPhone}
             actionLabel="Ver metas"
             icon={<Flag color={colors.primary} size={36} strokeWidth={2.4} />}
             onPress={() => router.push("/goals-overview")}
@@ -979,6 +994,7 @@ export default function DashboardScreen() {
           </RowCard>
 
           <RowCard
+            compact={isPhone}
             actionLabel="Ver deudas"
             icon={<CreditCard color={getToneColors(dashboardDebtTone).text} size={36} strokeWidth={2.4} />}
             onPress={() => router.push("/debts")}
@@ -993,10 +1009,11 @@ export default function DashboardScreen() {
             ) : null}
           </RowCard>
 
-          <View style={styles.quickSection}>
+          <View style={[styles.quickSection, isPhone && styles.quickSectionPhone]}>
             <Text style={styles.sectionTitleStandalone}>Accesos rápidos</Text>
             <View style={styles.quickGrid}>
               <QuickAccessCard
+                compact={isPhone}
                 icon={<ClipboardCheck color={colors.primary} size={31} strokeWidth={2.4} />}
                 onNavigate={navigate}
                 route="/diagnosis"
@@ -1004,6 +1021,7 @@ export default function DashboardScreen() {
                 tone="primary"
               />
               <QuickAccessCard
+                compact={isPhone}
                 icon={<ChartColumnIncreasing color={colors.support} size={31} strokeWidth={2.4} />}
                 onNavigate={navigate}
                 route="/simulation"
@@ -1011,6 +1029,7 @@ export default function DashboardScreen() {
                 tone="support"
               />
               <QuickAccessCard
+                compact={isPhone}
                 icon={<CalendarCheck color="#7C3AED" size={31} strokeWidth={2.4} />}
                 onNavigate={navigate}
                 route="/action-plan"
@@ -1018,6 +1037,7 @@ export default function DashboardScreen() {
                 tone="purple"
               />
               <QuickAccessCard
+                compact={isPhone}
                 icon={<PencilLine color="#B45309" size={31} strokeWidth={2.4} />}
                 onNavigate={navigate}
                 route={{ pathname: "/summary", params: { mode: "edit" } }}
@@ -1073,6 +1093,10 @@ const styles = StyleSheet.create({
     fontSize: typography.display,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.display
+  },
+  titlePhone: {
+    fontSize: typography.title,
+    lineHeight: typography.lineHeight.title
   },
   subtitle: {
     color: colors.textMuted,
@@ -1161,6 +1185,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     gap: spacing.sm,
+    padding: spacing.md
+  },
+  cardPhone: {
     padding: spacing.md
   },
   monthlyPlanBody: {
@@ -1410,6 +1437,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.lg
   },
+  rowCardPhone: {
+    alignItems: "flex-start",
+    padding: spacing.md
+  },
   rowCardBody: {
     flexBasis: 240,
     flex: 1,
@@ -1460,6 +1491,9 @@ const styles = StyleSheet.create({
   quickSection: {
     gap: spacing.md,
     paddingHorizontal: spacing.md
+  },
+  quickSectionPhone: {
+    paddingHorizontal: 0
   },
   sectionTitleStandalone: {
     color: colors.text,

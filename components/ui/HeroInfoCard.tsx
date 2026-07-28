@@ -3,6 +3,7 @@ import { ShieldCheck } from "lucide-react-native";
 import { Image, StyleSheet, Text, View } from "react-native";
 
 import { colors, shadows, spacing, typography } from "../../constants/theme";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 
 type HeroInfoCardProps = {
   image: ImageSourcePropType;
@@ -13,18 +14,25 @@ type HeroInfoCardProps = {
 };
 
 export function HeroInfoCard({ image, title, text, badge, imageStyle }: HeroInfoCardProps) {
+  const { isPhone, isSmallPhone } = useResponsiveLayout();
+
   return (
     <View style={styles.card}>
-      <View style={styles.topRow}>
+      <View style={[styles.topRow, isSmallPhone && styles.topRowSmallPhone]}>
         <Image
           accessibilityIgnoresInvertColors
           resizeMode="contain"
           source={image}
-          style={[styles.image, imageStyle]}
+          style={[
+            styles.image,
+            imageStyle,
+            isPhone && styles.imagePhone,
+            isSmallPhone && styles.imageSmallPhone
+          ]}
         />
 
         <View style={styles.copy}>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={[styles.title, isPhone && styles.titlePhone]}>{title}</Text>
           <Text style={styles.text}>{text}</Text>
         </View>
       </View>
@@ -56,6 +64,15 @@ const styles = StyleSheet.create({
     height: 116,
     width: 118
   },
+  imagePhone: {
+    height: 96,
+    width: 96
+  },
+  imageSmallPhone: {
+    alignSelf: "center",
+    height: 104,
+    width: 104
+  },
   copy: {
     flex: 1,
     gap: spacing.sm,
@@ -66,6 +83,10 @@ const styles = StyleSheet.create({
     fontSize: typography.cardTitle,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.cardTitle
+  },
+  titlePhone: {
+    fontSize: typography.sectionTitle,
+    lineHeight: typography.lineHeight.sectionTitle
   },
   text: {
     color: colors.textMuted,
@@ -87,5 +108,9 @@ const styles = StyleSheet.create({
     fontSize: typography.badge,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.badge
+  },
+  topRowSmallPhone: {
+    alignItems: "stretch",
+    flexDirection: "column"
   }
 });

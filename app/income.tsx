@@ -12,6 +12,7 @@ import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 const incomePiggy = require("../assets/illustrations/income-piggy.png");
 const frequencyMonthly = require("../assets/icons/frequency-monthly.png");
@@ -72,6 +73,7 @@ const incomeFrequencies = [
 
 export default function IncomeScreen() {
   const router = useRouter();
+  const { screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ source?: string }>();
   const { onboarding, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
@@ -108,7 +110,7 @@ export default function IncomeScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>

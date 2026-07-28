@@ -26,6 +26,7 @@ import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 const financialFoundation = require("../assets/illustrations/financial-foundation.png");
 
@@ -205,6 +206,7 @@ const investmentSituations = [
 
 export default function SavingsDebtsScreen() {
   const router = useRouter();
+  const { screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ source?: string }>();
   const { onboarding, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
@@ -276,7 +278,7 @@ export default function SavingsDebtsScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>

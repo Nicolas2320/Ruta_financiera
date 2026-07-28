@@ -38,6 +38,7 @@ import {
 } from "../components/SpendingSectionTabs";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import type { DebtPaymentStatus, DebtRecord } from "../types/financial";
 import {
   debtPaymentStatusLabels,
@@ -423,7 +424,8 @@ function SectionCard({
   icon,
   actionLabel,
   onActionPress,
-  children
+  children,
+  compact = false
 }: {
   title: string;
   subtitle?: string;
@@ -431,9 +433,10 @@ function SectionCard({
   actionLabel?: string;
   onActionPress?: () => void;
   children: ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.sectionCard}>
+    <View style={[styles.sectionCard, compact && styles.cardPhone]}>
       <View style={styles.sectionHeader}>
         <IconBubble icon={icon} size="small" />
         <View style={styles.sectionHeaderText}>
@@ -980,6 +983,7 @@ function DebtFormContent({
 }
 
 export default function DebtsScreen() {
+  const { isPhone, screenPadding } = useResponsiveLayout();
   const { exactValues, onboarding, updateOnboarding } = useOnboarding();
   const debts = onboarding.debts;
   const [showDebtForm, setShowDebtForm] = useState(false);
@@ -1139,23 +1143,23 @@ export default function DebtsScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <View style={styles.headerCard}>
+          <View style={[styles.headerCard, isPhone && styles.cardPhone]}>
             <View style={styles.headerIcon}>
               <CreditCard color={colors.primary} size={24} strokeWidth={2.4} />
             </View>
             <View style={styles.headerText}>
-              <Text style={styles.title}>Tus deudas</Text>
+              <Text style={[styles.title, isPhone && styles.titlePhone]}>Tus deudas</Text>
             </View>
           </View>
 
           <SpendingSectionTabs activeTab="debts" />
 
           <SpendingSectionContent activeTab="debts">
-          <View style={styles.heroCard}>
+          <View style={[styles.heroCard, isPhone && styles.cardPhone]}>
             <View style={styles.heroTextGroup}>
               <Text style={styles.heroKicker}>Pagas al mes en deudas</Text>
               <Text style={[styles.heroAmount, { color: getToneColors(summaryTone).text }]}>
@@ -1205,6 +1209,7 @@ export default function DebtsScreen() {
           </View>
 
           <SectionCard
+            compact={isPhone}
             icon={<ReceiptText color={colors.primary} size={20} strokeWidth={2.4} />}
             title="Deudas registradas"
           >
@@ -1235,6 +1240,7 @@ export default function DebtsScreen() {
           </SectionCard>
 
           <SectionCard
+            compact={isPhone}
             icon={<Banknote color={colors.primary} size={20} strokeWidth={2.4} />}
             title="Evaluar nueva cuota"
             subtitle="Util para estudio, vehiculo u otra obligacion antes de decidir."
@@ -1360,7 +1366,7 @@ export default function DebtsScreen() {
         visible={showDebtForm}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.debtFormModalPanel}>
+          <View style={[styles.debtFormModalPanel, isPhone && styles.modalPanelPhone]}>
             <ScrollView
               contentContainerStyle={styles.modalScrollContent}
               keyboardShouldPersistTaps="handled"
@@ -1394,7 +1400,7 @@ export default function DebtsScreen() {
         visible={Boolean(debtPendingDelete)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.confirmModalPanel}>
+          <View style={[styles.confirmModalPanel, isPhone && styles.modalPanelPhone]}>
             <View style={styles.modalHeader}>
               <View style={styles.modalTitleGroup}>
                 <Text style={styles.modalTitle}>Eliminar deuda</Text>
@@ -1476,6 +1482,10 @@ const styles = StyleSheet.create({
     fontSize: typography.title,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.title
+  },
+  titlePhone: {
+    fontSize: typography.heroTitle,
+    lineHeight: typography.lineHeight.heroTitle
   },
   headerSubtitle: {
     color: colors.textMuted,
@@ -1569,6 +1579,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.lg
   },
+  cardPhone: {
+    padding: spacing.md
+  },
   sectionHeader: {
     alignItems: "center",
     flexDirection: "row",
@@ -1640,6 +1653,10 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     padding: spacing.lg,
     width: "100%"
+  },
+  modalPanelPhone: {
+    borderRadius: radius.md,
+    padding: spacing.md
   },
   modalScrollContent: {
     padding: spacing.md,

@@ -6,16 +6,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 export default function DemoScreen() {
   const router = useRouter();
+  const { screenPadding } = useResponsiveLayout();
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>

@@ -12,6 +12,7 @@ import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 const profileContext = require("../assets/illustrations/profile-context.png");
 
@@ -20,6 +21,7 @@ const countries = ["Colombia", "Otro"] as const;
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ source?: string }>();
   const { onboarding, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
@@ -52,7 +54,7 @@ export default function ProfileScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >

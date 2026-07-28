@@ -8,11 +8,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useAuth } from "../context/AuthContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 type AuthMode = "sign-in" | "sign-up";
 
 export default function AuthScreen() {
   const router = useRouter();
+  const { screenPadding } = useResponsiveLayout();
   const {
     authError,
     isAuthReady,
@@ -63,7 +65,7 @@ export default function AuthScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >

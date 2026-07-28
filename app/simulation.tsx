@@ -27,6 +27,7 @@ import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
 import {
   calculateFinancialSnapshot,
@@ -459,15 +460,17 @@ function SectionCard({
   title,
   icon,
   headerAction,
-  children
+  children,
+  compact = false
 }: {
   title: string;
   icon: ReactNode;
   headerAction?: ReactNode;
   children: ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.sectionCard}>
+    <View style={[styles.sectionCard, compact && styles.cardPhone]}>
       <View style={styles.sectionHeader}>
         <IconBubble icon={icon} />
         <Text style={styles.sectionTitle}>{title}</Text>
@@ -565,12 +568,14 @@ function ScenarioCard({
   expanded,
   scenario,
   maxMonthlyContribution,
-  onToggle
+  onToggle,
+  compact = false
 }: {
   expanded: boolean;
   scenario: Scenario;
   maxMonthlyContribution: number;
   onToggle: () => void;
+  compact?: boolean;
 }) {
   const toneColors = getToneColors(scenario.tone);
   const relativeWidth =
@@ -585,6 +590,7 @@ function ScenarioCard({
     <View
       style={[
         styles.scenarioCard,
+        compact && styles.scenarioCardPhone,
         scenario.recommended && styles.scenarioCardRecommended
       ]}
     >
@@ -657,6 +663,7 @@ function ScenarioCard({
 
 export default function SimulationScreen() {
   const router = useRouter();
+  const { isPhone, screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ source?: string }>();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isFlowMode = source === "flow";
@@ -749,16 +756,16 @@ export default function SimulationScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <View style={styles.heroCard}>
+          <View style={[styles.heroCard, isPhone && styles.cardPhone]}>
             <View style={styles.heroIcon}>
               <LineChart color={colors.primary} size={31} strokeWidth={2.4} />
             </View>
             <View style={styles.heroTextGroup}>
-              <Text style={styles.title}>Simulación</Text>
+              <Text style={[styles.title, isPhone && styles.titlePhone]}>Simulación</Text>
             </View>
           </View>
 
@@ -794,6 +801,7 @@ export default function SimulationScreen() {
           </View>
 
           <SectionCard
+            compact={isPhone}
             icon={<Target color={colors.primary} size={22} strokeWidth={2.4} />}
             title="Meta simulada"
           >
@@ -827,6 +835,7 @@ export default function SimulationScreen() {
           </SectionCard>
 
           <SectionCard
+            compact={isPhone}
             headerAction={
               <Pressable
                 accessibilityLabel="Explicar escenarios"
@@ -867,6 +876,7 @@ export default function SimulationScreen() {
             <View style={styles.scenariosList}>
               {scenarios.map((scenario) => (
                 <ScenarioCard
+                  compact={isPhone}
                   key={scenario.key}
                   expanded={activeExpandedScenarioKey === scenario.key}
                   maxMonthlyContribution={maxMonthlyContribution}
@@ -884,7 +894,7 @@ export default function SimulationScreen() {
           </SectionCard>
 
           <View style={styles.insightsGrid}>
-            <View style={styles.insightCard}>
+            <View style={[styles.insightCard, isPhone && styles.cardPhone]}>
               <View style={styles.insightHeader}>
                 <IconBubble
                   icon={<AlertCircle color={colors.primary} size={22} strokeWidth={2.4} />}
@@ -893,7 +903,7 @@ export default function SimulationScreen() {
               </View>
               <Text style={styles.text}>{snapshot.priority.description}</Text>
             </View>
-            <View style={styles.insightCard}>
+            <View style={[styles.insightCard, isPhone && styles.cardPhone]}>
               <View style={styles.insightHeader}>
                 <IconBubble
                   icon={<ShieldCheck color={colors.support} size={22} strokeWidth={2.4} />}
@@ -906,6 +916,7 @@ export default function SimulationScreen() {
           </View>
 
           <SectionCard
+            compact={isPhone}
             icon={<WalletCards color={colors.primary} size={22} strokeWidth={2.4} />}
             title="Como se calculo"
           >
@@ -1024,6 +1035,10 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.title
   },
+  titlePhone: {
+    fontSize: typography.heroTitle,
+    lineHeight: typography.lineHeight.heroTitle
+  },
   subtitle: {
     color: colors.textMuted,
     fontSize: typography.subtitle,
@@ -1074,6 +1089,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.lg
+  },
+  cardPhone: {
+    padding: spacing.md
   },
   sectionHeader: {
     alignItems: "center",
@@ -1179,6 +1197,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.md
+  },
+  scenarioCardPhone: {
+    paddingHorizontal: spacing.sm
   },
   scenarioCardRecommended: {
     backgroundColor: "#FBFFFC",

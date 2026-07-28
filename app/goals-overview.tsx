@@ -43,6 +43,7 @@ import { BottomNavigation } from "../components/BottomNavigation";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   getGoalTypeFromTitle,
   getLegacyFieldsFromGoal,
@@ -732,7 +733,8 @@ function GoalCard({
   onSetPrimary,
   onPause,
   onReset,
-  onUpdateGoal
+  onUpdateGoal,
+  compact = false
 }: {
   allocation: GoalAllocation;
   assignableSavingsAmount?: number | null;
@@ -749,6 +751,7 @@ function GoalCard({
   onPause: () => void;
   onReset: () => void;
   onUpdateGoal: (updates: Partial<FinancialGoal>) => void;
+  compact?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedGoalOptionKey, setSelectedGoalOptionKey] = useState(getGoalOptionKey(allocation.goal));
@@ -956,7 +959,7 @@ function GoalCard({
   };
 
   return (
-    <View style={styles.goalCard}>
+    <View style={[styles.goalCard, compact && styles.cardPhone]}>
       <View style={styles.goalHeader}>
         <View style={[styles.goalHeaderIcon, { backgroundColor: goalVisual.backgroundColor }]}>
           <GoalIcon color={goalVisual.color} size={26} strokeWidth={2.4} />
@@ -1230,7 +1233,7 @@ function GoalCard({
         visible={isEditing}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, compact && styles.modalCardPhone]}>
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Editar meta</Text>
@@ -1424,6 +1427,7 @@ function GoalCard({
 
 export default function GoalsOverviewScreen() {
   const router = useRouter();
+  const { isPhone, screenPadding } = useResponsiveLayout();
   const navigate = (route: Route) => router.push(route);
   const { exactValues, onboarding, updateOnboarding } = useOnboarding();
   const { completedActions, updateActionProgress } = usePlan();
@@ -1759,14 +1763,17 @@ export default function GoalsOverviewScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.container}>
-          <View style={styles.heroCard}>
+          <View style={[styles.heroCard, isPhone && styles.cardPhone]}>
             <View style={styles.heroIcon}>
               <Target color={colors.primary} size={30} strokeWidth={2.4} />
             </View>
             <View style={styles.heroCopy}>
-              <Text style={styles.title}>Mis metas</Text>
+              <Text style={[styles.title, isPhone && styles.titlePhone]}>Mis metas</Text>
             </View>
           </View>
 
@@ -1835,7 +1842,13 @@ export default function GoalsOverviewScreen() {
             </View>
           ) : null}
 
-          <View style={[styles.budgetCard, goalPlan.isOverBudget && styles.budgetCardWarning]}>
+          <View
+            style={[
+              styles.budgetCard,
+              isPhone && styles.cardPhone,
+              goalPlan.isOverBudget && styles.budgetCardWarning
+            ]}
+          >
             <View style={styles.budgetHeader}>
               <View>
                 <Text style={styles.sectionKicker}>Bolsa para metas</Text>
@@ -1961,7 +1974,7 @@ export default function GoalsOverviewScreen() {
             </View>
           </View>
 
-          <View style={styles.quickCreateCard}>
+          <View style={[styles.quickCreateCard, isPhone && styles.cardPhone]}>
             <View style={styles.quickCreateCopy}>
               <Text style={styles.quickCreateTitle}>Agregar otra meta</Text>
               <Text style={styles.quickCreateText}>
@@ -1983,6 +1996,7 @@ export default function GoalsOverviewScreen() {
             <View style={styles.goalsList}>
               {goalPlan.allocations.map((allocation) => (
                 <GoalCard
+                  compact={isPhone}
                   key={allocation.goal.id}
                   allocation={allocation}
                   assignableSavingsAmount={
@@ -2019,7 +2033,7 @@ export default function GoalsOverviewScreen() {
               ))}
             </View>
           ) : (
-            <View style={styles.emptyCard}>
+            <View style={[styles.emptyCard, isPhone && styles.cardPhone]}>
               <Calendar color={colors.primary} size={28} strokeWidth={2.4} />
               <Text style={styles.emptyTitle}>Aun no tienes metas</Text>
               <Text style={styles.emptyText}>
@@ -2121,6 +2135,10 @@ const styles = StyleSheet.create({
     fontSize: typography.title,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.title
+  },
+  titlePhone: {
+    fontSize: typography.heroTitle,
+    lineHeight: typography.lineHeight.heroTitle
   },
   subtitle: {
     color: colors.textMuted,
@@ -2468,6 +2486,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.lg
   },
+  cardPhone: {
+    padding: spacing.md
+  },
   goalHeader: {
     alignItems: "flex-start",
     flexDirection: "row",
@@ -2761,6 +2782,10 @@ const styles = StyleSheet.create({
     maxWidth: 720,
     padding: spacing.lg,
     width: "100%"
+  },
+  modalCardPhone: {
+    borderRadius: radius.md,
+    padding: spacing.md
   },
   confirmCard: {
     ...shadows.card,

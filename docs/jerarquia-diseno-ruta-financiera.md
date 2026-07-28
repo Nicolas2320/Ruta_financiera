@@ -1,6 +1,6 @@
 # Jerarquia de diseno - Ruta Financiera
 
-Fecha de referencia: 2026-06-21
+Fecha de referencia: 2026-07-26
 
 Este documento resume la direccion visual y la jerarquia de diseno que estamos usando en Ruta Financiera. Debe servir como guia para futuros ajustes de UI sin romper la consistencia entre pantallas.
 
@@ -26,7 +26,7 @@ Principios:
 
 ## Fuente y jerarquia tipografica
 
-La app usa la fuente nativa del sistema. No hay fuente custom instalada actualmente.
+La app usa la fuente nativa del sistema: SF Pro en iOS y Roboto en Android. No hay fuente custom instalada actualmente. Esta eleccion es intencional porque mejora la legibilidad, respeta mejor las preferencias del sistema y evita diferencias de carga entre Expo Go, builds nativos y web.
 
 La fuente debe mantenerse consistente usando siempre los tokens de `constants/theme.ts`. Evitar `fontSize`, `fontWeight` y `lineHeight` numericos escritos directamente en pantallas o componentes.
 
@@ -35,27 +35,44 @@ La fuente debe mantenerse consistente usando siempre los tokens de `constants/th
 | Hero principal de welcome | `typography.display` | 35 | 41 | `typography.weight.black` |
 | Titulos de pantallas finales/resultados | `typography.title` | 30 | 36 | `typography.weight.black` |
 | Titulos hero dentro de cards | `typography.heroTitle` | 27 | 32 | `typography.weight.black` |
-| Titulos de hero compartido | `typography.cardTitle` | 24 | 29 | `typography.weight.black` |
-| Marca/header welcome | `typography.brand` | 21 | 26 | `typography.weight.black` |
-| Titulos de secciones grandes | `typography.sectionTitle` | 20 | 26 | `typography.weight.black` |
-| Preguntas del onboarding | `typography.question` | 17 | 23 | `typography.weight.black` |
+| Titulos de hero compartido | `typography.cardTitle` | 24 | 29 | `typography.weight.bold` o `black` |
+| Marca/header welcome | `typography.brand` | 21 | 26 | `typography.weight.bold` o `black` |
+| Titulos de secciones grandes | `typography.sectionTitle` | 20 | 26 | `typography.weight.bold` |
+| Preguntas del onboarding | `typography.question` | 17 | 23 | `typography.weight.bold` |
 | Botones | `typography.button` | 16 | 22 | `typography.weight.semibold` |
 | Subtitulos | `typography.subtitle` | 16 | 24 | regular o medium |
-| Opciones/cards seleccionables | `typography.option` | 15 | 20 | `typography.weight.bold` o `black` |
-| Texto base | `typography.body` | 15 | 22 | regular, semibold o bold segun jerarquia |
-| Ayudas, labels, pills | `typography.caption` | 13 | 18 | semibold, bold o black |
-| Badges pequenos | `typography.badge` | 12 | 17 | `typography.weight.black` |
-| Texto compacto | `typography.small` | 11 | 15 | semibold o bold |
+| Opciones/cards seleccionables | `typography.option` | 16 | 22 | `typography.weight.semibold` o `bold` |
+| Texto base | `typography.body` | 16 | 24 | regular, medium o semibold segun jerarquia |
+| Ayudas, labels, pills | `typography.caption` | 13 | 18 | medium, semibold o bold |
+| Badges pequenos | `typography.badge` | 12 | 17 | `typography.weight.bold` |
+| Texto compacto y navegacion | `typography.small` | 11 | 15 | medium, semibold o bold |
+
+Pesos disponibles:
+
+| Token | Valor | Uso |
+| --- | ---: | --- |
+| `typography.weight.regular` | 400 | Parrafos y explicaciones |
+| `typography.weight.medium` | 500 | Labels secundarios y datos |
+| `typography.weight.semibold` | 600 | Botones y enfasis moderado |
+| `typography.weight.bold` | 700 | Titulos de seccion, preguntas y opciones |
+| `typography.weight.black` | 800 | Heroes, titulos principales y cifras protagonistas |
 
 Reglas:
 
 - Una pantalla no debe inventar tamanos nuevos si ya existe un token equivalente.
+- El texto base, los botones y las opciones importantes deben usar al menos 16.
+- Ningun texto funcional de la app puede ser menor de 11. No usar 10 para labels de navegacion.
 - Las preguntas del onboarding deben usar `question`.
 - Las opciones dentro de cards deben usar `option`, `caption`, `badge` o `small` segun el espacio.
 - El texto secundario debe usar `textMuted`.
 - El texto de baja jerarquia debe usar `textSubtle`.
+- Reservar `weight.black` para heroes, titulos de pantalla y cifras protagonistas. No usarlo por defecto en captions o texto explicativo.
 - No usar letter spacing negativo.
 - Usar `typography.lineHeight.*` junto con cada tamano para evitar textos apretados o cortados.
+- Mantener `allowFontScaling` habilitado. No usar `allowFontScaling={false}` para corregir problemas de layout.
+- Evitar `adjustsFontSizeToFit` como solucion a textos largos; el contenido debe hacer wrap o la composicion debe reorganizarse.
+- No truncar informacion financiera, acciones o categorias importantes a una sola linea. Si `numberOfLines` es necesario en una zona compacta, permitir al menos dos lineas y comprobar el resultado con texto ampliado.
+- Probar cada patron compartido con el tamano de texto normal, ampliado y al 200%.
 
 ## Colores
 
@@ -69,12 +86,12 @@ Los colores base viven en `constants/theme.ts`.
 | Primario/accion | `colors.primary` | `#155EEF` |
 | Primario oscuro | `colors.primaryDark` | `#0F3EA8` |
 | Fondo primario suave | `colors.primarySoft` | `#E7F0FF` |
-| Soporte/confianza | `colors.support` | `#14905D` |
+| Soporte/confianza | `colors.support` | `#0F7A4F` |
 | Fondo soporte suave | `colors.supportSoft` | `#E8F8EF` |
 | Fondo advertencia suave | `colors.warningSoft` | `#FFF5E7` |
 | Texto principal | `colors.text` | `#0F172A` |
 | Texto secundario | `colors.textMuted` | `#475569` |
-| Texto sutil | `colors.textSubtle` | `#64748B` |
+| Texto sutil | `colors.textSubtle` | `#5B677A` |
 | Bordes | `colors.border` | `#E2E8F0` |
 | Sombras | `colors.shadow` | `#1E293B` |
 
@@ -85,6 +102,8 @@ Uso de colores:
 - Lila: incertidumbre o "No estoy seguro".
 - Amarillo/naranja/rojo: niveles de riesgo, carga o urgencia.
 - Gris azulado: informacion secundaria, opciones no seleccionadas, iconos neutros.
+- Todo texto normal debe mantener una relacion de contraste minima de 4.5:1 con su fondo.
+- No reutilizar un color decorativo para texto pequeno si no supera el contraste minimo. Si se agrega un nuevo color de texto, incluirlo en `tests/theme.test.ts`.
 
 Ejemplo de escala contextual para deudas:
 
@@ -113,6 +132,26 @@ Reglas:
 - El contenido debe tener `maxWidth` en web para mantener lectura mobile-first.
 - Mantener `ScrollView` cuando el contenido pueda crecer.
 - Evitar que el boton principal quede pegado al borde inferior.
+
+## Responsive y dispositivos
+
+Los breakpoints y el padding horizontal viven en `utils/responsiveLayout.ts` y se consumen mediante `useResponsiveLayout`.
+
+| Composicion | Ancho disponible | Padding horizontal | Regla principal |
+| --- | ---: | ---: | --- |
+| Telefono pequeno | Menos de 360 | 12 | Una columna para opciones largas y heroes apilados |
+| Telefono | 360 a 599 | 16 | Una columna principal; dos columnas solo para tiles compactos |
+| Tablet | 600 a 899 | 24 | Dos columnas cuando mejoren la lectura |
+| Desktop/web | 900 o mas | 24 | Grids amplios respetando el `maxWidth` de cada flujo |
+
+Reglas:
+
+- Adaptar por ancho disponible, no por modelo de dispositivo.
+- Un iPhone 13 de 390 puntos siempre usa composicion de telefono.
+- Las columnas secundarias solo se activan desde 600 cuando contienen formularios o texto largo.
+- El aumento del tamano de texto tiene prioridad sobre conservar una grilla. Si el contenido deja de caber, reducir columnas o apilar.
+- Conservar `SafeAreaView` en pantallas nativas y no compensar notch o indicador inferior con valores manuales.
+- Validar como minimo 320, 390, 430, 768 y 1024 puntos.
 
 ## Radios y cards
 
@@ -285,9 +324,16 @@ Summary, Diagnosis, Simulation:
 - No hay `fontSize` numericos hardcodeados en `app/` o `components/`.
 - No hay `fontWeight` escrito como string fuera de `constants/theme.ts`.
 - No hay `lineHeight` numerico hardcodeado en pantallas/componentes.
+- El texto base y las acciones principales usan al menos 16.
+- Ningun label funcional baja de 11.
+- `allowFontScaling` no esta deshabilitado.
+- La interfaz sigue siendo util con texto ampliado al 200%.
+- Los textos importantes hacen wrap y no se truncan a una sola linea.
+- Los colores de texto mantienen contraste minimo de 4.5:1.
 - Los textos no se cortan en mobile.
 - Los botones son comodos de tocar.
 - Los iconos tienen color/fondo consistente cuando representan categorias o estados.
+- Se revisaron 320, 390, 430, 768 y 1024 puntos cuando el cambio afecta layout.
 - Las rutas compilan.
 - `npm run typecheck` pasa limpio.
 
@@ -306,5 +352,14 @@ Antes de crear un nuevo estilo, revisar si ya existe un token equivalente en:
 - `radius`
 - `typography`
 - `shadows`
+
+Para responsive, revisar tambien:
+
+- `utils/responsiveLayout.ts`
+- `hooks/useResponsiveLayout.ts`
+
+Las pruebas de regresion para tamanos, pesos y contraste viven en:
+
+- `tests/theme.test.ts`
 
 Si una pantalla necesita una variacion nueva, primero agregarla al tema y luego usarla desde la pantalla o componente.

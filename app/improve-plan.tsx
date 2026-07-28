@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import type { ExactFinancialValueKey, ExactFinancialValues } from "../types/financial";
 import {
   formatCOP,
@@ -125,6 +126,7 @@ function hasUnsavedExactValueChanges(
 
 export default function ImprovePlanScreen() {
   const router = useRouter();
+  const { screenPadding } = useResponsiveLayout();
   const { exactValues, onboardingSyncError, saveExactValues } = useOnboarding();
   const [inputValues, setInputValues] = useState<InputValues>(() =>
     getInitialInputValues(exactValues)
@@ -183,7 +185,7 @@ export default function ImprovePlanScreen() {
       <StatusBar style="dark" />
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
