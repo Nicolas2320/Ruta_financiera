@@ -14,6 +14,26 @@ type AuthMode = "sign-in" | "sign-up";
 
 export default function AuthScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    intent?: string;
+    mode?: string;
+    returnTo?: string;
+  }>();
+  const { screenPadding } = useResponsiveLayout();
+  const intent = Array.isArray(params.intent) ? params.intent[0] : params.intent;
+  const requestedMode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
+  const requestedReturnTo = Array.isArray(params.returnTo)
+    ? params.returnTo[0]
+    : params.returnTo;
+  const isSavePlanFlow = intent === "save-plan";
+  const returnTo: ExpoRoute =
+    requestedReturnTo === "/dashboard"
+      ? "/dashboard"
+      : requestedReturnTo === "/action-plan"
+        ? "/action-plan"
+        : isSavePlanFlow
+          ? "/action-plan"
+          : "/";
   const {
     authError,
     isAuthReady,

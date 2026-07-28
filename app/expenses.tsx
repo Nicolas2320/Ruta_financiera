@@ -210,7 +210,7 @@ export default function ExpensesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string }>();
   const { isPhone, screenPadding } = useResponsiveLayout();
-  const { onboarding, updateOnboarding } = useOnboarding();
+  const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isSpendingEditMode = source === "spending";
   const isProfileEditMode = source === "profile";
