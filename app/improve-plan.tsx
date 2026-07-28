@@ -135,7 +135,23 @@ function hasUnsavedExactValueChanges(
 
 export default function ImprovePlanScreen() {
   const router = useRouter();
-  const { exactValues, onboardingSyncError, saveExactValues } = useOnboarding();
+  const { screenPadding } = useResponsiveLayout();
+  const { exactValues, onboarding, onboardingSyncError, saveExactValues } = useOnboarding();
+  const reportedNoSmallExpenses = onboarding.hasSmallExpenses === "No";
+  const effectiveExactValues = useMemo(
+    () =>
+      reportedNoSmallExpenses
+        ? { ...exactValues, smallExpenses: 0 }
+        : exactValues,
+    [exactValues, reportedNoSmallExpenses]
+  );
+  const visibleFields = useMemo(
+    () =>
+      reportedNoSmallExpenses
+        ? fields.filter((field) => field.id !== "smallExpenses")
+        : fields,
+    [reportedNoSmallExpenses]
+  );
   const [inputValues, setInputValues] = useState<InputValues>(() =>
     getInitialInputValues(effectiveExactValues)
   );

@@ -16,6 +16,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
+import { useAuth } from "../context/AuthContext";
+import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 const privacyShield = require("../assets/illustrations/privacy-shield.png");
 
@@ -51,6 +53,8 @@ const excludedData: ExcludedDataItem[] = [
 
 export default function PrivacyScreen() {
   const router = useRouter();
+  const { session } = useAuth();
+  const { screenPadding } = useResponsiveLayout();
 
   return (
     <SafeAreaView style={styles.safeArea}>
