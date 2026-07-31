@@ -8,9 +8,12 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  CircleEllipsis,
   CircleQuestionMark,
   CreditCard,
   GraduationCap,
+  HeartPulse,
+  House,
   Landmark,
   PencilLine,
   Plus,
@@ -56,6 +59,8 @@ import {
   getDebtRatioLabel,
   getDebtTotalLabel,
   getRegisteredDebtSummary,
+  hasDebtMonthlyExpenseMismatch,
+  syncDebtExpenseCategory,
   type DebtLevel,
   type NewDebtViability
 } from "../utils/debtCalculations";
@@ -129,6 +134,24 @@ const debtTypeOptions: DebtTypeOption[] = [
     icon: Users,
     label: "Familiar o informal",
     text: "Dinero prestado por persona cercana.",
+    tone: "neutral"
+  },
+  {
+    icon: House,
+    label: "Vivienda",
+    text: "Crédito hipotecario u otra deuda de vivienda.",
+    tone: "purple"
+  },
+  {
+    icon: HeartPulse,
+    label: "Salud",
+    text: "Tratamiento, operación u otro saldo médico.",
+    tone: "support"
+  },
+  {
+    icon: CircleEllipsis,
+    label: "Otra deuda",
+    text: "Una obligación que no encaja en las anteriores.",
     tone: "neutral"
   }
 ];
@@ -209,42 +232,9 @@ function formatMonthYear(value: MonthYearValue) {
   return `${monthLabels[value.month]} ${value.year}`;
 }
 
-const DEBT_EXPENSE_CATEGORY = "Deudas";
 const dangerRed = "#DC2626";
 const dangerRedSoft = "#FEF2F2";
 const dangerRedBorder = "#FECACA";
-
-function getSyncedDebtExpenseData({
-  debts,
-  expenseCategories,
-  expenseCategoryAmounts
-}: {
-  debts: DebtRecord[];
-  expenseCategories: string[];
-  expenseCategoryAmounts: Record<string, number>;
-}) {
-  const monthlyDebtTotal = debts.reduce(
-    (total, debt) => total + Math.max(0, debt.monthlyPayment),
-    0
-  );
-  const nextExpenseCategoryAmounts = {
-    ...expenseCategoryAmounts
-  };
-  const nextExpenseCategories = expenseCategories.includes(DEBT_EXPENSE_CATEGORY)
-    ? expenseCategories
-    : [...expenseCategories, DEBT_EXPENSE_CATEGORY];
-
-  if (monthlyDebtTotal > 0) {
-    nextExpenseCategoryAmounts[DEBT_EXPENSE_CATEGORY] = monthlyDebtTotal;
-  } else {
-    delete nextExpenseCategoryAmounts[DEBT_EXPENSE_CATEGORY];
-  }
-
-  return {
-    expenseCategories: monthlyDebtTotal > 0 ? nextExpenseCategories : expenseCategories,
-    expenseCategoryAmounts: nextExpenseCategoryAmounts
-  };
-}
 
 function getToneColors(tone: Tone) {
   if (tone === "support") {
@@ -1076,6 +1066,12 @@ export default function DebtsScreen() {
   );
   const summaryTone = getDebtTone(debtSummary.level);
   const canSaveDebt = Boolean(parseCOPInput(debtForm.monthlyPayment));
+  const hasMonthlyExpenseMismatch = hasDebtMonthlyExpenseMismatch({
+    isExactMonthlyExpense:
+      debtSummary.source === "registered" && snapshot.sourceMap.monthlyExpenses === "exact",
+    monthlyExpenses: snapshot.cashflow.monthlyExpenses,
+    monthlyPaymentTotal: debtSummary.monthlyPaymentTotal
+  });
 
   const updateDebtForm = (patch: Partial<DebtFormState>) => {
     setDebtForm((current) => ({
@@ -1087,7 +1083,7 @@ export default function DebtsScreen() {
   const updateDebts = (nextDebts: DebtRecord[]) => {
     updateOnboarding({
       debts: nextDebts,
-      ...getSyncedDebtExpenseData({
+      ...syncDebtExpenseCategory({
         debts: nextDebts,
         expenseCategories: onboarding.expenseCategories,
         expenseCategoryAmounts: onboarding.expenseCategoryAmounts
@@ -1230,8 +1226,8 @@ export default function DebtsScreen() {
               <View style={styles.guidanceNote}>
                 <Text style={styles.guidanceNoteText}>
                   {debtSummary.source === "reported"
-                    ? "Usamos tu rango mientras no registres cuotas. Puedes mantenerlo así o agregar detalles para mejorar la precisión."
-                    : "Agrega tus cuotas para evaluar mejor si una nueva obligación cabe en tu presupuesto."}
+                    ? "Puedes agregar tus cuotas cuando quieras mejorar la precisión."
+                    : "Aquí van pagos con un saldo pendiente que terminarás de pagar."}
                 </Text>
               </View>
             </View>
@@ -1267,6 +1263,15 @@ export default function DebtsScreen() {
               }
             />
           </View>
+
+          {hasMonthlyExpenseMismatch ? (
+            <View style={styles.expenseMismatchNote}>
+              <AlertCircle color="#B45309" size={20} strokeWidth={2.4} />
+              <Text style={styles.expenseMismatchText}>
+                Tus cuotas registradas superan tu gasto mensual. Revisa el total en Gastos.
+              </Text>
+            </View>
+          ) : null}
 
           <SectionCard
             compact={isPhone}
@@ -1672,6 +1677,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
+  },
+  expenseMismatchNote: {
+    alignItems: "flex-start",
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  expenseMismatchText: {
+    color: "#B45309",
+    flex: 1,
+    fontSize: typography.body,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.body
   },
   summaryMetric: {
     borderRadius: radius.md,

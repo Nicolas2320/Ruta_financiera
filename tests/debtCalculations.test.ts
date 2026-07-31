@@ -2,14 +2,106 @@ import { describe, expect, it } from "vitest";
 
 import {
   evaluateNewDebt,
+  getRecurringExpenseCategories,
   getDebtMonthlyPaymentTotal,
   getDebtRemainingTotal,
   getReportedDebtPaymentRatio,
-  getRegisteredDebtSummary
+  getRegisteredDebtSummary,
+  hasDebtMonthlyExpenseMismatch,
+  syncDebtExpenseCategory
 } from "../utils/debtCalculations";
 import { makeDebt } from "./fixtures/financial";
 
 describe("registered debt calculations", () => {
+  it("keeps debt categories out of the recurring expense selection", () => {
+    expect(
+      getRecurringExpenseCategories([
+        "Vivienda",
+        "Deudas",
+        "Pago de deudas",
+        "Salud",
+        "Vivienda"
+      ])
+    ).toEqual(["Vivienda", "Salud"]);
+  });
+
+  it("creates one managed debt expense category from registered installments", () => {
+    expect(
+      syncDebtExpenseCategory({
+        debts: [
+          makeDebt({ id: "education", monthlyPayment: 300_000 }),
+          makeDebt({ id: "vehicle", monthlyPayment: 450_000 })
+        ],
+        expenseCategories: ["Vivienda", "Deudas"],
+        expenseCategoryAmounts: {
+          Vivienda: 900_000,
+          Deudas: 200_000
+        }
+      })
+    ).toEqual({
+      expenseCategories: ["Vivienda", "Deudas"],
+      expenseCategoryAmounts: {
+        Vivienda: 900_000,
+        Deudas: 750_000
+      }
+    });
+  });
+
+  it("removes the managed debt category after the last registered debt is deleted", () => {
+    expect(
+      syncDebtExpenseCategory({
+        debts: [],
+        expenseCategories: ["Vivienda", "Deudas"],
+        expenseCategoryAmounts: {
+          Vivienda: 900_000,
+          Deudas: 300_000
+        }
+      })
+    ).toEqual({
+      expenseCategories: ["Vivienda"],
+      expenseCategoryAmounts: {
+        Vivienda: 900_000
+      }
+    });
+  });
+
+  it("preserves a legacy debt amount while recurring expenses are edited", () => {
+    expect(
+      syncDebtExpenseCategory({
+        debts: [],
+        expenseCategories: ["Vivienda", "Salud"],
+        expenseCategoryAmounts: {
+          Vivienda: 900_000,
+          Deudas: 300_000
+        },
+        preserveExistingReference: true
+      })
+    ).toEqual({
+      expenseCategories: ["Vivienda", "Salud", "Deudas"],
+      expenseCategoryAmounts: {
+        Vivienda: 900_000,
+        Deudas: 300_000
+      }
+    });
+  });
+
+  it("flags registered installments that exceed an exact monthly expense total", () => {
+    expect(
+      hasDebtMonthlyExpenseMismatch({
+        isExactMonthlyExpense: true,
+        monthlyExpenses: 600_000,
+        monthlyPaymentTotal: 800_000
+      })
+    ).toBe(true);
+    expect(
+      hasDebtMonthlyExpenseMismatch({
+        isExactMonthlyExpense: false,
+        monthlyExpenses: 600_000,
+        monthlyPaymentTotal: 800_000
+      })
+    ).toBe(false);
+  });
+
   it("sanitizes invalid amounts when totaling debts", () => {
     const debts = [
       makeDebt({ id: "positive", monthlyPayment: 200_000, remainingAmount: 1_000_000 }),

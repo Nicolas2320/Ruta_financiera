@@ -44,6 +44,7 @@ import {
   normalizeFinancialGuidanceMode
 } from "../types/financial";
 import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
+import { isDebtExpenseCategory } from "../utils/debtCalculations";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
 import {
   getMonthlyPlanData,
@@ -1236,7 +1237,7 @@ export default function SpendingScreen() {
                       isExactMonthlyExpense={hasExactMonthlyExpenses}
                       inputValue={categoryAmountInputs[category] ?? ""}
                       label={category}
-                      locked={normalizeLabel(category) === "deudas"}
+                      locked={isDebtExpenseCategory(category)}
                       onManagePress={() => router.push("/debts")}
                       onChangeText={(value) => updateCategoryAmountInput(category, value)}
                       totalExpenses={metrics.expenseMidpoint}
