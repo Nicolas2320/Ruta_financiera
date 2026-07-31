@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -8,6 +8,7 @@ import {
   PiggyBank,
   ReceiptText,
   ShieldCheck,
+  Sparkles,
   Target,
   UserRound,
   Wallet
@@ -15,11 +16,20 @@ import {
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { FinancialGuidancePreference } from "../components/FinancialGuidancePreference";
 import { PrimaryButton } from "../components/PrimaryButton";
+import {
+  AppModal,
+  AppModalAction,
+  AppModalActions
+} from "../components/ui/AppModal";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import { getOnboardingGoals } from "../types/financial";
+import {
+  getOnboardingGoals,
+  type FinancialGuidanceMode
+} from "../types/financial";
 import {
   getCurrentSavingsDisplay,
   getGoalTargetAmountDisplay,
@@ -187,7 +197,10 @@ export default function SummaryScreen() {
   const router = useRouter();
   const { screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ mode?: string }>();
-  const { exactValues, onboarding } = useOnboarding();
+  const { exactValues, onboarding, updateOnboarding } = useOnboarding();
+  const [showGuidanceModal, setShowGuidanceModal] = useState(false);
+  const [selectedGuidanceMode, setSelectedGuidanceMode] =
+    useState<FinancialGuidanceMode>(onboarding.financialGuidanceMode);
   const mode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
   const isEditMode = mode === "edit";
   const financialProfile = { onboarding, exactValues };
@@ -197,6 +210,15 @@ export default function SummaryScreen() {
   const savingsDisplay = getCurrentSavingsDisplay(financialProfile);
   const smallExpensesDisplay = getSmallExpensesDisplay(financialProfile);
   const goalAmountDisplay = getGoalTargetAmountDisplay(financialProfile);
+  const openGuidanceModal = () => {
+    setSelectedGuidanceMode(onboarding.financialGuidanceMode);
+    setShowGuidanceModal(true);
+  };
+  const confirmGuidanceMode = () => {
+    updateOnboarding({ financialGuidanceMode: selectedGuidanceMode });
+    setShowGuidanceModal(false);
+    router.push("/diagnosis");
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -395,7 +417,7 @@ export default function SummaryScreen() {
                 <PrimaryButton
                   accessibilityLabel="Generar diagnóstico financiero"
                   iconPosition="right"
-                  onPress={() => router.push("/diagnosis")}
+                  onPress={openGuidanceModal}
                   title="Generar diagnóstico"
                 />
                 <PrimaryButton
@@ -411,6 +433,32 @@ export default function SummaryScreen() {
           </View>
         </View>
       </ScrollView>
+      <AppModal
+        closeAccessibilityLabel="Cerrar preferencia de explicación"
+        footer={
+          <AppModalActions>
+            <AppModalAction
+              label="Cancelar"
+              onPress={() => setShowGuidanceModal(false)}
+              variant="secondary"
+            />
+            <AppModalAction
+              label="Ver diagnóstico"
+              onPress={confirmGuidanceMode}
+            />
+          </AppModalActions>
+        }
+        icon={<Sparkles color={colors.primary} size={24} strokeWidth={2.4} />}
+        onClose={() => setShowGuidanceModal(false)}
+        subtitle="Puedes cambiar esta preferencia después desde Configuración."
+        title="¿Cómo prefieres que te expliquemos tus resultados?"
+        visible={showGuidanceModal}
+      >
+        <FinancialGuidancePreference
+          onChange={setSelectedGuidanceMode}
+          value={selectedGuidanceMode}
+        />
+      </AppModal>
     </SafeAreaView>
   );
 }

@@ -1105,6 +1105,61 @@ export default function SimulationScreen() {
             />
           </View>
 
+          <View style={styles.calculationHelp}>
+            <FinancialEducationModal
+              accessibilityLabel="Explicar cómo calculamos el aporte sugerido"
+              guidanceMode={guidanceMode}
+              icon={<WalletCards color={colors.primary} size={23} strokeWidth={2.4} />}
+              title="Cómo calculamos tu aporte sugerido"
+              triggerLabel="¿Cómo calculamos este aporte?"
+            >
+              <FinancialEducationStory
+                calculationItems={[
+                  {
+                    label: "Margen mensual",
+                    value:
+                      metrics.estimatedMargin !== null
+                        ? formatSignedCOP(metrics.estimatedMargin)
+                        : getMarginLabel(metrics)
+                  },
+                  {
+                    label: "Porcentaje usado",
+                    operator: "×",
+                    value: contributionRateLabel
+                  },
+                  {
+                    emphasis: true,
+                    label: "Aporte sugerido",
+                    operator: "=",
+                    value:
+                      snapshot.cashflow.suggestedMonthlyContribution > 0
+                        ? formatCOP(snapshot.cashflow.suggestedMonthlyContribution)
+                        : capacityContributionLabel
+                  }
+                ]}
+                calculationTitle="Cómo estimamos el aporte"
+                closeLabel="Cerrar"
+                definition={`${contributionRuleText} ${contributionBandRuleText}`}
+                estimateLabel={snapshot.precision.label}
+                guidanceMode={guidanceMode}
+                plainLanguage={contributionPlainLanguage}
+                plainLanguageBadge={
+                  snapshot.cashflow.suggestedContributionRate !== null
+                    ? `${Math.round(snapshot.cashflow.suggestedContributionRate * 100)}%`
+                    : "Aporte"
+                }
+                resultDescription="Es una referencia educativa calculada desde tu margen; no modifica tu plan."
+                resultLabel={contributionResultLabel}
+                resultValue={
+                  snapshot.cashflow.suggestedMonthlyContribution > 0
+                    ? formatCOP(snapshot.cashflow.suggestedMonthlyContribution)
+                    : capacityContributionLabel
+                }
+                tone={contributionTone}
+              />
+            </FinancialEducationModal>
+          </View>
+
           <SectionCard
             compact={isPhone}
             headerAction={
@@ -1214,73 +1269,6 @@ export default function SimulationScreen() {
             </View>
           </View>
 
-          <SectionCard
-            compact={isPhone}
-            headerAction={
-              <FinancialEducationModal
-                accessibilityLabel="Explicar los cálculos de la simulación"
-                guidanceMode={guidanceMode}
-                icon={<WalletCards color={colors.primary} size={23} strokeWidth={2.4} />}
-                title="Cómo calculamos tu aporte sugerido"
-              >
-                <FinancialEducationStory
-                  calculationItems={[
-                    {
-                      label: "Margen mensual",
-                      value:
-                        metrics.estimatedMargin !== null
-                          ? formatSignedCOP(metrics.estimatedMargin)
-                          : getMarginLabel(metrics)
-                    },
-                    {
-                      label: "Porcentaje usado",
-                      operator: "×",
-                      value: contributionRateLabel
-                    },
-                    {
-                      emphasis: true,
-                      label: "Aporte sugerido",
-                      operator: "=",
-                      value:
-                        snapshot.cashflow.suggestedMonthlyContribution > 0
-                          ? formatCOP(snapshot.cashflow.suggestedMonthlyContribution)
-                          : capacityContributionLabel
-                    }
-                  ]}
-                  calculationTitle="Cómo estimamos el aporte"
-                  closeLabel="Cerrar"
-                  definition={`${contributionRuleText} ${contributionBandRuleText}`}
-                  estimateLabel={snapshot.precision.label}
-                  guidanceMode={guidanceMode}
-                  plainLanguage={contributionPlainLanguage}
-                  plainLanguageBadge={
-                    snapshot.cashflow.suggestedContributionRate !== null
-                      ? `$${Math.round(snapshot.cashflow.suggestedContributionRate * 100)}`
-                      : "Aporte"
-                  }
-                  resultDescription="Es una referencia educativa calculada desde tu margen; no modifica tu plan."
-                  resultLabel={contributionResultLabel}
-                  resultValue={
-                    snapshot.cashflow.suggestedMonthlyContribution > 0
-                      ? formatCOP(snapshot.cashflow.suggestedMonthlyContribution)
-                      : capacityContributionLabel
-                  }
-                  tone={contributionTone}
-                />
-              </FinancialEducationModal>
-            }
-            icon={<WalletCards color={colors.primary} size={22} strokeWidth={2.4} />}
-            title="Tus cálculos"
-          >
-            <Text style={styles.disclaimerText}>
-              Estas simulaciones son estimaciones educativas. No garantizan resultados futuros.
-            </Text>
-            <View style={styles.valueGrid}>
-              <ValuePill label="Margen mensual" value={getMarginLabel(metrics)} />
-              <ValuePill label="Aporte sugerido final" value={capacityContributionLabel} />
-            </View>
-          </SectionCard>
-
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel={
@@ -1384,6 +1372,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.md
+  },
+  calculationHelp: {
+    alignItems: "flex-start"
   },
   summaryMetric: {
     borderRadius: radius.lg,

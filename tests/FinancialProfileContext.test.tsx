@@ -318,4 +318,73 @@ describe("FinancialProfileProvider", () => {
     expect(getOnboarding().onboarding.firstName).toBe("Usuario actual");
     expect(getPlan().completedActions).toEqual({ "new-action": true });
   });
+
+  it("saves onboarding and exact values together in one authenticated write", async () => {
+    contextMocks.fetchFinancialProfile.mockResolvedValue(
+      createProfile("Andrea", "action-1")
+    );
+    await mountProviders();
+
+    let saved = false;
+    await act(async () => {
+      saved = await getOnboarding().saveOnboardingAndExactValues(
+        {
+          incomeRange: "$3.000.000 – $5.000.000"
+        },
+        {
+          monthlyIncome: 4_800_000,
+          monthlyExpenses: 2_100_000
+        }
+      );
+      await flushEffects();
+    });
+
+    expect(saved).toBe(true);
+    expect(contextMocks.saveFinancialProfileDraft).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({
+        firstName: "Andrea",
+        incomeRange: "$3.000.000 – $5.000.000"
+      }),
+      {
+        monthlyIncome: 4_800_000,
+        monthlyExpenses: 2_100_000
+      }
+    );
+    expect(getOnboarding()).toMatchObject({
+      onboardingSyncStatus: "saved",
+      exactValues: {
+        monthlyIncome: 4_800_000,
+        monthlyExpenses: 2_100_000
+      }
+    });
+  });
+
+  it("stores a guest onboarding and exact-value change as one local draft", async () => {
+    contextMocks.auth.user = null;
+    contextMocks.loadGuestFinancialDraft.mockResolvedValue(null);
+    await mountProviders();
+
+    await act(async () => {
+      await getOnboarding().saveOnboardingAndExactValues(
+        {
+          expensesRange: "$2.000.000 – $4.000.000"
+        },
+        {
+          monthlyExpenses: 2_400_000
+        }
+      );
+      await flushEffects();
+    });
+
+    expect(contextMocks.saveGuestFinancialDraft).toHaveBeenCalledOnce();
+    expect(contextMocks.saveGuestFinancialDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expensesRange: "$2.000.000 – $4.000.000"
+      }),
+      {
+        monthlyExpenses: 2_400_000
+      }
+    );
+  });
 });

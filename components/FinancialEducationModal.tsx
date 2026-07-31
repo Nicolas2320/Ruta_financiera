@@ -25,6 +25,7 @@ type FinancialEducationModalProps = {
   icon?: ReactNode;
   iconBackgroundColor?: string;
   title: string;
+  triggerLabel?: string;
   triggerSize?: "compact" | "default";
 };
 
@@ -44,6 +45,7 @@ export function FinancialEducationModal({
   icon,
   iconBackgroundColor,
   title,
+  triggerLabel,
   triggerSize = "default"
 }: FinancialEducationModalProps) {
   const [visible, setVisible] = useState(false);
@@ -70,6 +72,7 @@ export function FinancialEducationModal({
         style={({ pressed }) => [
           styles.helpButton,
           triggerSize === "compact" && styles.helpButtonCompact,
+          triggerLabel && styles.helpButtonWithLabel,
           pressed && styles.pressed
         ]}
       >
@@ -78,6 +81,9 @@ export function FinancialEducationModal({
           size={triggerSize === "compact" ? 17 : 21}
           strokeWidth={2.5}
         />
+        {triggerLabel ? (
+          <Text style={styles.helpButtonLabel}>{triggerLabel}</Text>
+        ) : null}
       </Pressable>
 
       <AppModal
@@ -121,6 +127,20 @@ const styles = StyleSheet.create({
   helpButtonCompact: {
     height: 30,
     width: 30
+  },
+  helpButtonWithLabel: {
+    flexDirection: "row",
+    gap: spacing.xs,
+    height: "auto",
+    minHeight: 40,
+    paddingHorizontal: spacing.md,
+    width: "auto"
+  },
+  helpButtonLabel: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   summaryGroup: {
     backgroundColor: colors.primarySoft,

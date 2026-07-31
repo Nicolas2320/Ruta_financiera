@@ -20,6 +20,7 @@ import {
 } from "../components/FinancialEducationStory";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
+import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
@@ -620,6 +621,7 @@ function ValueRow({ label, value }: { label: string; value: string }) {
 export default function DiagnosisScreen() {
   const router = useRouter();
   const { screenPadding } = useResponsiveLayout();
+  const { session } = useAuth();
   const { exactValues, onboarding } = useOnboarding();
   const guidanceMode = onboarding.financialGuidanceMode;
   const metrics = useMemo(
@@ -1064,7 +1066,7 @@ export default function DiagnosisScreen() {
               <Text style={styles.subsectionTitle}>Deudas</Text>
               <Text style={styles.text}>{debtMessage}</Text>
               {debtActionMessage ? <Text style={styles.text}>{debtActionMessage}</Text> : null}
-              {shouldShowDebtDetailsCta ? (
+              {shouldShowDebtDetailsCta && session ? (
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => router.push("/debts")}
@@ -1073,6 +1075,14 @@ export default function DiagnosisScreen() {
                   <Text style={styles.debtCtaText}>{debtDetailsCtaLabel}</Text>
                   <ChevronRight color={colors.primary} size={20} strokeWidth={2.5} />
                 </Pressable>
+              ) : shouldShowDebtDetailsCta ? (
+                <View style={styles.debtGuestNote}>
+                  <ShieldCheck color={colors.primary} size={18} strokeWidth={2.4} />
+                  <Text style={styles.debtGuestNoteText}>
+                    Podrás agregar el detalle de tus deudas después de iniciar sesión para
+                    mejorar los cálculos.
+                  </Text>
+                </View>
               ) : null}
             </View>
             <View style={styles.subsection}>
@@ -1416,6 +1426,23 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.body
+  },
+  debtGuestNote: {
+    alignItems: "flex-start",
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  debtGuestNoteText: {
+    color: colors.primaryDark,
+    flex: 1,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
   },
   pressed: {
     opacity: 0.78,

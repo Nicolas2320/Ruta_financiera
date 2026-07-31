@@ -46,6 +46,10 @@ type OnboardingContextValue = {
     | "not-configured";
   resetFinancialData: () => Promise<boolean>;
   saveExactValues: (values: ExactFinancialValues) => Promise<boolean>;
+  saveOnboardingAndExactValues: (
+    data: Partial<OnboardingData>,
+    values: ExactFinancialValues
+  ) => Promise<boolean>;
   updateOnboarding: (data: Partial<OnboardingData>) => void;
 };
 
@@ -325,6 +329,66 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     [isSupabaseConfigured, onboarding, user]
   );
 
+  const saveOnboardingAndExactValues = useCallback(
+    async (data: Partial<OnboardingData>, values: ExactFinancialValues) => {
+      const nextOnboarding = {
+        ...onboarding,
+        ...data
+      };
+      const nextExactValues = normalizeExactValues(values);
+
+      setOnboarding(nextOnboarding);
+      setExactValues(nextExactValues);
+      setOnboardingSyncError(null);
+
+      if (!user) {
+        setOnboardingSyncStatus("saving");
+
+        try {
+          guestSaveQueueRef.current = guestSaveQueueRef.current
+            .catch(() => undefined)
+            .then(() => saveGuestFinancialDraft(nextOnboarding, nextExactValues));
+          await guestSaveQueueRef.current;
+          setOnboardingSyncStatus("saved");
+          return true;
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "No pudimos guardar los datos en este dispositivo.";
+          setOnboardingSyncStatus("error");
+          setOnboardingSyncError(message);
+          return false;
+        }
+      }
+
+      if (!isSupabaseConfigured) {
+        setOnboardingSyncStatus("not-configured");
+        return true;
+      }
+
+      setOnboardingSyncStatus("saving");
+
+      try {
+        await saveFinancialProfileDraft(
+          user.id,
+          nextOnboarding,
+          nextExactValues
+        );
+        setFinancialProfileExists(true);
+        setOnboardingSyncStatus("saved");
+        return true;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "No pudimos guardar los datos.";
+        setOnboardingSyncStatus("error");
+        setOnboardingSyncError(message);
+        return false;
+      }
+    },
+    [isSupabaseConfigured, onboarding, user]
+  );
+
   const resetFinancialData = useCallback(async () => {
     const nextOnboarding = getEmptyOnboarding();
     const nextExactValues: ExactFinancialValues = {};
@@ -406,6 +470,7 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
       onboardingSyncStatus: effectiveOnboardingSyncStatus,
       resetFinancialData,
       saveExactValues,
+      saveOnboardingAndExactValues,
       updateOnboarding
     }),
     [
@@ -417,6 +482,7 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
       onboarding,
       resetFinancialData,
       saveExactValues,
+      saveOnboardingAndExactValues,
       updateOnboarding
     ]
   );
