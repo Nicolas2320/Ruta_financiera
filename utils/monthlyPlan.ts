@@ -16,6 +16,7 @@ import {
   type OnboardingData
 } from "../types/financial";
 import { initialOnboarding } from "../types/financial";
+import { isDebtPaid } from "./debtPayments";
 
 export type MonthlyPlanData = {
   ageRange: string | null;
@@ -215,7 +216,7 @@ function getDebtTitle(debt: DebtRecord) {
 }
 
 export function getPriorityDebt(debts: DebtRecord[]) {
-  return [...debts].sort((left, right) => {
+  return debts.filter((debt) => !isDebtPaid(debt)).sort((left, right) => {
     const overdueDifference =
       Number(right.status === "overdue") - Number(left.status === "overdue");
 

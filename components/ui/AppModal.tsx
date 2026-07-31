@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
   },
   grabber: {
     alignSelf: "center",
-    backgroundColor: "#CBD5E1",
+    backgroundColor: colors.disabledBorder,
     borderRadius: radius.pill,
     height: 5,
     width: 44
@@ -418,11 +418,11 @@ const styles = StyleSheet.create({
     borderWidth: 1
   },
   actionDanger: {
-    backgroundColor: "#DC2626"
+    backgroundColor: colors.danger
   },
   actionDisabled: {
-    backgroundColor: "#E2E8F0",
-    borderColor: "#CBD5E1"
+    backgroundColor: colors.disabled,
+    borderColor: colors.disabledBorder
   },
   actionText: {
     fontSize: typography.body,

@@ -59,6 +59,8 @@ describe("text color contrast", () => {
     ["support on supportSoft", colors.support, colors.supportSoft],
     ["support on surface", colors.support, colors.surface],
     ["primary on primarySoft", colors.primary, colors.primarySoft],
+    ["danger on dangerSoft", colors.danger, colors.dangerSoft],
+    ["surface on danger", colors.surface, colors.danger],
     ["textSubtle on background", colors.textSubtle, colors.background]
   ])("%s stays at or above 4.5:1", (_label, foreground, background) => {
     expect(getContrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);

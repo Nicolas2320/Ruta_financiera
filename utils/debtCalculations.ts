@@ -3,6 +3,7 @@ import type {
   DebtRecord,
   ExpenseCategoryAmounts
 } from "../types/financial";
+import { isDebtPaid } from "./debtPayments";
 import { formatCOP } from "./financialRanges";
 
 export type DebtLevel = "none" | "low" | "medium" | "high" | "unknown";
@@ -165,7 +166,8 @@ function pickHigherDebtLevel(left: DebtLevel, right: DebtLevel): DebtLevel {
 
 export function getDebtMonthlyPaymentTotal(debts: DebtRecord[] | null | undefined) {
   return (debts ?? []).reduce(
-    (total, debt) => total + Math.max(0, safeNumber(debt.monthlyPayment) ?? 0),
+    (total, debt) =>
+      total + (isDebtPaid(debt) ? 0 : Math.max(0, safeNumber(debt.monthlyPayment) ?? 0)),
     0
   );
 }
@@ -299,9 +301,11 @@ export function getRegisteredDebtSummary({
   monthlyIncome: number | null | undefined;
 }): RegisteredDebtSummary {
   const validDebts = debts ?? [];
+  const activeDebts = validDebts.filter((debt) => !isDebtPaid(debt));
   const registeredMonthlyPaymentTotal = getDebtMonthlyPaymentTotal(validDebts);
   const categoryMonthlyPaymentTotal = getDebtCategoryMonthlyPaymentTotal(expenseCategoryAmounts);
-  const hasRegisteredDebts = validDebts.length > 0 && registeredMonthlyPaymentTotal > 0;
+  const hasRegisteredDebts = activeDebts.length > 0 && registeredMonthlyPaymentTotal > 0;
+  const hasDetailedDebtRecords = validDebts.length > 0;
   const hasCategoryDebtReference = categoryMonthlyPaymentTotal > 0;
   const monthlyPaymentTotal = hasRegisteredDebts
     ? registeredMonthlyPaymentTotal
@@ -311,7 +315,7 @@ export function getRegisteredDebtSummary({
   const reportedPaymentRatio = getReportedDebtPaymentRatio(debtPaymentShare);
 
   if (!hasRegisteredDebts && !hasCategoryDebtReference) {
-    if (reportedPaymentRatio !== null && reportedPaymentRatio > 0) {
+    if (!hasDetailedDebtRecords && reportedPaymentRatio !== null && reportedPaymentRatio > 0) {
       const reportedMonthlyPayment =
         monthlyIncome && monthlyIncome > 0
           ? Math.round(monthlyIncome * reportedPaymentRatio)
@@ -351,12 +355,12 @@ export function getRegisteredDebtSummary({
   }
 
   const ratioLevel = getDebtLevelFromRatio(debtToIncomeRatio);
-  const statusLevel = hasRegisteredDebts ? getStatusLevel(validDebts) : "none";
+  const statusLevel = hasRegisteredDebts ? getStatusLevel(activeDebts) : "none";
   const level = pickHigherDebtLevel(ratioLevel, statusLevel);
   const source = hasRegisteredDebts ? "registered" : "category";
 
   return {
-    count: validDebts.length,
+    count: activeDebts.length,
     source,
     monthlyPaymentTotal,
     categoryMonthlyPaymentTotal,

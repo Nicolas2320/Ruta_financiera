@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { StatusBar } from "expo-status-bar";
 import {
   AlertCircle,
@@ -13,9 +13,9 @@ import {
   CreditCard,
   GraduationCap,
   HeartPulse,
+  History,
   House,
   Landmark,
-  PencilLine,
   Plus,
   ReceiptText,
   ShieldCheck,
@@ -36,6 +36,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNavigation } from "../components/BottomNavigation";
 import { FinancialEducationModal } from "../components/FinancialEducationModal";
 import { FinancialEducationStory } from "../components/FinancialEducationStory";
+import { PrimaryButton } from "../components/PrimaryButton";
 import {
   SpendingSectionContent,
   SpendingSectionTabs
@@ -50,6 +51,7 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   normalizeFinancialGuidanceMode,
+  type DebtPaymentRecord,
   type DebtPaymentStatus,
   type DebtRecord
 } from "../types/financial";
@@ -64,6 +66,13 @@ import {
   type DebtLevel,
   type NewDebtViability
 } from "../utils/debtCalculations";
+import {
+  getDebtPaymentTotal,
+  getDebtPaymentTotalForMonth,
+  isDebtPaid,
+  registerDebtPayment,
+  removeDebtPayment
+} from "../utils/debtPayments";
 import { calculateFinancialSnapshot } from "../utils/financialCalculations";
 import { formatCOP, formatSignedCOP, parseCOPInput } from "../utils/financialRanges";
 
@@ -97,6 +106,17 @@ type DebtFormState = {
 type MonthYearValue = {
   month: number;
   year: number;
+};
+
+type CalendarDateValue = MonthYearValue & {
+  day: number;
+};
+
+type DebtPaymentFormState = {
+  amount: string;
+  date: string;
+  remainingAmountAfter: string;
+  updatesBalance: boolean;
 };
 
 const debtTypeOptions: DebtTypeOption[] = [
@@ -194,6 +214,33 @@ const emptyDebtForm: DebtFormState = {
   type: debtTypeOptions[0].label
 };
 
+function getTodayDateInput() {
+  const date = new Date();
+  const day = `${date.getDate()}`.padStart(2, "0");
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+
+  return `${day}/${month}/${date.getFullYear()}`;
+}
+
+function getTodayCalendarDate(): CalendarDateValue {
+  const date = new Date();
+
+  return {
+    day: date.getDate(),
+    month: date.getMonth(),
+    year: date.getFullYear()
+  };
+}
+
+function getEmptyDebtPaymentForm(): DebtPaymentFormState {
+  return {
+    amount: "",
+    date: getTodayDateInput(),
+    remainingAmountAfter: "",
+    updatesBalance: false
+  };
+}
+
 const monthLabels = [
   "Enero",
   "Febrero",
@@ -208,6 +255,8 @@ const monthLabels = [
   "Noviembre",
   "Diciembre"
 ];
+
+const weekdayLabels = ["L", "M", "M", "J", "V", "S", "D"];
 
 function getCurrentMonthYear(): MonthYearValue {
   const date = new Date();
@@ -232,15 +281,82 @@ function formatMonthYear(value: MonthYearValue) {
   return `${monthLabels[value.month]} ${value.year}`;
 }
 
-const dangerRed = "#DC2626";
-const dangerRedSoft = "#FEF2F2";
-const dangerRedBorder = "#FECACA";
+function getDaysInMonth(value: MonthYearValue) {
+  return new Date(value.year, value.month + 1, 0).getDate();
+}
+
+function getCalendarDateFromInput(value: string): CalendarDateValue {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim());
+
+  if (!match) {
+    return getTodayCalendarDate();
+  }
+
+  const day = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const year = Number(match[3]);
+  const date = new Date(year, month, day, 12);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month ||
+    date.getDate() !== day
+  ) {
+    return getTodayCalendarDate();
+  }
+
+  return { day, month, year };
+}
+
+function getDateInputFromCalendar(value: CalendarDateValue) {
+  const day = `${value.day}`.padStart(2, "0");
+  const month = `${value.month + 1}`.padStart(2, "0");
+
+  return `${day}/${month}/${value.year}`;
+}
+
+function getClampedCalendarDate(
+  value: CalendarDateValue,
+  patch: Partial<MonthYearValue>
+): CalendarDateValue {
+  const nextValue = {
+    ...value,
+    ...patch
+  };
+
+  return {
+    ...nextValue,
+    day: Math.min(nextValue.day, getDaysInMonth(nextValue))
+  };
+}
+
+function isFutureCalendarDate(value: CalendarDateValue) {
+  const today = getTodayCalendarDate();
+
+  if (value.year !== today.year) {
+    return value.year > today.year;
+  }
+
+  if (value.month !== today.month) {
+    return value.month > today.month;
+  }
+
+  return value.day > today.day;
+}
+
+function getCalendarDateLabel(value: CalendarDateValue) {
+  return new Date(value.year, value.month, value.day, 12).toLocaleDateString("es-CO", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
+}
 
 function getToneColors(tone: Tone) {
   if (tone === "support") {
     return {
       background: colors.supportSoft,
-      border: "#B9E9CD",
+      border: colors.supportBorder,
       text: colors.support
     };
   }
@@ -263,9 +379,9 @@ function getToneColors(tone: Tone) {
 
   if (tone === "danger") {
     return {
-      background: dangerRedSoft,
-      border: dangerRedBorder,
-      text: dangerRed
+      background: colors.dangerSoft,
+      border: colors.dangerBorder,
+      text: colors.danger
     };
   }
 
@@ -279,7 +395,7 @@ function getToneColors(tone: Tone) {
 
   return {
     background: colors.primarySoft,
-    border: "#CFE0FF",
+    border: colors.primaryBorder,
     text: colors.primary
   };
 }
@@ -348,6 +464,60 @@ function getFormattedDayInput(value: string) {
   return `${Math.min(parsedValue, 31)}`;
 }
 
+function parsePaymentDateInput(value: string) {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim());
+
+  if (!match) {
+    return null;
+  }
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day, 12);
+  const today = new Date();
+  const endOfToday = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+    23,
+    59,
+    59,
+    999
+  );
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day ||
+    date > endOfToday
+  ) {
+    return null;
+  }
+
+  return `${year}-${`${month}`.padStart(2, "0")}-${`${day}`.padStart(2, "0")}`;
+}
+
+function getFormattedPaymentDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day, 12);
+
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return "Sin fecha";
+  }
+
+  return date.toLocaleDateString("es-CO", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
+}
+
 function getFormattedInterestRateInput(value: string) {
   const normalizedValue = value.replace(",", ".").replace(/[^\d.]/g, "");
   const [whole = "", ...decimalParts] = normalizedValue.split(".");
@@ -357,6 +527,10 @@ function getFormattedInterestRateInput(value: string) {
 }
 
 function parseInterestRateInput(value: string) {
+  if (!value.trim()) {
+    return null;
+  }
+
   const parsedValue = Number(value.replace(",", "."));
 
   return Number.isFinite(parsedValue) && parsedValue >= 0 && parsedValue <= 100
@@ -406,7 +580,7 @@ function getDebtInsight({
   }
 
   if (level === "high") {
-    return "Antes de asumir una nueva cuota, conviene revisar qué deuda genera más presión.";
+    return "Antes de asumir una nueva deuda, conviene revisar qué deuda genera más presión.";
   }
 
   if (level === "medium" || level === "unknown") {
@@ -514,6 +688,7 @@ function SummaryMetric({
   tone?: Tone;
   compact?: boolean;
 }) {
+  const { isPhone } = useResponsiveLayout();
   const toneColors = getToneColors(tone);
 
   return (
@@ -521,6 +696,7 @@ function SummaryMetric({
       style={[
         styles.summaryMetric,
         compact && styles.summaryMetricCompact,
+        compact && isPhone && styles.summaryMetricCompactPhone,
         {
           backgroundColor: toneColors.background,
           borderColor: toneColors.border
@@ -547,15 +723,17 @@ function CurrencyInput({
   label,
   value,
   onChangeText,
-  optional
+  optional,
+  stacked = false
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
   optional?: boolean;
+  stacked?: boolean;
 }) {
   return (
-    <View style={styles.inputGroup}>
+    <View style={[styles.inputGroup, stacked && styles.stackedInputGroup]}>
       <InputLabel label={label} optional={optional} />
       <TextInput
         keyboardType="number-pad"
@@ -838,6 +1016,138 @@ function MonthYearSelectionModal({
   );
 }
 
+function PaymentDateSelectionModal({
+  visible,
+  value,
+  onChange,
+  onClose,
+  onConfirm
+}: {
+  visible: boolean;
+  value: CalendarDateValue;
+  onChange: (value: CalendarDateValue) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const today = getTodayCalendarDate();
+  const canSelectNextMonth =
+    value.year < today.year || (value.year === today.year && value.month < today.month);
+  const firstWeekday = (new Date(value.year, value.month, 1, 12).getDay() + 6) % 7;
+  const daysInMonth = getDaysInMonth(value);
+  const calendarCellCount = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+
+  const changeMonth = (offset: number) => {
+    const nextMonth = new Date(value.year, value.month + offset, 1, 12);
+    const nextValue = getClampedCalendarDate(value, {
+      month: nextMonth.getMonth(),
+      year: nextMonth.getFullYear()
+    });
+    onChange(isFutureCalendarDate(nextValue) ? today : nextValue);
+  };
+
+  return (
+    <AppModal
+      footer={
+        <AppModalActions>
+          <AppModalAction label="Cancelar" onPress={onClose} variant="secondary" />
+          <AppModalAction label="Usar fecha" onPress={onConfirm} />
+        </AppModalActions>
+      }
+      icon={<CalendarDays color={colors.primary} size={23} strokeWidth={2.4} />}
+      onClose={onClose}
+      scrollable
+      size="compact"
+      title="Fecha del pago"
+      visible={visible}
+    >
+      <View style={[styles.monthYearPreview, styles.calendarPreview]}>
+        <Text style={[styles.monthYearPreviewText, styles.calendarPreviewText]}>
+          {getCalendarDateLabel(value)}
+        </Text>
+      </View>
+
+      <View style={styles.calendarMonthControls}>
+        <Pressable
+          accessibilityLabel="Mes anterior"
+          accessibilityRole="button"
+          onPress={() => changeMonth(-1)}
+          style={({ pressed }) => [styles.yearButton, pressed && styles.pressed]}
+        >
+          <ChevronLeft color={colors.primary} size={18} strokeWidth={2.5} />
+        </Pressable>
+        <Text style={styles.calendarMonthValue}>{formatMonthYear(value)}</Text>
+        <Pressable
+          accessibilityLabel="Mes siguiente"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canSelectNextMonth }}
+          disabled={!canSelectNextMonth}
+          onPress={() => changeMonth(1)}
+          style={({ pressed }) => [
+            styles.yearButton,
+            !canSelectNextMonth && styles.yearButtonDisabled,
+            pressed && canSelectNextMonth && styles.pressed
+          ]}
+        >
+          <ChevronRight
+            color={canSelectNextMonth ? colors.primary : colors.textSubtle}
+            size={18}
+            strokeWidth={2.5}
+          />
+        </Pressable>
+      </View>
+
+      <Text style={styles.modalSectionLabel}>Día</Text>
+      <View style={styles.calendarWeekdayRow}>
+        {weekdayLabels.map((weekday, index) => (
+          <Text key={`${weekday}-${index}`} style={styles.calendarWeekday}>
+            {weekday}
+          </Text>
+        ))}
+      </View>
+      <View style={styles.calendarDayGrid}>
+        {Array.from({ length: calendarCellCount }, (_, index) => {
+          const day = index - firstWeekday + 1;
+
+          if (day < 1 || day > daysInMonth) {
+            return <View key={`empty-${index}`} style={styles.calendarDayPlaceholder} />;
+          }
+
+          const candidate = { day, month: value.month, year: value.year };
+          const selected = day === value.day;
+          const disabled = isFutureCalendarDate(candidate);
+
+          return (
+            <Pressable
+              accessibilityLabel={getCalendarDateLabel(candidate)}
+              accessibilityRole="button"
+              accessibilityState={{ disabled, selected }}
+              disabled={disabled}
+              key={day}
+              onPress={() => onChange(candidate)}
+              style={({ pressed }) => [
+                styles.calendarDayButton,
+                selected && styles.calendarDayButtonSelected,
+                disabled && styles.calendarDayButtonDisabled,
+                pressed && !disabled && styles.pressed
+              ]}
+            >
+              <Text
+                style={[
+                  styles.calendarDayText,
+                  selected && styles.calendarDayTextSelected,
+                  disabled && styles.calendarDayTextDisabled
+                ]}
+              >
+                {day}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </AppModal>
+  );
+}
+
 function EmptyState({ onPress }: { onPress: () => void }) {
   return (
     <View style={styles.emptyState}>
@@ -866,16 +1176,21 @@ function EmptyState({ onPress }: { onPress: () => void }) {
 function DebtCard({
   debt,
   onEdit,
-  onDelete
+  onDelete,
+  onPayments
 }: {
   debt: DebtRecord;
   onEdit: () => void;
   onDelete: () => void;
+  onPayments: () => void;
 }) {
   const typeOption = getDebtTypeOption(debt.type);
   const Icon = typeOption.icon;
+  const paymentCount = debt.payments?.length ?? 0;
+  const paymentTotal = getDebtPaymentTotal(debt);
+  const paid = isDebtPaid(debt);
   const statusTone =
-    debt.status === "on_track"
+    paid || debt.status === "on_track"
       ? "support"
       : debt.status === "overdue"
         ? "danger"
@@ -898,13 +1213,13 @@ function DebtCard({
             {debt.lender ? ` · ${debt.lender}` : ""}
           </Text>
         </View>
-        <Chip label={debtPaymentStatusLabels[debt.status]} tone={statusTone} />
+        <Chip label={paid ? "Pagada" : debtPaymentStatusLabels[debt.status]} tone={statusTone} />
       </View>
 
       <View style={styles.debtCardMetrics}>
         <SummaryMetric
           compact
-          label="Cuota mensual"
+          label={paid ? "Última cuota" : "Cuota mensual"}
           tone="primary"
           value={formatCOP(debt.monthlyPayment)}
         />
@@ -928,25 +1243,243 @@ function DebtCard({
         />
       </View>
 
+      <View
+        accessibilityLabel={`${paymentCount} ${paymentCount === 1 ? "aporte registrado" : "aportes registrados"} por un total de ${formatCOP(paymentTotal)}`}
+        accessible
+        style={styles.debtPaymentOverview}
+      >
+        <View style={styles.debtPaymentOverviewItem}>
+          <Text style={styles.debtPaymentOverviewLabel}>Aportes registrados</Text>
+          <Text style={styles.debtPaymentOverviewValue}>
+            {paymentCount} {paymentCount === 1 ? "aporte" : "aportes"}
+          </Text>
+        </View>
+        <View style={styles.debtPaymentOverviewDivider} />
+        <View style={styles.debtPaymentOverviewItem}>
+          <Text style={styles.debtPaymentOverviewLabel}>Valor total</Text>
+          <Text style={styles.debtPaymentOverviewValue}>{formatCOP(paymentTotal)}</Text>
+        </View>
+      </View>
+
       <View style={styles.debtCardActions}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onEdit}
-          style={({ pressed }) => [styles.secondaryInlineButton, pressed && styles.pressed]}
-        >
-          <PencilLine color={colors.primary} size={18} strokeWidth={2.4} />
-          <Text style={styles.secondaryInlineButtonText}>Editar</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
+        <PrimaryButton
+          accessibilityLabel={`Eliminar deuda ${getDebtTitle(debt)}`}
+          icon={null}
           onPress={onDelete}
-          style={({ pressed }) => [styles.dangerInlineButton, pressed && styles.pressed]}
-        >
-          <Trash2 color={dangerRed} size={18} strokeWidth={2.4} />
-          <Text style={styles.dangerInlineButtonText}>Eliminar</Text>
-        </Pressable>
+          size="compact"
+          title="Eliminar"
+          variant="danger"
+        />
+        <PrimaryButton
+          accessibilityLabel={`Editar deuda ${getDebtTitle(debt)}`}
+          icon={null}
+          onPress={onEdit}
+          size="compact"
+          style={styles.debtActionEdit}
+          title="Editar"
+          variant="secondary"
+        />
+        <PrimaryButton
+          accessibilityLabel={`Registrar pago para ${getDebtTitle(debt)}`}
+          icon={null}
+          onPress={onPayments}
+          size="compact"
+          style={styles.debtActionPayment}
+          title="Registrar pago"
+        />
       </View>
     </View>
+  );
+}
+
+function DebtPaymentsModal({
+  canSave,
+  debt,
+  form,
+  onClose,
+  onOpenDatePicker,
+  onRequestDelete,
+  onSave,
+  onUpdate
+}: {
+  canSave: boolean;
+  debt: DebtRecord | null;
+  form: DebtPaymentFormState;
+  onClose: () => void;
+  onOpenDatePicker: () => void;
+  onRequestDelete: (payment: DebtPaymentRecord) => void;
+  onSave: () => void;
+  onUpdate: (patch: Partial<DebtPaymentFormState>) => void;
+}) {
+  const payments = debt?.payments ?? [];
+  const paymentTotal = debt ? getDebtPaymentTotal(debt) : 0;
+  const monthlyPaymentTotal = debt ? getDebtPaymentTotalForMonth(debt) : 0;
+  const nextRemainingAmount = form.updatesBalance
+    ? parseCOPInput(form.remainingAmountAfter)
+    : null;
+
+  return (
+    <AppModal
+      footer={
+        <AppModalActions>
+          <AppModalAction label="Cancelar" onPress={onClose} variant="secondary" />
+          <AppModalAction
+            disabled={!canSave}
+            icon={
+              <CheckCircle2
+                color={canSave ? colors.surface : colors.textSubtle}
+                size={19}
+                strokeWidth={2.5}
+              />
+            }
+            label="Guardar pago"
+            onPress={onSave}
+          />
+        </AppModalActions>
+      }
+      icon={<History color={colors.primary} size={23} strokeWidth={2.4} />}
+      onClose={onClose}
+      scrollable
+      size="compact"
+      subtitle="Guarda el pago y actualiza el saldo solo si conoces la cifra nueva."
+      title={debt ? `Pagos de ${getDebtTitle(debt)}` : "Pagos de la deuda"}
+      visible={Boolean(debt)}
+    >
+      {debt ? (
+        <>
+          <View style={styles.paymentSummary}>
+            <View style={styles.paymentSummaryItem}>
+              <Text style={styles.paymentSummaryLabel}>Saldo pendiente</Text>
+              <Text style={styles.paymentSummaryValue}>
+                {getOptionalAmountLabel(debt.remainingAmount)}
+              </Text>
+            </View>
+            <View style={styles.paymentSummaryItem}>
+              <Text style={styles.paymentSummaryLabel}>Pagado este mes</Text>
+              <Text style={styles.paymentSummaryValue}>{formatCOP(monthlyPaymentTotal)}</Text>
+            </View>
+            <View style={styles.paymentSummaryItem}>
+              <Text style={styles.paymentSummaryLabel}>Total registrado</Text>
+              <Text style={styles.paymentSummaryValue}>{formatCOP(paymentTotal)}</Text>
+            </View>
+          </View>
+
+          <View style={styles.paymentFormSection}>
+            <Text style={styles.paymentSectionTitle}>Registrar un pago</Text>
+            <CurrencyInput
+              label="Monto pagado"
+              onChangeText={(amount) => onUpdate({ amount })}
+              stacked
+              value={form.amount}
+            />
+            <View style={[styles.inputGroup, styles.stackedInputGroup]}>
+              <InputLabel label="Fecha del pago" />
+              <Pressable
+                accessibilityLabel={`Seleccionar fecha del pago. Fecha actual: ${getCalendarDateLabel(getCalendarDateFromInput(form.date))}`}
+                accessibilityRole="button"
+                onPress={onOpenDatePicker}
+                style={({ pressed }) => [styles.monthYearField, pressed && styles.pressed]}
+              >
+                <CalendarDays color={colors.primary} size={20} strokeWidth={2.4} />
+                <Text style={styles.monthYearFieldText}>
+                  {getCalendarDateLabel(getCalendarDateFromInput(form.date))}
+                </Text>
+                <ChevronRight color={colors.primary} size={20} strokeWidth={2.5} />
+              </Pressable>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: form.updatesBalance }}
+              onPress={() =>
+                onUpdate({
+                  remainingAmountAfter: form.updatesBalance
+                    ? ""
+                    : debt.remainingAmount !== null && debt.remainingAmount !== undefined
+                      ? formatCOP(debt.remainingAmount)
+                      : "",
+                  updatesBalance: !form.updatesBalance
+                })
+              }
+              style={({ pressed }) => [styles.balanceToggle, pressed && styles.pressed]}
+            >
+              {form.updatesBalance ? (
+                <CheckCircle2 color={colors.primary} size={18} strokeWidth={2.4} />
+              ) : (
+                <Plus color={colors.primary} size={18} strokeWidth={2.4} />
+              )}
+              <Text style={styles.balanceToggleText}>
+                {form.updatesBalance ? "No actualizar el saldo" : "Actualizar saldo pendiente"}
+              </Text>
+              {!form.updatesBalance ? <Text style={styles.optionalText}>Opcional</Text> : null}
+            </Pressable>
+
+            {form.updatesBalance ? (
+              <View style={styles.balanceUpdateArea}>
+                <CurrencyInput
+                  label="Saldo pendiente actual"
+                  onChangeText={(remainingAmountAfter) => onUpdate({ remainingAmountAfter })}
+                  stacked
+                  value={form.remainingAmountAfter}
+                />
+                <Text style={styles.paymentHelperText}>
+                  {nextRemainingAmount === 0
+                    ? "La deuda quedará marcada como pagada y su cuota dejará de contar en tus cálculos."
+                    : "Usaremos esta cifra como el saldo actual, aunque el pago sea de otra fecha. No lo restamos automáticamente porque puede incluir intereses u otros cobros."}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.paymentHelperText}>
+                El pago quedará en el historial sin cambiar el saldo pendiente.
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.paymentHistorySection}>
+            <View style={styles.paymentHistoryHeader}>
+              <Text style={styles.paymentSectionTitle}>Historial</Text>
+              <Chip
+                label={`${payments.length} ${payments.length === 1 ? "pago" : "pagos"}`}
+                tone={payments.length > 0 ? "support" : "neutral"}
+              />
+            </View>
+            {payments.length > 0 ? (
+              <View style={styles.paymentHistoryList}>
+                {payments.map((payment) => (
+                  <View key={payment.id} style={styles.paymentHistoryRow}>
+                    <View style={styles.paymentHistoryCopy}>
+                      <Text style={styles.paymentHistoryAmount}>{formatCOP(payment.amount)}</Text>
+                      <Text style={styles.paymentHistoryDate}>
+                        {getFormattedPaymentDate(payment.date)}
+                        {payment.reportedRemainingAmount !== null &&
+                        payment.reportedRemainingAmount !== undefined
+                          ? ` · Saldo actualizado: ${formatCOP(payment.reportedRemainingAmount)}`
+                          : ""}
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityLabel={`Eliminar pago de ${formatCOP(payment.amount)}`}
+                      accessibilityRole="button"
+                      onPress={() => onRequestDelete(payment)}
+                      style={({ pressed }) => [
+                        styles.paymentDeleteButton,
+                        pressed && styles.pressed
+                      ]}
+                    >
+                      <Trash2 color={colors.danger} size={18} strokeWidth={2.4} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.paymentHistoryEmpty}>
+                Aún no hay pagos registrados para esta deuda.
+              </Text>
+            )}
+          </View>
+        </>
+      ) : null}
+    </AppModal>
   );
 }
 
@@ -1046,6 +1579,17 @@ export default function DebtsScreen() {
   );
   const [isStartPickerOpen, setIsStartPickerOpen] = useState(false);
   const [debtPendingDelete, setDebtPendingDelete] = useState<DebtRecord | null>(null);
+  const [paymentDebtId, setPaymentDebtId] = useState<string | null>(null);
+  const [paymentForm, setPaymentForm] = useState<DebtPaymentFormState>(() =>
+    getEmptyDebtPaymentForm()
+  );
+  const [paymentPendingDelete, setPaymentPendingDelete] =
+    useState<DebtPaymentRecord | null>(null);
+  const [isPaymentDatePickerOpen, setIsPaymentDatePickerOpen] = useState(false);
+  const [draftPaymentDate, setDraftPaymentDate] = useState<CalendarDateValue>(() =>
+    getTodayCalendarDate()
+  );
+  const isSavingPaymentRef = useRef(false);
   const snapshot = useMemo(
     () => calculateFinancialSnapshot({ onboarding, exactValues }),
     [exactValues, onboarding]
@@ -1082,10 +1626,28 @@ export default function DebtsScreen() {
     ]
   );
   const summaryTone = getDebtTone(debtSummary.level);
+  const hasOnlyPaidDebts = debts.length > 0 && debts.every(isDebtPaid);
+  const debtFormRemainingAmount = parseCOPInput(debtForm.remainingAmount);
+  const debtFormMonthlyPayment = parseCOPInput(debtForm.monthlyPayment);
   const canSaveDebt = Boolean(
     debtForm.name.trim() &&
-      parseCOPInput(debtForm.remainingAmount) &&
-      parseCOPInput(debtForm.monthlyPayment)
+      debtFormRemainingAmount !== null &&
+      (editingDebtId ? debtFormRemainingAmount >= 0 : debtFormRemainingAmount > 0) &&
+      debtFormMonthlyPayment !== null &&
+      debtFormMonthlyPayment > 0
+  );
+  const paymentDebt = debts.find((debt) => debt.id === paymentDebtId) ?? null;
+  const paymentAmount = parseCOPInput(paymentForm.amount);
+  const paymentDate = parsePaymentDateInput(paymentForm.date);
+  const paymentRemainingAmount = paymentForm.updatesBalance
+    ? parseCOPInput(paymentForm.remainingAmountAfter)
+    : null;
+  const canSavePayment = Boolean(
+    paymentDebt &&
+      paymentAmount !== null &&
+      paymentAmount > 0 &&
+      paymentDate &&
+      (!paymentForm.updatesBalance || paymentRemainingAmount !== null)
   );
   const hasMonthlyExpenseMismatch = hasDebtMonthlyExpenseMismatch({
     isExactMonthlyExpense:
@@ -1147,14 +1709,14 @@ export default function DebtsScreen() {
 
   const saveDebt = () => {
     const name = debtForm.name.trim();
-    const remainingAmount = parseCOPInput(debtForm.remainingAmount);
-    const monthlyPayment = parseCOPInput(debtForm.monthlyPayment);
+    const remainingAmount = debtFormRemainingAmount;
+    const monthlyPayment = debtFormMonthlyPayment;
 
     if (
       !name ||
-      !remainingAmount ||
-      remainingAmount <= 0 ||
-      !monthlyPayment ||
+      remainingAmount === null ||
+      (editingDebtId ? remainingAmount < 0 : remainingAmount <= 0) ||
+      monthlyPayment === null ||
       monthlyPayment <= 0
     ) {
       return;
@@ -1175,6 +1737,7 @@ export default function DebtsScreen() {
       annualInterestRate: parseInterestRateInput(debtForm.annualInterestRate),
       status: debtForm.status,
       paymentDay: normalizedPaymentDay,
+      payments: existingDebt?.payments ?? [],
       createdAt: existingDebt?.createdAt ?? now,
       updatedAt: now
     };
@@ -1203,6 +1766,70 @@ export default function DebtsScreen() {
 
     deleteDebt(debtPendingDelete.id);
     setDebtPendingDelete(null);
+  };
+
+  const openDebtPayments = (debt: DebtRecord) => {
+    isSavingPaymentRef.current = false;
+    setPaymentDebtId(debt.id);
+    setPaymentForm(getEmptyDebtPaymentForm());
+    setPaymentPendingDelete(null);
+    setIsPaymentDatePickerOpen(false);
+  };
+
+  const closeDebtPayments = () => {
+    setPaymentDebtId(null);
+    setPaymentForm(getEmptyDebtPaymentForm());
+    setPaymentPendingDelete(null);
+    setIsPaymentDatePickerOpen(false);
+  };
+
+  const updatePaymentForm = (patch: Partial<DebtPaymentFormState>) => {
+    setPaymentForm((current) => ({
+      ...current,
+      ...patch
+    }));
+  };
+
+  const savePayment = () => {
+    if (isSavingPaymentRef.current || !paymentDebt || !paymentAmount || !paymentDate) {
+      return;
+    }
+
+    if (paymentForm.updatesBalance && paymentRemainingAmount === null) {
+      return;
+    }
+
+    isSavingPaymentRef.current = true;
+
+    updateDebts(
+      registerDebtPayment(debts, paymentDebt.id, {
+        amount: paymentAmount,
+        date: paymentDate,
+        reportedRemainingAmount: paymentForm.updatesBalance
+          ? paymentRemainingAmount
+          : undefined
+      })
+    );
+    closeDebtPayments();
+  };
+
+  const confirmDeletePayment = () => {
+    if (!paymentDebt || !paymentPendingDelete) {
+      return;
+    }
+
+    updateDebts(removeDebtPayment(debts, paymentDebt.id, paymentPendingDelete.id));
+    setPaymentPendingDelete(null);
+  };
+
+  const openPaymentDatePicker = () => {
+    setDraftPaymentDate(getCalendarDateFromInput(paymentForm.date));
+    setIsPaymentDatePickerOpen(true);
+  };
+
+  const confirmPaymentDatePicker = () => {
+    updatePaymentForm({ date: getDateInputFromCalendar(draftPaymentDate) });
+    setIsPaymentDatePickerOpen(false);
   };
 
   const openStartPicker = () => {
@@ -1245,12 +1872,14 @@ export default function DebtsScreen() {
                   : getDebtTotalLabel(debtSummary.monthlyPaymentTotal)}
               </Text>
               <Text style={styles.heroInsight}>
-                {getDebtInsight({
-                  count: debtSummary.count,
-                  level: debtSummary.level,
-                  monthlyPaymentTotal: debtSummary.monthlyPaymentTotal,
-                  source: debtSummary.source
-                })}
+                {hasOnlyPaidDebts
+                  ? "No tienes cuotas activas. Conservamos tus deudas pagadas y su historial."
+                  : getDebtInsight({
+                      count: debtSummary.count,
+                      level: debtSummary.level,
+                      monthlyPaymentTotal: debtSummary.monthlyPaymentTotal,
+                      source: debtSummary.source
+                    })}
               </Text>
               <View style={styles.guidanceNote}>
                 <Text style={styles.guidanceNoteText}>
@@ -1313,7 +1942,8 @@ export default function DebtsScreen() {
                 onPress={startNewDebt}
                 style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
               >
-                <Text style={styles.primaryButtonText}>Agregar deuda +</Text>
+                <Text style={styles.primaryButtonText}>Agregar deuda</Text>
+                <Plus color={colors.surface} size={20} strokeWidth={2.5} />
               </Pressable>
             ) : null}
 
@@ -1325,6 +1955,7 @@ export default function DebtsScreen() {
                     key={debt.id}
                     onDelete={() => requestDeleteDebt(debt)}
                     onEdit={() => startEditDebt(debt)}
+                    onPayments={() => openDebtPayments(debt)}
                   />
                 ))}
               </View>
@@ -1543,6 +2174,54 @@ export default function DebtsScreen() {
         visible={isStartPickerOpen}
       />
 
+      <DebtPaymentsModal
+        canSave={canSavePayment}
+        debt={paymentPendingDelete || isPaymentDatePickerOpen ? null : paymentDebt}
+        form={paymentForm}
+        onClose={closeDebtPayments}
+        onOpenDatePicker={openPaymentDatePicker}
+        onRequestDelete={setPaymentPendingDelete}
+        onSave={savePayment}
+        onUpdate={updatePaymentForm}
+      />
+
+      <PaymentDateSelectionModal
+        onChange={setDraftPaymentDate}
+        onClose={() => setIsPaymentDatePickerOpen(false)}
+        onConfirm={confirmPaymentDatePicker}
+        value={draftPaymentDate}
+        visible={isPaymentDatePickerOpen}
+      />
+
+      <AppModal
+        footer={
+          <AppModalActions>
+            <AppModalAction
+              label="Cancelar"
+              onPress={() => setPaymentPendingDelete(null)}
+              variant="secondary"
+            />
+            <AppModalAction
+              label="Eliminar pago"
+              onPress={confirmDeletePayment}
+              variant="danger"
+            />
+          </AppModalActions>
+        }
+        icon={<Trash2 color={colors.surface} size={22} strokeWidth={2.4} />}
+        iconBackgroundColor={colors.danger}
+        onClose={() => setPaymentPendingDelete(null)}
+        size="compact"
+        title="Eliminar pago"
+        visible={Boolean(paymentPendingDelete)}
+      >
+        <Text style={styles.modalText}>
+          {paymentPendingDelete
+            ? `¿Quieres eliminar el pago de ${formatCOP(paymentPendingDelete.amount)}? Si este pago definió el saldo actual, restauraremos el saldo anterior.`
+            : "¿Quieres eliminar este pago?"}
+        </Text>
+      </AppModal>
+
       <AppModal
         footer={
           <AppModalActions>
@@ -1552,14 +2231,14 @@ export default function DebtsScreen() {
               variant="secondary"
             />
             <AppModalAction
-              icon={<Trash2 color={colors.surface} size={19} strokeWidth={2.5} />}
               label="Eliminar deuda"
               onPress={confirmDeleteDebt}
               variant="danger"
             />
           </AppModalActions>
         }
-        icon={<Trash2 color={dangerRed} size={22} strokeWidth={2.4} />}
+        icon={<Trash2 color={colors.surface} size={22} strokeWidth={2.4} />}
+        iconBackgroundColor={colors.danger}
         onClose={() => setDebtPendingDelete(null)}
         size="compact"
         title="Eliminar deuda"
@@ -1673,7 +2352,7 @@ const styles = StyleSheet.create({
   },
   guidanceNote: {
     backgroundColor: colors.supportSoft,
-    borderColor: "#B9E9CD",
+    borderColor: colors.supportBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     marginTop: spacing.sm,
@@ -1873,7 +2552,7 @@ const styles = StyleSheet.create({
   },
   formCard: {
     backgroundColor: "#F8FBFF",
-    borderColor: "#D7E7FF",
+    borderColor: colors.primaryBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     gap: spacing.md,
@@ -1941,6 +2620,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     gap: spacing.xs
   },
+  stackedInputGroup: {
+    flexBasis: "auto",
+    flexGrow: 0
+  },
   inputLabelRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -1955,7 +2638,7 @@ const styles = StyleSheet.create({
   },
   optionalBadge: {
     backgroundColor: colors.primarySoft,
-    borderColor: "#CFE0FF",
+    borderColor: colors.primaryBorder,
     borderRadius: radius.pill,
     borderWidth: 1,
     paddingHorizontal: spacing.xs,
@@ -2047,7 +2730,7 @@ const styles = StyleSheet.create({
   yearButton: {
     alignItems: "center",
     backgroundColor: colors.primarySoft,
-    borderColor: "#CFE0FF",
+    borderColor: colors.primaryBorder,
     borderRadius: radius.pill,
     borderWidth: 1,
     height: 34,
@@ -2099,7 +2782,7 @@ const styles = StyleSheet.create({
   monthYearPreview: {
     alignItems: "center",
     backgroundColor: colors.primarySoft,
-    borderColor: "#CFE0FF",
+    borderColor: colors.primaryBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: "row",
@@ -2112,6 +2795,28 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.question
   },
+  calendarPreview: {
+    justifyContent: "center",
+    minHeight: 52,
+    paddingVertical: spacing.sm
+  },
+  calendarPreviewText: {
+    textAlign: "center"
+  },
+  calendarMonthControls: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "space-between"
+  },
+  calendarMonthValue: {
+    color: colors.text,
+    flex: 1,
+    fontSize: typography.question,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.question,
+    textAlign: "center"
+  },
   monthYearControlRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -2123,6 +2828,61 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
+  },
+  calendarWeekdayRow: {
+    flexDirection: "row",
+    gap: spacing.xs
+  },
+  calendarWeekday: {
+    color: colors.textSubtle,
+    flexBasis: "12%",
+    flexGrow: 1,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.small,
+    textAlign: "center"
+  },
+  calendarDayGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs
+  },
+  calendarDayPlaceholder: {
+    flexBasis: "12%",
+    flexGrow: 1,
+    minHeight: 38
+  },
+  calendarDayButton: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flexBasis: "12%",
+    flexGrow: 1,
+    justifyContent: "center",
+    minHeight: 38
+  },
+  calendarDayButtonSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary
+  },
+  calendarDayButtonDisabled: {
+    backgroundColor: colors.surfaceMuted,
+    opacity: 0.5
+  },
+  calendarDayText: {
+    color: colors.text,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  calendarDayTextSelected: {
+    color: colors.surface,
+    fontWeight: typography.weight.black
+  },
+  calendarDayTextDisabled: {
+    color: colors.textSubtle
   },
   modalActions: {
     alignItems: "center",
@@ -2147,7 +2907,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md
   },
   primaryButtonDisabled: {
-    backgroundColor: "#CBD5E1"
+    backgroundColor: colors.disabledBorder
   },
   primaryButtonText: {
     color: colors.surface,
@@ -2157,7 +2917,7 @@ const styles = StyleSheet.create({
   },
   dangerButton: {
     alignItems: "center",
-    backgroundColor: dangerRed,
+    backgroundColor: colors.danger,
     borderRadius: radius.md,
     flexDirection: "row",
     gap: spacing.sm,
@@ -2227,39 +2987,189 @@ const styles = StyleSheet.create({
     gap: spacing.xs
   },
   debtCardActions: {
-    alignItems: "center",
+    alignItems: "stretch",
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  secondaryInlineButton: {
-    alignItems: "center",
-    flexDirection: "row",
     gap: spacing.xs,
-    minHeight: 40
+    width: "100%"
   },
-  secondaryInlineButtonText: {
+  debtPaymentOverview: {
+    alignItems: "stretch",
+    backgroundColor: colors.supportSoft,
+    borderColor: colors.supportBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 58,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  summaryMetricCompactPhone: {
+    flexBasis: "46%",
+    minWidth: 0
+  },
+  debtPaymentOverviewItem: {
+    flex: 1,
+    gap: 2,
+    justifyContent: "center",
+    minWidth: 0
+  },
+  debtPaymentOverviewDivider: {
+    alignSelf: "stretch",
+    backgroundColor: colors.supportBorder,
+    width: 1
+  },
+  debtPaymentOverviewLabel: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.small
+  },
+  debtPaymentOverviewValue: {
+    color: colors.support,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  debtActionEdit: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border
+  },
+  debtActionPayment: {
+    marginLeft: "auto"
+  },
+  paymentSummary: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  paymentSummaryItem: {
+    flexBasis: 120,
+    flexGrow: 1,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  paymentSummaryLabel: {
+    color: colors.textSubtle,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  paymentSummaryValue: {
+    color: colors.primary,
+    fontSize: typography.question,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.question
+  },
+  paymentFormSection: {
+    gap: spacing.md
+  },
+  paymentSectionTitle: {
+    color: colors.text,
+    fontSize: typography.question,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.question
+  },
+  balanceToggle: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+    minHeight: 44
+  },
+  balanceToggleText: {
     color: colors.primary,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
   },
-  dangerInlineButton: {
+  optionalText: {
+    color: colors.textSubtle,
+    fontSize: typography.small,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.small
+  },
+  balanceUpdateArea: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  paymentHelperText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
+  },
+  paymentHistorySection: {
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    gap: spacing.sm,
+    paddingTop: spacing.md
+  },
+  paymentHistoryHeader: {
     alignItems: "center",
     flexDirection: "row",
-    gap: spacing.xs,
-    minHeight: 40
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    justifyContent: "space-between"
   },
-  dangerInlineButtonText: {
-    color: dangerRed,
-    fontSize: typography.caption,
+  paymentHistoryList: {
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1
+  },
+  paymentHistoryRow: {
+    alignItems: "center",
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 62,
+    paddingVertical: spacing.sm
+  },
+  paymentHistoryCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  paymentHistoryAmount: {
+    color: colors.text,
+    fontSize: typography.body,
     fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  paymentHistoryDate: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
     lineHeight: typography.lineHeight.caption
+  },
+  paymentDeleteButton: {
+    alignItems: "center",
+    backgroundColor: colors.dangerSoft,
+    borderColor: colors.dangerBorder,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: "center",
+    width: 44
+  },
+  paymentHistoryEmpty: {
+    color: colors.textMuted,
+    fontSize: typography.body,
+    lineHeight: typography.lineHeight.body
   },
   emptyState: {
     alignItems: "center",
     backgroundColor: colors.surfaceMuted,
-    borderColor: "#D7E7FF",
+    borderColor: colors.primaryBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     gap: spacing.md,
@@ -2278,7 +3188,7 @@ const styles = StyleSheet.create({
   evaluationIntro: {
     alignItems: "flex-start",
     backgroundColor: colors.supportSoft,
-    borderColor: "#B9E9CD",
+    borderColor: colors.supportBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: "row",

@@ -81,4 +81,28 @@ describe("debt normalization", () => {
     expect(normalized[0].annualInterestRate).toBe(32.5);
     expect(normalized[1].annualInterestRate).toBeNull();
   });
+
+  it("normalizes, orders and deduplicates persisted payment history", () => {
+    const [debt] = normalizeDebtRecords([
+      {
+        id: "debt-1",
+        type: "Préstamo",
+        monthlyPayment: 300_000,
+        status: "on_track",
+        payments: [
+          { id: "payment-1", amount: 100_000, date: "2026-07-01" },
+          { id: "payment-2", amount: 150_000, date: "2026-07-31" },
+          { id: "payment-1", amount: 999_000, date: "2026-07-02" },
+          { id: "invalid", amount: 0, date: "not-a-date" }
+        ]
+      }
+    ]);
+
+    expect(debt.payments).toHaveLength(2);
+    expect(debt.payments?.map((payment) => payment.id)).toEqual([
+      "payment-2",
+      "payment-1"
+    ]);
+    expect(debt.payments?.[0].date).toBe("2026-07-31");
+  });
 });

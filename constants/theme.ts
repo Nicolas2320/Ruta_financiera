@@ -5,13 +5,20 @@ export const colors = {
   primary: "#155EEF",
   primaryDark: "#0F3EA8",
   primarySoft: "#E7F0FF",
+  primaryBorder: "#CFE0FF",
   support: "#0F7A4F",
   supportSoft: "#E8F8EF",
+  supportBorder: "#B9E9CD",
+  danger: "#B42318",
+  dangerSoft: "#FFF0F1",
+  dangerBorder: "#F7D0D4",
   warningSoft: "#FFF5E7",
   text: "#0F172A",
   textMuted: "#475569",
   textSubtle: "#5B677A",
   border: "#E2E8F0",
+  disabled: "#E2E8F0",
+  disabledBorder: "#CBD5E1",
   shadow: "#1E293B"
 };
 

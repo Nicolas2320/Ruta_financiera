@@ -1,6 +1,6 @@
 # Jerarquia de diseno - Ruta Financiera
 
-Fecha de referencia: 2026-07-26
+Fecha de referencia: 2026-07-31
 
 Este documento resume la direccion visual y la jerarquia de diseno que estamos usando en Ruta Financiera. Debe servir como guia para futuros ajustes de UI sin romper la consistencia entre pantallas.
 
@@ -86,13 +86,20 @@ Los colores base viven en `constants/theme.ts`.
 | Primario/accion | `colors.primary` | `#155EEF` |
 | Primario oscuro | `colors.primaryDark` | `#0F3EA8` |
 | Fondo primario suave | `colors.primarySoft` | `#E7F0FF` |
+| Borde primario suave | `colors.primaryBorder` | `#CFE0FF` |
 | Soporte/confianza | `colors.support` | `#0F7A4F` |
 | Fondo soporte suave | `colors.supportSoft` | `#E8F8EF` |
+| Borde soporte suave | `colors.supportBorder` | `#B9E9CD` |
+| Peligro/destructivo | `colors.danger` | `#B42318` |
+| Fondo destructivo suave | `colors.dangerSoft` | `#FFF0F1` |
+| Borde destructivo suave | `colors.dangerBorder` | `#F7D0D4` |
 | Fondo advertencia suave | `colors.warningSoft` | `#FFF5E7` |
 | Texto principal | `colors.text` | `#0F172A` |
 | Texto secundario | `colors.textMuted` | `#475569` |
 | Texto sutil | `colors.textSubtle` | `#5B677A` |
 | Bordes | `colors.border` | `#E2E8F0` |
+| Estado deshabilitado | `colors.disabled` | `#E2E8F0` |
+| Borde deshabilitado | `colors.disabledBorder` | `#CBD5E1` |
 | Sombras | `colors.shadow` | `#1E293B` |
 
 Uso de colores:
@@ -153,6 +160,43 @@ Reglas:
 - Conservar `SafeAreaView` en pantallas nativas y no compensar notch o indicador inferior con valores manuales.
 - Validar como minimo 320, 390, 430, 768 y 1024 puntos.
 
+### Parametros obligatorios para telefono
+
+La referencia principal de diseno es un viewport de 390 puntos. Una pantalla no
+se considera terminada si solo funciona en esa medida: tambien debe revisarse en
+320 y 430 puntos, con contenido real y textos largos.
+
+| Elemento | Parametro para telefono |
+| --- | --- |
+| Breakpoint | Menos de 600 puntos |
+| Padding horizontal | 12 en menos de 360; 16 desde 360 |
+| Composicion | Una columna principal |
+| Acciones tactiles aisladas | Area minima recomendada de 44 x 44 |
+| Inputs | Altura minima de 48 y texto de 16 o superior |
+| Boton primario | Ancho completo cuando es la unica accion principal |
+| Scroll | Vertical en la pantalla o cuerpo; no crear dos scrolls verticales anidados |
+| Safe area | Respetar notch, indicador inferior y teclado mediante APIs del sistema |
+
+Reglas de composicion movil:
+
+- El contenido importante debe aparecer antes que la decoracion y las acciones
+  secundarias.
+- Formularios, explicaciones y cards con texto usan una sola columna. Solo se
+  permiten dos columnas para tiles cortos que sigan siendo legibles a 320.
+- Una fila horizontal de opciones debe mostrar parte de la siguiente opcion o
+  una senal equivalente para comunicar que se puede desplazar.
+- No fijar alturas para rellenar la pantalla. El contenedor se adapta al contenido
+  y usa scroll cuando supera el espacio disponible.
+- El encabezado puede permanecer visible, pero no debe consumir una proporcion
+  excesiva de la pantalla ni empujar la primera decision fuera del viewport.
+- El pie fijo no puede cubrir contenido. El cuerpo desplazable debe incluir el
+  espacio necesario para que el ultimo elemento quede completamente visible.
+- Con el teclado abierto, el campo activo y la accion principal deben seguir
+  siendo alcanzables.
+- Los controles compactos, como chips, pueden medir menos de 44 de alto cuando
+  forman un grupo claro; deben conservar separacion suficiente para evitar toques
+  accidentales.
+
 ## Radios y cards
 
 | Token | Valor | Uso |
@@ -201,12 +245,30 @@ Anatomia comun:
 
 - Overlay oscuro suave.
 - Card blanca con `radius.lg`, borde sutil y `shadows.card`.
-- Icono contextual opcional dentro de un cuadro azul suave.
+- Icono contextual opcional dentro de un fondo suave circular. Su color debe
+  coincidir con la card o el concepto desde el que se abrio.
 - Titulo y subtitulo alineados a la izquierda.
 - Boton circular `X` en la esquina superior derecha.
 - Cuerpo con `ScrollView` cuando el contenido pueda crecer.
 - Pie separado por un borde superior cuando existan acciones.
 - En telefono se presenta como panel inferior; en tablet y web aparece centrado.
+
+Parametros del panel inferior:
+
+| Elemento | Parametro |
+| --- | --- |
+| Ancho | 100% |
+| Altura maxima | 92% del viewport |
+| Posicion | Pegado al borde inferior |
+| Radio | `radius.lg` arriba; sin radio en las esquinas inferiores |
+| Padding interno | `spacing.md` |
+| Tirador visible | 44 x 5, color gris azulado y radio `pill` |
+| Zona de gesto | Minimo 30 de alto, limitada al tirador |
+| Cierre por distancia | 18% del alto del viewport, con maximo de 140 |
+| Cierre por velocidad | Desde 28 de recorrido y velocidad vertical de 0.9 |
+
+El encabezado, el cierre y el pie permanecen visibles. Solo el cuerpo central se
+desplaza cuando el contenido supera el alto disponible.
 
 Variantes:
 
@@ -236,6 +298,24 @@ Reglas:
   guardarlo y sin mostrar una confirmacion adicional.
 - Reservar las confirmaciones para decisiones que si cambian la estructura del
   plan, como sustituir el tipo de la meta principal.
+- No apilar dos modales visibles. Para una confirmacion iniciada desde un editor,
+  ocultar temporalmente el editor, mostrar la confirmacion y restaurar el borrador
+  si el usuario vuelve.
+- El gesto de arrastre es una alternativa al cierre, no el unico mecanismo. La
+  `X` siempre debe estar disponible y ser accesible.
+
+Carruseles educativos en telefono:
+
+- El alto se adapta a la pagina activa; no reservar el alto de la pagina mas larga.
+- El usuario puede avanzar, retroceder, deslizar horizontalmente o cerrar cuando
+  quiera.
+- Los puntos van encima del texto `X de Y` y ambos ocupan la columna central de
+  la misma fila que `Anterior` y `Siguiente` o `Cerrar`.
+- Los botones usan el mismo alto, radio y ancho visual entre paginas.
+- Evitar espacios blancos creados por `minHeight`, alturas de pantalla completa o
+  alineacion vertical forzada.
+- Cada pagina comunica una sola idea: resultado, calculo o significado practico.
+- La ultima pagina usa `Cerrar`; no agrega una pantalla final sin informacion.
 
 Ayudas financieras:
 
@@ -390,6 +470,14 @@ Summary, Diagnosis, Simulation:
 - Los colores de texto mantienen contraste minimo de 4.5:1.
 - Los textos no se cortan en mobile.
 - Los botones son comodos de tocar.
+- Las acciones tactiles aisladas tienen un area aproximada de 44 x 44.
+- En telefono, no hay dos scrolls verticales compitiendo entre si.
+- El ultimo campo o texto no queda oculto detras de un pie fijo ni del teclado.
+- Los paneles inferiores respetan alto, radios, tirador y gesto definidos en
+  `AppModal`.
+- Los carruseles ajustan su alto a la pagina activa y mantienen navegacion e
+  indicador alineados.
+- Cerrar un formulario movil no conserva valores que nunca se guardaron.
 - Los iconos tienen color/fondo consistente cuando representan categorias o estados.
 - Se revisaron 320, 390, 430, 768 y 1024 puntos cuando el cambio afecta layout.
 - Las rutas compilan.

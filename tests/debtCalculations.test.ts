@@ -185,6 +185,29 @@ describe("registered debt calculations", () => {
       debtToIncomeRatio: 0.08
     });
   });
+
+  it("excludes paid debts without reviving an earlier reported range", () => {
+    const paidDebt = makeDebt({
+      remainingAmount: 0,
+      monthlyPayment: 320_000,
+      payments: [{ id: "final", amount: 320_000, date: "2026-07-15" }]
+    });
+    const summary = getRegisteredDebtSummary({
+      debts: [paidDebt],
+      debtPaymentShare: "Más del 40%",
+      expenseCategoryAmounts: {},
+      monthlyIncome: 4_000_000
+    });
+
+    expect(getDebtMonthlyPaymentTotal([paidDebt])).toBe(0);
+    expect(summary).toMatchObject({
+      count: 0,
+      source: "none",
+      monthlyPaymentTotal: 0,
+      remainingTotal: 0,
+      level: "none"
+    });
+  });
 });
 
 describe("new debt viability", () => {
