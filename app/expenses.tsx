@@ -79,7 +79,7 @@ const expenseCategories: Array<{
   backgroundColor: string;
 }> = [
   {
-    label: "Vivienda",
+    label: "Arriendo",
     icon: House,
     color: "#7C3AED",
     backgroundColor: "#EFE7FF"
@@ -334,8 +334,8 @@ export default function ExpensesScreen() {
             <View style={[styles.card, showSideBySide && styles.categoryPanel]}>
               <Text style={styles.questionTitle}>¿Cuáles son tus gastos principales?</Text>
               <Text style={styles.helperText}>
-                Elige gastos habituales. Las cuotas de préstamos o créditos se registran en
-                Deudas.
+                Elige gastos habituales que no tengan un saldo pendiente. Los préstamos y
+                créditos se registran en Deudas.
               </Text>
               <View style={styles.categoryGrid}>
                 {expenseCategories.map((category) => (

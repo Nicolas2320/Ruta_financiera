@@ -667,6 +667,15 @@ export function getLegacyFieldsFromGoal(goal: FinancialGoal | null) {
 
 export function hasCompletedOnboarding(onboarding: OnboardingData) {
   const skipsSmallExpenseDetails = onboarding.hasSmallExpenses === "No";
+  const hasRecurringExpenseCategory = onboarding.expenseCategories.some((category) => {
+    const normalizedCategory = category
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+
+    return normalizedCategory.length > 0 && !normalizedCategory.includes("deuda");
+  });
   const hasRequiredSmallExpenseCategories =
     onboarding.hasSmallExpenses !== "Sí" || onboarding.smallExpenseCategories.length > 0;
   const hasRequiredSmallExpensePlan =
@@ -682,7 +691,7 @@ export function hasCompletedOnboarding(onboarding: OnboardingData) {
       onboarding.incomeType &&
       onboarding.incomeFrequency &&
       onboarding.expensesRange &&
-      onboarding.expenseCategories.length > 0 &&
+      hasRecurringExpenseCategory &&
       onboarding.expensesFeeling &&
       onboarding.hasSmallExpenses &&
       hasRequiredSmallExpenseCategories &&

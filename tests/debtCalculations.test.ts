@@ -20,9 +20,9 @@ describe("registered debt calculations", () => {
         "Deudas",
         "Pago de deudas",
         "Salud",
-        "Vivienda"
+        "Arriendo"
       ])
-    ).toEqual(["Vivienda", "Salud"]);
+    ).toEqual(["Arriendo", "Salud"]);
   });
 
   it("creates one managed debt expense category from registered installments", () => {
@@ -39,15 +39,15 @@ describe("registered debt calculations", () => {
         }
       })
     ).toEqual({
-      expenseCategories: ["Vivienda", "Deudas"],
+      expenseCategories: ["Arriendo", "Deudas"],
       expenseCategoryAmounts: {
-        Vivienda: 900_000,
+        Arriendo: 900_000,
         Deudas: 750_000
       }
     });
   });
 
-  it("removes the managed debt category after the last registered debt is deleted", () => {
+  it("keeps the managed debt category visible after the last registered debt is deleted", () => {
     expect(
       syncDebtExpenseCategory({
         debts: [],
@@ -58,9 +58,9 @@ describe("registered debt calculations", () => {
         }
       })
     ).toEqual({
-      expenseCategories: ["Vivienda"],
+      expenseCategories: ["Arriendo", "Deudas"],
       expenseCategoryAmounts: {
-        Vivienda: 900_000
+        Arriendo: 900_000
       }
     });
   });
@@ -77,9 +77,9 @@ describe("registered debt calculations", () => {
         preserveExistingReference: true
       })
     ).toEqual({
-      expenseCategories: ["Vivienda", "Salud", "Deudas"],
+      expenseCategories: ["Arriendo", "Salud", "Deudas"],
       expenseCategoryAmounts: {
-        Vivienda: 900_000,
+        Arriendo: 900_000,
         Deudas: 300_000
       }
     });

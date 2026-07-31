@@ -10,6 +10,7 @@ export type DebtDataSource = "registered" | "category" | "reported" | "none";
 export type NewDebtViability = "possible" | "tight" | "risky" | "missing";
 
 export const DEBT_EXPENSE_CATEGORY = "Deudas";
+export const RENT_EXPENSE_CATEGORY = "Arriendo";
 
 export type RegisteredDebtSummary = {
   count: number;
@@ -65,8 +66,23 @@ export function isDebtExpenseCategory(category: string) {
   return normalizeText(category).includes("deuda");
 }
 
+function normalizeRecurringExpenseCategory(category: string) {
+  const trimmedCategory = category.trim();
+
+  return normalizeText(trimmedCategory) === "vivienda"
+    ? RENT_EXPENSE_CATEGORY
+    : trimmedCategory;
+}
+
 export function getRecurringExpenseCategories(categories: string[] | null | undefined) {
-  return [...new Set((categories ?? []).filter((category) => !isDebtExpenseCategory(category)))];
+  return [
+    ...new Set(
+      (categories ?? [])
+        .filter((category) => !isDebtExpenseCategory(category))
+        .map(normalizeRecurringExpenseCategory)
+        .filter(Boolean)
+    )
+  ];
 }
 
 function getDebtLevelFromRatio(ratio: number | null): DebtLevel {
@@ -229,14 +245,19 @@ export function syncDebtExpenseCategory({
   const recurringCategoryAmounts = Object.entries(expenseCategoryAmounts ?? {}).reduce<
     ExpenseCategoryAmounts
   >((amounts, [category, amount]) => {
-    if (!recurringCategorySet.has(category)) {
+    const normalizedCategory = normalizeRecurringExpenseCategory(category);
+
+    if (!recurringCategorySet.has(normalizedCategory)) {
       return amounts;
     }
 
     const normalizedAmount = Math.max(0, safeNumber(amount) ?? 0);
 
     if (normalizedAmount > 0) {
-      amounts[category] = normalizedAmount;
+      amounts[normalizedCategory] = Math.max(
+        amounts[normalizedCategory] ?? 0,
+        normalizedAmount
+      );
     }
 
     return amounts;
@@ -252,7 +273,7 @@ export function syncDebtExpenseCategory({
 
   if (monthlyPaymentTotal <= 0) {
     return {
-      expenseCategories: recurringCategories,
+      expenseCategories: [...recurringCategories, DEBT_EXPENSE_CATEGORY],
       expenseCategoryAmounts: recurringCategoryAmounts
     };
   }

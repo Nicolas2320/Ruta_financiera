@@ -47,6 +47,16 @@ describe("onboarding completion", () => {
       )
     ).toBe(false);
   });
+
+  it("does not treat the managed debt category as a selected recurring expense", () => {
+    expect(
+      hasCompletedOnboarding(
+        makeCompletedOnboarding({
+          expenseCategories: ["Deudas"]
+        })
+      )
+    ).toBe(false);
+  });
 });
 
 describe("debt normalization", () => {
