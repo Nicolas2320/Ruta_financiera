@@ -1,5 +1,14 @@
 export type DebtPaymentStatus = "on_track" | "sometimes_heavy" | "overdue" | "not_sure";
 
+export type DebtPaymentRecord = {
+  id: string;
+  amount: number;
+  date: string;
+  reportedRemainingAmount?: number | null;
+  previousRemainingAmount?: number | null;
+  createdAt?: string;
+};
+
 export const financialGuidanceModes = ["guided", "brief", "direct"] as const;
 
 export type FinancialGuidanceMode = (typeof financialGuidanceModes)[number];
@@ -20,6 +29,7 @@ export type DebtRecord = {
   annualInterestRate?: number | null;
   status: DebtPaymentStatus;
   paymentDay?: number | null;
+  payments?: DebtPaymentRecord[];
   createdAt?: string;
   updatedAt?: string;
 };
@@ -323,6 +333,65 @@ function normalizeAnnualInterestRate(value: unknown) {
     : null;
 }
 
+function normalizeDebtPaymentDate(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
+function normalizeDebtPaymentTimestamp(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function normalizeDebtPayments(value: unknown): DebtPaymentRecord[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const paymentIds = new Set<string>();
+
+  return value
+    .reduce<DebtPaymentRecord[]>((payments, payment, index) => {
+      if (!payment || typeof payment !== "object") {
+        return payments;
+      }
+
+      const rawPayment = payment as Partial<DebtPaymentRecord>;
+      const amount = normalizeGoalAmount(rawPayment.amount);
+      const date = normalizeDebtPaymentDate(rawPayment.date);
+      const id = normalizeDebtString(rawPayment.id) ?? `debt-payment-${index + 1}`;
+
+      if (amount === null || amount <= 0 || !date || paymentIds.has(id)) {
+        return payments;
+      }
+
+      paymentIds.add(id);
+
+      payments.push({
+        id,
+        amount,
+        date,
+        reportedRemainingAmount: normalizeGoalAmount(rawPayment.reportedRemainingAmount),
+        previousRemainingAmount: normalizeGoalAmount(rawPayment.previousRemainingAmount),
+        createdAt:
+          normalizeDebtPaymentTimestamp(rawPayment.createdAt) ?? `${date}T12:00:00.000Z`
+      });
+
+      return payments;
+    }, [])
+    .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
+}
+
 export function normalizeDebtRecords(value: unknown): DebtRecord[] {
   if (!Array.isArray(value)) {
     return [];
@@ -354,6 +423,7 @@ export function normalizeDebtRecords(value: unknown): DebtRecord[] {
       annualInterestRate: normalizeAnnualInterestRate(rawDebt.annualInterestRate),
       status: normalizeDebtPaymentStatus(rawDebt.status),
       paymentDay: normalizePaymentDay(rawDebt.paymentDay),
+      payments: normalizeDebtPayments(rawDebt.payments),
       createdAt: normalizeDebtString(rawDebt.createdAt) ?? now,
       updatedAt: normalizeDebtString(rawDebt.updatedAt) ?? now
     });
@@ -667,6 +737,15 @@ export function getLegacyFieldsFromGoal(goal: FinancialGoal | null) {
 
 export function hasCompletedOnboarding(onboarding: OnboardingData) {
   const skipsSmallExpenseDetails = onboarding.hasSmallExpenses === "No";
+  const hasRecurringExpenseCategory = onboarding.expenseCategories.some((category) => {
+    const normalizedCategory = category
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+
+    return normalizedCategory.length > 0 && !normalizedCategory.includes("deuda");
+  });
   const hasRequiredSmallExpenseCategories =
     onboarding.hasSmallExpenses !== "Sí" || onboarding.smallExpenseCategories.length > 0;
   const hasRequiredSmallExpensePlan =
@@ -682,7 +761,7 @@ export function hasCompletedOnboarding(onboarding: OnboardingData) {
       onboarding.incomeType &&
       onboarding.incomeFrequency &&
       onboarding.expensesRange &&
-      onboarding.expenseCategories.length > 0 &&
+      hasRecurringExpenseCategory &&
       onboarding.expensesFeeling &&
       onboarding.hasSmallExpenses &&
       hasRequiredSmallExpenseCategories &&

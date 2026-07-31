@@ -5,7 +5,8 @@ import { ArrowRight } from "lucide-react-native";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
 
-type ButtonVariant = "primary" | "secondary";
+type ButtonVariant = "danger" | "primary" | "secondary";
+type ButtonSize = "compact" | "default";
 
 type IconProps = {
   color?: string;
@@ -20,6 +21,7 @@ type PrimaryButtonProps = {
   variant?: ButtonVariant;
   icon?: ComponentType<IconProps> | null;
   iconPosition?: "inline" | "right";
+  size?: ButtonSize;
   style?: StyleProp<ViewStyle>;
   disabled?: boolean;
 };
@@ -31,12 +33,20 @@ export function PrimaryButton({
   variant = "primary",
   icon: Icon = ArrowRight,
   iconPosition = "inline",
+  size = "default",
   style,
   disabled = false
 }: PrimaryButtonProps) {
   const isPrimary = variant === "primary";
+  const isDanger = variant === "danger";
   const hasTrailingIcon = Boolean(Icon && iconPosition === "right");
-  const contentColor = disabled ? colors.textSubtle : isPrimary ? colors.surface : colors.primary;
+  const contentColor = disabled
+    ? colors.textSubtle
+    : isPrimary
+      ? colors.surface
+      : isDanger
+        ? colors.danger
+        : colors.primary;
 
   return (
     <Pressable
@@ -47,7 +57,10 @@ export function PrimaryButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        isPrimary ? styles.primary : styles.secondary,
+        size === "compact" && styles.compact,
+        isPrimary && styles.primary,
+        variant === "secondary" && styles.secondary,
+        isDanger && styles.danger,
         pressed && !disabled && styles.pressed,
         disabled && styles.disabled,
         style
@@ -57,7 +70,9 @@ export function PrimaryButton({
         <Text
           style={[
             styles.text,
-            isPrimary ? styles.primaryText : styles.secondaryText,
+            isPrimary && styles.primaryText,
+            variant === "secondary" && styles.secondaryText,
+            isDanger && styles.dangerText,
             hasTrailingIcon && styles.trailingText,
             disabled && styles.disabledText
           ]}
@@ -85,14 +100,23 @@ const styles = StyleSheet.create({
   primary: {
     backgroundColor: colors.primary
   },
+  compact: {
+    minHeight: 44,
+    paddingHorizontal: spacing.md
+  },
   secondary: {
     backgroundColor: colors.primarySoft,
     borderColor: colors.border,
     borderWidth: 1
   },
+  danger: {
+    backgroundColor: colors.dangerSoft,
+    borderColor: colors.dangerBorder,
+    borderWidth: 1
+  },
   disabled: {
-    backgroundColor: "#E2E8F0",
-    borderColor: colors.border,
+    backgroundColor: colors.disabled,
+    borderColor: colors.disabledBorder,
     opacity: 0.86
   },
   pressed: {
@@ -115,7 +139,8 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: typography.button,
-    fontWeight: typography.weight.semibold
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.button
   } satisfies TextStyle,
   trailingText: {
     paddingHorizontal: spacing.xl
@@ -125,6 +150,9 @@ const styles = StyleSheet.create({
   },
   secondaryText: {
     color: colors.primary
+  },
+  dangerText: {
+    color: colors.danger
   },
   disabledText: {
     color: colors.textSubtle

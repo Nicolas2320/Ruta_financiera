@@ -80,6 +80,8 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     useState<OnboardingContextValue["onboardingSyncStatus"]>("idle");
   const [onboardingSyncError, setOnboardingSyncError] = useState<string | null>(null);
   const guestSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const authenticatedSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const authenticatedSaveRevisionRef = useRef(0);
   const migrationRef = useRef<{
     promise: Promise<GuestFinancialDraft | null>;
     userId: string;
@@ -261,12 +263,26 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
         setOnboardingSyncStatus("saving");
         setOnboardingSyncError(null);
 
-        saveOnboardingData(user.id, next)
+        const saveRevision = authenticatedSaveRevisionRef.current + 1;
+        authenticatedSaveRevisionRef.current = saveRevision;
+        authenticatedSaveQueueRef.current = authenticatedSaveQueueRef.current
+          .catch(() => undefined)
+          .then(() => saveOnboardingData(user.id, next));
+
+        authenticatedSaveQueueRef.current
           .then(() => {
+            if (authenticatedSaveRevisionRef.current !== saveRevision) {
+              return;
+            }
+
             setFinancialProfileExists(true);
             setOnboardingSyncStatus("saved");
           })
           .catch((error: Error) => {
+            if (authenticatedSaveRevisionRef.current !== saveRevision) {
+              return;
+            }
+
             setOnboardingSyncStatus("error");
             setOnboardingSyncError(error.message);
           });
@@ -312,17 +328,26 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
 
       setOnboardingSyncStatus("saving");
       setOnboardingSyncError(null);
+      const saveRevision = authenticatedSaveRevisionRef.current + 1;
+      authenticatedSaveRevisionRef.current = saveRevision;
 
       try {
-        await persistExactValues(user.id, nextValues);
+        authenticatedSaveQueueRef.current = authenticatedSaveQueueRef.current
+          .catch(() => undefined)
+          .then(() => persistExactValues(user.id, nextValues));
+        await authenticatedSaveQueueRef.current;
         setExactValues(nextValues);
         setFinancialProfileExists(true);
-        setOnboardingSyncStatus("saved");
+        if (authenticatedSaveRevisionRef.current === saveRevision) {
+          setOnboardingSyncStatus("saved");
+        }
         return true;
       } catch (error) {
         const message = error instanceof Error ? error.message : "No pudimos guardar los datos.";
-        setOnboardingSyncStatus("error");
-        setOnboardingSyncError(message);
+        if (authenticatedSaveRevisionRef.current === saveRevision) {
+          setOnboardingSyncStatus("error");
+          setOnboardingSyncError(message);
+        }
         return false;
       }
     },
@@ -368,21 +393,28 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
       }
 
       setOnboardingSyncStatus("saving");
+      const saveRevision = authenticatedSaveRevisionRef.current + 1;
+      authenticatedSaveRevisionRef.current = saveRevision;
 
       try {
-        await saveFinancialProfileDraft(
-          user.id,
-          nextOnboarding,
-          nextExactValues
-        );
+        authenticatedSaveQueueRef.current = authenticatedSaveQueueRef.current
+          .catch(() => undefined)
+          .then(() =>
+            saveFinancialProfileDraft(user.id, nextOnboarding, nextExactValues)
+          );
+        await authenticatedSaveQueueRef.current;
         setFinancialProfileExists(true);
-        setOnboardingSyncStatus("saved");
+        if (authenticatedSaveRevisionRef.current === saveRevision) {
+          setOnboardingSyncStatus("saved");
+        }
         return true;
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "No pudimos guardar los datos.";
-        setOnboardingSyncStatus("error");
-        setOnboardingSyncError(message);
+        if (authenticatedSaveRevisionRef.current === saveRevision) {
+          setOnboardingSyncStatus("error");
+          setOnboardingSyncError(message);
+        }
         return false;
       }
     },
@@ -425,19 +457,30 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
 
     setOnboardingSyncStatus("saving");
     setOnboardingSyncError(null);
+    const saveRevision = authenticatedSaveRevisionRef.current + 1;
+    authenticatedSaveRevisionRef.current = saveRevision;
 
     try {
-      await saveOnboardingData(user.id, nextOnboarding);
-      await persistExactValues(user.id, nextExactValues);
+      authenticatedSaveQueueRef.current = authenticatedSaveQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          await saveOnboardingData(user.id, nextOnboarding);
+          await persistExactValues(user.id, nextExactValues);
+        });
+      await authenticatedSaveQueueRef.current;
       setOnboarding(nextOnboarding);
       setExactValues(nextExactValues);
       setFinancialProfileExists(true);
-      setOnboardingSyncStatus("saved");
+      if (authenticatedSaveRevisionRef.current === saveRevision) {
+        setOnboardingSyncStatus("saved");
+      }
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "No pudimos borrar los datos.";
-      setOnboardingSyncStatus("error");
-      setOnboardingSyncError(message);
+      if (authenticatedSaveRevisionRef.current === saveRevision) {
+        setOnboardingSyncStatus("error");
+        setOnboardingSyncError(message);
+      }
       return false;
     }
   }, [isSupabaseConfigured, user]);

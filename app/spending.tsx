@@ -44,6 +44,10 @@ import {
   normalizeFinancialGuidanceMode
 } from "../types/financial";
 import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
+import {
+  isDebtExpenseCategory,
+  syncDebtExpenseCategory
+} from "../utils/debtCalculations";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
 import {
   getMonthlyPlanData,
@@ -71,19 +75,6 @@ type CategoryVisual = {
 
 type CategoryAmountInputs = Record<string, string>;
 
-type CategorySpendingItem = {
-  amount: number | null;
-  index: number;
-  label: string;
-  share: number | null;
-};
-
-type OpportunityInsight = {
-  impact: string;
-  label: string;
-  text: string;
-};
-
 const defaultCategoryVisual: CategoryVisual = {
   icon: CircleEllipsis,
   color: colors.textSubtle,
@@ -91,6 +82,11 @@ const defaultCategoryVisual: CategoryVisual = {
 };
 
 const categoryVisuals: Record<string, CategoryVisual> = {
+  arriendo: {
+    icon: House,
+    color: "#7C3AED",
+    backgroundColor: "#EFE7FF"
+  },
   vivienda: {
     icon: House,
     color: "#7C3AED",
@@ -330,47 +326,6 @@ function getPrioritizedCategoryLabels(categories: string[], amounts: Record<stri
   });
 }
 
-function getCategorySpendingItems(
-  categories: string[],
-  amounts: Record<string, number>,
-  totalExpenses: number | null
-): CategorySpendingItem[] {
-  return categories
-    .map((category, index) => {
-      const amount = amounts[category] ?? null;
-
-      return {
-        amount,
-        index,
-        label: category,
-        share: getCategorySharePercentage(amount, totalExpenses)
-      };
-    })
-    .sort((leftItem, rightItem) => {
-      if (leftItem.amount !== null && rightItem.amount !== null) {
-        return rightItem.amount - leftItem.amount;
-      }
-
-      if (leftItem.amount !== null) {
-        return -1;
-      }
-
-      if (rightItem.amount !== null) {
-        return 1;
-      }
-
-      return leftItem.index - rightItem.index;
-    });
-}
-
-function getTopKnownCategory(categoryItems: CategorySpendingItem[]) {
-  return categoryItems.find((categoryItem) => categoryItem.amount !== null && categoryItem.amount > 0) ?? null;
-}
-
-function roundMonthlyImpact(value: number) {
-  return Math.max(1000, Math.round(value / 1000) * 1000);
-}
-
 function haveCategoryAmountsChanged(
   currentAmounts: Record<string, number>,
   nextAmounts: Record<string, number>
@@ -520,63 +475,6 @@ function getSmallExpensesText(data: MonthlyPlanData, metrics: MonthlyPlanMetrics
   }
 
   return "Puedes completar esta parte para entender si hay consumos pequeños que valga la pena mirar.";
-}
-
-function getOpportunityInsight(
-  categoryItems: CategorySpendingItem[],
-  metrics: MonthlyPlanMetrics
-): OpportunityInsight {
-  const topCategory = getTopKnownCategory(categoryItems);
-
-  if (topCategory?.amount) {
-    const monthlyImpact = roundMonthlyImpact(topCategory.amount * 0.05);
-    const shareText =
-      topCategory.share !== null
-        ? topCategory.share > 100
-          ? "Este monto supera tu gasto mensual estimado; puede valer la pena revisarlo."
-          : `Representa ${topCategory.share}% de tu gasto mensual conocido.`
-        : "Es tu categoría con mayor monto conocido.";
-
-    return {
-      impact: `Un ajuste de ${formatCOP(monthlyImpact)} al mes sumaría ${formatCOP(
-        monthlyImpact * 12
-      )} al año.`,
-      label: `Revisar ${topCategory.label}`,
-      text: `${shareText} Puedes decidir qué conservar y qué ajustar.`
-    };
-  }
-
-  const smallExpenses = metrics.snapshot.smallExpenses.amount;
-
-  if (smallExpenses !== null && smallExpenses > 0) {
-    const monthlyImpact = roundMonthlyImpact(smallExpenses * 0.1);
-
-    return {
-      impact: `Ajustar ${formatCOP(monthlyImpact)} al mes sumaría ${formatCOP(
-        monthlyImpact * 12
-      )} al año.`,
-      label: "Revisar gastos pequeños",
-      text: "Una oportunidad puede estar en consumos repetidos que no siempre se sienten grandes."
-    };
-  }
-
-  if (metrics.expenseMidpoint !== null && metrics.expenseMidpoint > 0) {
-    const monthlyImpact = roundMonthlyImpact(metrics.expenseMidpoint * 0.03);
-
-    return {
-      impact: `${formatCOP(monthlyImpact)} al mes equivalen a ${formatCOP(
-        monthlyImpact * 12
-      )} al año.`,
-      label: "Elegir una categoría",
-      text: "Puedes ingresar montos en tus categorías para encontrar una oportunidad más concreta."
-    };
-  }
-
-  return {
-    impact: "Cuando tengas un gasto mensual, calcularemos un impacto simple.",
-    label: "Completar tus datos",
-    text: "Con ingresos, gastos y categorías podremos mostrar una oportunidad útil."
-  };
 }
 
 function IconBubble({
@@ -922,10 +820,24 @@ export default function SpendingScreen() {
       (item) => item.target === "cashflow" || item.target === "small_expenses"
     )
   ];
-  const expenseCategories = onboarding.expenseCategories;
+  const syncedExpenseData = useMemo(
+    () =>
+      syncDebtExpenseCategory({
+        debts: onboarding.debts,
+        expenseCategories: onboarding.expenseCategories,
+        expenseCategoryAmounts: onboarding.expenseCategoryAmounts,
+        preserveExistingReference: true
+      }),
+    [onboarding.debts, onboarding.expenseCategories, onboarding.expenseCategoryAmounts]
+  );
+  const expenseCategories = syncedExpenseData.expenseCategories;
   const savedCategoryAmounts = useMemo(
-    () => normalizeExpenseCategoryAmounts(onboarding.expenseCategoryAmounts, expenseCategories),
-    [expenseCategories, onboarding.expenseCategoryAmounts]
+    () =>
+      normalizeExpenseCategoryAmounts(
+        syncedExpenseData.expenseCategoryAmounts,
+        expenseCategories
+      ),
+    [expenseCategories, syncedExpenseData.expenseCategoryAmounts]
   );
   const [categoryAmountInputs, setCategoryAmountInputs] = useState<CategoryAmountInputs>(() =>
     getCategoryAmountInputValues(expenseCategories, savedCategoryAmounts)
@@ -946,14 +858,6 @@ export default function SpendingScreen() {
   const prioritizedExpenseCategories = useMemo(
     () => getPrioritizedCategoryLabels(expenseCategories, savedCategoryAmounts),
     [expenseCategories, savedCategoryAmounts]
-  );
-  const categorySpendingItems = useMemo(
-    () => getCategorySpendingItems(expenseCategories, categoryAmountsFromInputs, metrics.expenseMidpoint),
-    [categoryAmountsFromInputs, expenseCategories, metrics.expenseMidpoint]
-  );
-  const opportunityInsight = useMemo(
-    () => getOpportunityInsight(categorySpendingItems, metrics),
-    [categorySpendingItems, metrics]
   );
   const hasCategoryAmountChanges = haveCategoryAmountsChanged(
     savedCategoryAmounts,
@@ -989,6 +893,7 @@ export default function SpendingScreen() {
 
   const saveCategoryAmounts = () => {
     updateOnboarding({
+      expenseCategories,
       expenseCategoryAmounts: normalizeExpenseCategoryAmounts(
         categoryAmountsFromInputs,
         expenseCategories
@@ -1165,25 +1070,6 @@ export default function SpendingScreen() {
             </View>
           </View>
 
-          <View style={[styles.opportunityCard, isPhone && styles.cardPhone]}>
-            <View style={styles.opportunityHeader}>
-              <IconBubble
-                icon={<LineChart color={colors.support} size={20} strokeWidth={2.4} />}
-                size="small"
-                tone="support"
-              />
-              <Text style={styles.sectionTitle}>Tu mayor oportunidad este mes</Text>
-            </View>
-            <Text style={styles.opportunityLabel}>{opportunityInsight.label}</Text>
-            <View style={styles.opportunityNote}>
-              <Text style={styles.opportunityNoteText}>{opportunityInsight.text}</Text>
-            </View>
-            <View style={styles.impactBlock}>
-              <Text style={styles.impactLabel}>Impacto de un ajuste pequeño</Text>
-              <Text style={styles.impactText}>{opportunityInsight.impact}</Text>
-            </View>
-          </View>
-
           {spendingSignals.length > 0 ? (
             <SectionCard
               compact={isPhone}
@@ -1236,7 +1122,7 @@ export default function SpendingScreen() {
                       isExactMonthlyExpense={hasExactMonthlyExpenses}
                       inputValue={categoryAmountInputs[category] ?? ""}
                       label={category}
-                      locked={normalizeLabel(category) === "deudas"}
+                      locked={isDebtExpenseCategory(category)}
                       onManagePress={() => router.push("/debts")}
                       onChangeText={(value) => updateCategoryAmountInput(category, value)}
                       totalExpenses={metrics.expenseMidpoint}
@@ -1535,58 +1421,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.body,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
-  },
-  opportunityCard: {
-    ...shadows.card,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    gap: spacing.sm,
-    padding: spacing.lg
-  },
-  opportunityHeader: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: spacing.sm
-  },
-  opportunityLabel: {
-    color: colors.support,
-    fontSize: typography.sectionTitle,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.sectionTitle
-  },
-  opportunityNote: {
-    backgroundColor: colors.warningSoft,
-    borderColor: "#FED7AA",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: spacing.md
-  },
-  opportunityNoteText: {
-    color: "#92400E",
-    fontSize: typography.body,
-    fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.body
-  },
-  impactBlock: {
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-    paddingTop: spacing.sm
-  },
-  impactLabel: {
-    color: colors.textSubtle,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  impactText: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.body
   },
   planSignalsList: {

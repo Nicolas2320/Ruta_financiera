@@ -85,4 +85,17 @@ describe("monthly debt plan", () => {
     expect(actions[1].description).toContain("pagos atrasados");
     expect(actions[1].estimatedImpact).toContain("32% E.A.");
   });
+
+  it("does not prioritize a debt whose confirmed balance is zero", () => {
+    const paidDebt = makeDebt({
+      id: "paid",
+      remainingAmount: 0,
+      status: "overdue",
+      annualInterestRate: 50
+    });
+    const activeDebt = makeDebt({ id: "active", remainingAmount: 500_000 });
+
+    expect(getPriorityDebt([paidDebt, activeDebt])?.id).toBe("active");
+    expect(getPriorityDebt([paidDebt])).toBeNull();
+  });
 });

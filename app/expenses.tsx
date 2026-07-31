@@ -9,7 +9,6 @@ import {
   Cable,
   CalendarCheck,
   CircleEllipsis,
-  CreditCard,
   Flag,
   Frown,
   Gamepad2,
@@ -43,7 +42,10 @@ import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import { normalizeExpenseCategoryAmounts } from "../types/financial";
+import {
+  getRecurringExpenseCategories,
+  syncDebtExpenseCategory
+} from "../utils/debtCalculations";
 
 const expensesCupReceipt = require("../assets/illustrations/expenses-cup-receipt.png");
 
@@ -77,7 +79,7 @@ const expenseCategories: Array<{
   backgroundColor: string;
 }> = [
   {
-    label: "Vivienda",
+    label: "Arriendo",
     icon: House,
     color: "#7C3AED",
     backgroundColor: "#EFE7FF"
@@ -99,12 +101,6 @@ const expenseCategories: Array<{
     icon: Cable,
     color: "#1C7ED6",
     backgroundColor: "#E5F2FF"
-  },
-  {
-    label: "Deudas",
-    icon: CreditCard,
-    color: "#2563EB",
-    backgroundColor: "#EAF1FF"
   },
   {
     label: "Educación",
@@ -220,7 +216,7 @@ export default function ExpensesScreen() {
     normalizeExpenseRange(onboarding.expensesRange)
   );
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
-    onboarding.expenseCategories
+    getRecurringExpenseCategories(onboarding.expenseCategories)
   );
   const [selectedExpenseFeeling, setSelectedExpenseFeeling] = useState<string | null>(
     onboarding.expensesFeeling
@@ -234,7 +230,7 @@ export default function ExpensesScreen() {
 
     hasHydratedStoredAnswers.current = true;
     setSelectedExpenseRange(normalizeExpenseRange(onboarding.expensesRange));
-    setSelectedCategories(onboarding.expenseCategories);
+    setSelectedCategories(getRecurringExpenseCategories(onboarding.expenseCategories));
     setSelectedExpenseFeeling(onboarding.expensesFeeling);
   }, [onboarding, onboardingSyncStatus]);
 
@@ -256,13 +252,16 @@ export default function ExpensesScreen() {
       return;
     }
 
+    const syncedExpenseData = syncDebtExpenseCategory({
+      debts: onboarding.debts,
+      expenseCategories: selectedCategories,
+      expenseCategoryAmounts: onboarding.expenseCategoryAmounts,
+      preserveExistingReference: true
+    });
+
     updateOnboarding({
       expensesRange: selectedExpenseRange,
-      expenseCategories: selectedCategories,
-      expenseCategoryAmounts: normalizeExpenseCategoryAmounts(
-        onboarding.expenseCategoryAmounts,
-        selectedCategories
-      ),
+      ...syncedExpenseData,
       expensesFeeling: selectedExpenseFeeling
     });
     router.push(
@@ -334,7 +333,10 @@ export default function ExpensesScreen() {
 
             <View style={[styles.card, showSideBySide && styles.categoryPanel]}>
               <Text style={styles.questionTitle}>¿Cuáles son tus gastos principales?</Text>
-              <Text style={styles.helperText}>Puedes elegir varias categorías.</Text>
+              <Text style={styles.helperText}>
+                Elige gastos habituales que no tengan un saldo pendiente. Los préstamos y
+                créditos se registran en Deudas.
+              </Text>
               <View style={styles.categoryGrid}>
                 {expenseCategories.map((category) => (
                   <CategoryChip

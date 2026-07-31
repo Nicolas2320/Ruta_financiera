@@ -360,6 +360,45 @@ describe("FinancialProfileProvider", () => {
     });
   });
 
+  it("serializes authenticated onboarding writes so newer debt data cannot be overwritten", async () => {
+    let resolveFirstSave!: () => void;
+    contextMocks.fetchFinancialProfile.mockResolvedValue(
+      createProfile("Andrea", "action-1")
+    );
+    contextMocks.saveOnboardingData
+      .mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          resolveFirstSave = resolve;
+        })
+      )
+      .mockResolvedValueOnce(undefined);
+    await mountProviders();
+
+    await act(async () => {
+      getOnboarding().updateOnboarding({ firstName: "Primer cambio" });
+      getOnboarding().updateOnboarding({ lastName: "Segundo cambio" });
+      await flushEffects();
+    });
+
+    expect(contextMocks.saveOnboardingData).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      resolveFirstSave();
+      await flushEffects();
+    });
+
+    expect(contextMocks.saveOnboardingData).toHaveBeenCalledTimes(2);
+    expect(contextMocks.saveOnboardingData).toHaveBeenNthCalledWith(
+      2,
+      "user-1",
+      expect.objectContaining({
+        firstName: "Primer cambio",
+        lastName: "Segundo cambio"
+      })
+    );
+    expect(getOnboarding().onboardingSyncStatus).toBe("saved");
+  });
+
   it("stores a guest onboarding and exact-value change as one local draft", async () => {
     contextMocks.auth.user = null;
     contextMocks.loadGuestFinancialDraft.mockResolvedValue(null);

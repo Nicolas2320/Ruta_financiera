@@ -14,6 +14,7 @@ import {
   type ExactFinancialValues,
   type OnboardingData
 } from "../types/financial";
+import { syncDebtExpenseCategory } from "../utils/debtCalculations";
 import { normalizeExactValues } from "../utils/financialRanges";
 
 const FINANCIAL_PROFILES_TABLE = "financial_profiles";
@@ -42,20 +43,26 @@ function getSupabaseClient() {
 export function normalizeOnboardingData(
   onboarding: Partial<OnboardingData> | null | undefined
 ) {
+  const debts = normalizeDebtRecords(onboarding?.debts);
+  const expenseData = syncDebtExpenseCategory({
+    debts,
+    expenseCategories: Array.isArray(onboarding?.expenseCategories)
+      ? onboarding.expenseCategories
+      : [],
+    expenseCategoryAmounts: normalizeExpenseCategoryAmounts(
+      onboarding?.expenseCategoryAmounts
+    ),
+    preserveExistingReference: true
+  });
   const normalizedBase: OnboardingData = {
     ...initialOnboarding,
     ...(onboarding ?? {}),
     firstName: typeof onboarding?.firstName === "string" ? onboarding.firstName : "",
     lastName: typeof onboarding?.lastName === "string" ? onboarding.lastName : "",
     financialGuidanceMode: normalizeFinancialGuidanceMode(onboarding?.financialGuidanceMode),
-    expenseCategories: Array.isArray(onboarding?.expenseCategories)
-      ? onboarding.expenseCategories
-      : [],
-    expenseCategoryAmounts: normalizeExpenseCategoryAmounts(
-      onboarding?.expenseCategoryAmounts,
-      onboarding?.expenseCategories
-    ),
-    debts: normalizeDebtRecords(onboarding?.debts),
+    expenseCategories: expenseData.expenseCategories,
+    expenseCategoryAmounts: expenseData.expenseCategoryAmounts,
+    debts,
     smallExpenseCategories: Array.isArray(onboarding?.smallExpenseCategories)
       ? onboarding.smallExpenseCategories
       : [],

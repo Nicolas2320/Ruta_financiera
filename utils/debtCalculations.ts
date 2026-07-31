@@ -3,11 +3,15 @@ import type {
   DebtRecord,
   ExpenseCategoryAmounts
 } from "../types/financial";
+import { isDebtPaid } from "./debtPayments";
 import { formatCOP } from "./financialRanges";
 
 export type DebtLevel = "none" | "low" | "medium" | "high" | "unknown";
 export type DebtDataSource = "registered" | "category" | "reported" | "none";
 export type NewDebtViability = "possible" | "tight" | "risky" | "missing";
+
+export const DEBT_EXPENSE_CATEGORY = "Deudas";
+export const RENT_EXPENSE_CATEGORY = "Arriendo";
 
 export type RegisteredDebtSummary = {
   count: number;
@@ -57,6 +61,29 @@ function normalizeText(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+export function isDebtExpenseCategory(category: string) {
+  return normalizeText(category).includes("deuda");
+}
+
+function normalizeRecurringExpenseCategory(category: string) {
+  const trimmedCategory = category.trim();
+
+  return normalizeText(trimmedCategory) === "vivienda"
+    ? RENT_EXPENSE_CATEGORY
+    : trimmedCategory;
+}
+
+export function getRecurringExpenseCategories(categories: string[] | null | undefined) {
+  return [
+    ...new Set(
+      (categories ?? [])
+        .filter((category) => !isDebtExpenseCategory(category))
+        .map(normalizeRecurringExpenseCategory)
+        .filter(Boolean)
+    )
+  ];
 }
 
 function getDebtLevelFromRatio(ratio: number | null): DebtLevel {
@@ -139,7 +166,8 @@ function pickHigherDebtLevel(left: DebtLevel, right: DebtLevel): DebtLevel {
 
 export function getDebtMonthlyPaymentTotal(debts: DebtRecord[] | null | undefined) {
   return (debts ?? []).reduce(
-    (total, debt) => total + Math.max(0, safeNumber(debt.monthlyPayment) ?? 0),
+    (total, debt) =>
+      total + (isDebtPaid(debt) ? 0 : Math.max(0, safeNumber(debt.monthlyPayment) ?? 0)),
     0
   );
 }
@@ -167,6 +195,26 @@ export function getDebtToIncomeRatio(
   return monthlyPaymentTotal / monthlyIncome;
 }
 
+export function hasDebtMonthlyExpenseMismatch({
+  isExactMonthlyExpense,
+  monthlyExpenses,
+  monthlyPaymentTotal
+}: {
+  isExactMonthlyExpense: boolean;
+  monthlyExpenses: number | null | undefined;
+  monthlyPaymentTotal: number;
+}) {
+  const normalizedMonthlyExpenses = safeNumber(monthlyExpenses);
+  const normalizedMonthlyPaymentTotal = safeNumber(monthlyPaymentTotal);
+
+  return Boolean(
+    isExactMonthlyExpense &&
+      normalizedMonthlyExpenses !== null &&
+      normalizedMonthlyPaymentTotal !== null &&
+      normalizedMonthlyPaymentTotal > normalizedMonthlyExpenses
+  );
+}
+
 export function getDebtCategoryMonthlyPaymentTotal(
   expenseCategoryAmounts: ExpenseCategoryAmounts | null | undefined
 ) {
@@ -175,12 +223,70 @@ export function getDebtCategoryMonthlyPaymentTotal(
   }
 
   return Object.entries(expenseCategoryAmounts).reduce((total, [category, amount]) => {
-    if (!normalizeText(category).includes("deuda")) {
+    if (!isDebtExpenseCategory(category)) {
       return total;
     }
 
     return total + Math.max(0, safeNumber(amount) ?? 0);
   }, 0);
+}
+
+export function syncDebtExpenseCategory({
+  debts,
+  expenseCategories,
+  expenseCategoryAmounts,
+  preserveExistingReference = false
+}: {
+  debts: DebtRecord[] | null | undefined;
+  expenseCategories: string[] | null | undefined;
+  expenseCategoryAmounts: ExpenseCategoryAmounts | null | undefined;
+  preserveExistingReference?: boolean;
+}) {
+  const recurringCategories = getRecurringExpenseCategories(expenseCategories);
+  const recurringCategorySet = new Set(recurringCategories);
+  const recurringCategoryAmounts = Object.entries(expenseCategoryAmounts ?? {}).reduce<
+    ExpenseCategoryAmounts
+  >((amounts, [category, amount]) => {
+    const normalizedCategory = normalizeRecurringExpenseCategory(category);
+
+    if (!recurringCategorySet.has(normalizedCategory)) {
+      return amounts;
+    }
+
+    const normalizedAmount = Math.max(0, safeNumber(amount) ?? 0);
+
+    if (normalizedAmount > 0) {
+      amounts[normalizedCategory] = Math.max(
+        amounts[normalizedCategory] ?? 0,
+        normalizedAmount
+      );
+    }
+
+    return amounts;
+  }, {});
+  const registeredMonthlyPaymentTotal = getDebtMonthlyPaymentTotal(debts);
+  const existingMonthlyPaymentReference = preserveExistingReference
+    ? getDebtCategoryMonthlyPaymentTotal(expenseCategoryAmounts)
+    : 0;
+  const monthlyPaymentTotal =
+    registeredMonthlyPaymentTotal > 0
+      ? registeredMonthlyPaymentTotal
+      : existingMonthlyPaymentReference;
+
+  if (monthlyPaymentTotal <= 0) {
+    return {
+      expenseCategories: [...recurringCategories, DEBT_EXPENSE_CATEGORY],
+      expenseCategoryAmounts: recurringCategoryAmounts
+    };
+  }
+
+  return {
+    expenseCategories: [...recurringCategories, DEBT_EXPENSE_CATEGORY],
+    expenseCategoryAmounts: {
+      ...recurringCategoryAmounts,
+      [DEBT_EXPENSE_CATEGORY]: monthlyPaymentTotal
+    }
+  };
 }
 
 export function getRegisteredDebtSummary({
@@ -195,9 +301,11 @@ export function getRegisteredDebtSummary({
   monthlyIncome: number | null | undefined;
 }): RegisteredDebtSummary {
   const validDebts = debts ?? [];
+  const activeDebts = validDebts.filter((debt) => !isDebtPaid(debt));
   const registeredMonthlyPaymentTotal = getDebtMonthlyPaymentTotal(validDebts);
   const categoryMonthlyPaymentTotal = getDebtCategoryMonthlyPaymentTotal(expenseCategoryAmounts);
-  const hasRegisteredDebts = validDebts.length > 0 && registeredMonthlyPaymentTotal > 0;
+  const hasRegisteredDebts = activeDebts.length > 0 && registeredMonthlyPaymentTotal > 0;
+  const hasDetailedDebtRecords = validDebts.length > 0;
   const hasCategoryDebtReference = categoryMonthlyPaymentTotal > 0;
   const monthlyPaymentTotal = hasRegisteredDebts
     ? registeredMonthlyPaymentTotal
@@ -207,7 +315,7 @@ export function getRegisteredDebtSummary({
   const reportedPaymentRatio = getReportedDebtPaymentRatio(debtPaymentShare);
 
   if (!hasRegisteredDebts && !hasCategoryDebtReference) {
-    if (reportedPaymentRatio !== null && reportedPaymentRatio > 0) {
+    if (!hasDetailedDebtRecords && reportedPaymentRatio !== null && reportedPaymentRatio > 0) {
       const reportedMonthlyPayment =
         monthlyIncome && monthlyIncome > 0
           ? Math.round(monthlyIncome * reportedPaymentRatio)
@@ -247,12 +355,12 @@ export function getRegisteredDebtSummary({
   }
 
   const ratioLevel = getDebtLevelFromRatio(debtToIncomeRatio);
-  const statusLevel = hasRegisteredDebts ? getStatusLevel(validDebts) : "none";
+  const statusLevel = hasRegisteredDebts ? getStatusLevel(activeDebts) : "none";
   const level = pickHigherDebtLevel(ratioLevel, statusLevel);
   const source = hasRegisteredDebts ? "registered" : "category";
 
   return {
-    count: validDebts.length,
+    count: activeDebts.length,
     source,
     monthlyPaymentTotal,
     categoryMonthlyPaymentTotal,
