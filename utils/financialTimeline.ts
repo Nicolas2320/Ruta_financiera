@@ -46,7 +46,16 @@ export type FinancialTimelineMonth = {
   newlyPaidDebtIds: string[];
   protectedMargin: number;
   releasedPaymentNextMonth: number;
+  trackedGoalAmount: number | null;
   unassignedAmount: number;
+};
+
+export type TimelineTrackedGoal = {
+  currentAmount: number;
+  goalId: string;
+  targetAmount: number | null;
+  targetMonth: string | null;
+  title: string;
 };
 
 export type FinancialScenarioTimeline = {
@@ -57,6 +66,7 @@ export type FinancialScenarioTimeline = {
   months: FinancialTimelineMonth[];
   status: DistributionScenarioStatus;
   totalInterestCharged: number;
+  trackedGoal: TimelineTrackedGoal | null;
 };
 
 type TimelineDebtState = {
@@ -228,6 +238,16 @@ export function buildFinancialScenarioTimeline({
   const hasUnknownInterestRates = input.debts.some(
     (debt) => debt.annualInterestRate === null
   );
+  const trackedGoal = getActiveGoal(input.goals, scenario);
+  const trackedGoalSummary = trackedGoal
+    ? {
+        currentAmount: trackedGoal.currentAmount,
+        goalId: trackedGoal.id,
+        targetAmount: trackedGoal.targetAmount,
+        targetMonth: trackedGoal.targetMonth,
+        title: trackedGoal.title
+      }
+    : null;
 
   if (scenario.status !== "ready" || monthlyIncome === null || operatingCosts === null) {
     return {
@@ -237,7 +257,8 @@ export function buildFinancialScenarioTimeline({
       hasUnknownInterestRates,
       months: [],
       status: scenario.status,
-      totalInterestCharged: 0
+      totalInterestCharged: 0,
+      trackedGoal: trackedGoalSummary
     };
   }
 
@@ -253,11 +274,15 @@ export function buildFinancialScenarioTimeline({
   );
   const activeGoal =
     scenario.id === "accelerate_goal" || scenario.id === "split_debt_goal"
-      ? getActiveGoal(input.goals, scenario)
+      ? trackedGoal
       : scenario.id === "current_reference" && scenario.goalAllocations[0]
         ? input.goals.find((goal) => goal.id === scenario.goalAllocations[0].goalId) ?? null
         : null;
-  const selectedGoalState = activeGoal ? goalStates.get(activeGoal.id) ?? null : null;
+  const selectedGoalState = trackedGoal ? goalStates.get(trackedGoal.id) ?? null : null;
+  const scenarioWaitsForGoal =
+    scenario.id === "accelerate_goal" ||
+    scenario.id === "split_debt_goal" ||
+    (scenario.id === "current_reference" && activeGoal !== null);
   const preference = getProtectedMarginPreference(scenario);
   const paidDebtIds = new Set<string>();
   const months: FinancialTimelineMonth[] = [];
@@ -462,6 +487,7 @@ export function buildFinancialScenarioTimeline({
       newlyPaidDebtIds,
       protectedMargin,
       releasedPaymentNextMonth,
+      trackedGoalAmount: selectedGoalState?.amount ?? null,
       unassignedAmount
     });
 
@@ -484,6 +510,7 @@ export function buildFinancialScenarioTimeline({
     }
 
     const selectedGoalFinished =
+      !scenarioWaitsForGoal ||
       !selectedGoalState ||
       selectedGoalState.goal.targetAmount === null ||
       selectedGoalState.amount >= selectedGoalState.goal.targetAmount;
@@ -502,6 +529,7 @@ export function buildFinancialScenarioTimeline({
     hasUnknownInterestRates,
     months,
     status: scenario.status,
-    totalInterestCharged
+    totalInterestCharged,
+    trackedGoal: trackedGoalSummary
   };
 }

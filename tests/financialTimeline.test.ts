@@ -50,12 +50,14 @@ describe("month-by-month financial timeline", () => {
       goalContributionTotal: 1_800_000,
       month: "2026-09",
       newlyPaidDebtIds: ["short-debt"],
-      releasedPaymentNextMonth: 200_000
+      releasedPaymentNextMonth: 200_000,
+      trackedGoalAmount: 1_800_000
     });
     expect(timeline.months[1]).toMatchObject({
       baseDebtPayments: 0,
       goalContributionTotal: 2_000_000,
-      month: "2026-10"
+      month: "2026-10",
+      trackedGoalAmount: 3_800_000
     });
   });
 
