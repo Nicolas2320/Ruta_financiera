@@ -45,8 +45,8 @@ import {
 } from "../types/financial";
 import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
 import {
-  isDebtExpenseCategory,
-  syncDebtExpenseCategory
+  getRecurringExpenseCategories,
+  isDebtExpenseCategory
 } from "../utils/debtCalculations";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
 import {
@@ -260,14 +260,14 @@ function getCategoryShareLabel(
   }
 
   if (share === null) {
-    return "Agrega tu gasto mensual";
+    return "Agrega tus gastos principales";
   }
 
   if (share > 100) {
-    return "Supera el gasto mensual";
+    return "Supera tus gastos principales";
   }
 
-  return `${share}% del gasto mensual ${isExactMonthlyExpense ? "ingresado" : "estimado"}`;
+  return `${share}% de los gastos principales ${isExactMonthlyExpense ? "ingresados" : "estimados"}`;
 }
 
 function getCategoryAmountsTotal(amounts: Record<string, number>) {
@@ -284,11 +284,11 @@ function getCategoryCoverageText({
   totalExpenses: number | null;
 }) {
   if (totalExpenses === null || totalExpenses <= 0) {
-    return "Agrega un gasto mensual para comparar tus categorias contra el total.";
+    return "Agrega tus gastos principales para comparar las categorías contra el total.";
   }
 
   if (categorizedAmount > totalExpenses) {
-    return "La suma de categorias supera tu gasto mensual. Revisa montos o actualiza tu gasto mensual.";
+    return "La suma de categorías supera tus gastos principales. Revisa los montos o actualiza esa cifra.";
   }
 
   if (categorizedAmount === 0) {
@@ -297,12 +297,12 @@ function getCategoryCoverageText({
 
   const unclassifiedAmount = totalExpenses - categorizedAmount;
   if (unclassifiedAmount > 0) {
-    return `Quedan ${formatCOP(unclassifiedAmount)} sin clasificar del gasto mensual ${
+    return `Quedan ${formatCOP(unclassifiedAmount)} sin clasificar de los gastos principales ${
       isExactMonthlyExpense ? "ingresado" : "estimado"
     }.`;
   }
 
-  return "Tus categorias cubren el gasto mensual registrado.";
+  return "Tus categorías cubren los gastos principales registrados.";
 }
 
 function getPrioritizedCategoryLabels(categories: string[], amounts: Record<string, number>) {
@@ -358,22 +358,22 @@ function getPercentageLabel(value: number | null, isMorePrecise = false) {
 
 function getQuickReadText(metrics: MonthlyPlanMetrics) {
   if (metrics.expensePercentage === null) {
-    return "Completa ingresos y gastos para ver una lectura rápida.";
+    return "Completa ingresos y gastos para ver una lectura rápida de tus salidas mensuales.";
   }
 
   if (metrics.expensePercentage >= 100) {
-    return "Tus gastos están por encima de tus ingresos. Conviene revisar una categoría concreta.";
+    return "Tus salidas están por encima de tus ingresos. Conviene revisar un rubro concreto.";
   }
 
   if (metrics.expensePercentage >= 85) {
-    return "Tus gastos están cerca de tus ingresos. Un ajuste pequeño puede darte más margen.";
+    return "Tus salidas están cerca de tus ingresos. Un ajuste pequeño puede darte más margen.";
   }
 
   if (metrics.expensePercentage >= 70) {
-    return "Tus gastos ocupan una parte importante de tus ingresos, pero aún hay espacio para decidir.";
+    return "Tus salidas ocupan una parte importante de tus ingresos, pero aún hay espacio para decidir.";
   }
 
-  return "Tus gastos parecen dejar margen para avanzar en tu plan.";
+  return "Tus salidas parecen dejar margen para avanzar en tu plan.";
 }
 
 function getExpenseSourceLabel(source: string) {
@@ -407,17 +407,6 @@ function getSmallExpensesValue(metrics: MonthlyPlanMetrics) {
   return source === "exact" ? formatCOP(amount) : `${formatCOP(amount)} aprox.`;
 }
 
-function getSmallExpensesToIncomePercentage(metrics: MonthlyPlanMetrics) {
-  const smallExpenses = metrics.snapshot.smallExpenses.amount;
-  const income = metrics.incomeMidpoint;
-
-  if (smallExpenses === null || income === null || income <= 0) {
-    return null;
-  }
-
-  return Math.round((smallExpenses / income) * 100);
-}
-
 function getSmallExpensesComparisonValue(metrics: MonthlyPlanMetrics) {
   const smallExpenses = metrics.snapshot.smallExpenses.amount;
 
@@ -445,8 +434,18 @@ function getSmallExpensesComparisonValue(metrics: MonthlyPlanMetrics) {
   }`;
 }
 
-function getCashflowMetricLabel(hasExactMonthlyAmounts: boolean) {
-  return `Margen mensual ${hasExactMonthlyAmounts ? "calculado" : "estimado"}`;
+function getDebtPaymentsComparisonValue(metrics: MonthlyPlanMetrics) {
+  const amount = metrics.snapshot.cashflow.monthlyDebtPayments;
+
+  if (metrics.snapshot.debt.source === "none" && amount === 0) {
+    return "Sin pagos registrados";
+  }
+
+  return `${formatCOP(amount)}${metrics.snapshot.debt.source === "reported" ? " aprox." : ""}`;
+}
+
+function getCashflowMetricLabel(isCashflowExact: boolean) {
+  return `Margen mensual ${isCashflowExact ? "calculado" : "estimado"}`;
 }
 
 function getCashflowMetricValue(metrics: MonthlyPlanMetrics) {
@@ -640,7 +639,7 @@ function CategoryCoverageSummary({
           value={categorizedAmount > 0 ? formatCOP(categorizedAmount) : "$0"}
         />
         <CategorySummaryMetric
-          label={isExactMonthlyExpense ? "Gasto mensual ingresado" : "Gasto mensual estimado"}
+          label={isExactMonthlyExpense ? "Gastos principales ingresados" : "Gastos principales estimados"}
           tone={hasTotalExpenses ? "primary" : "neutral"}
           value={hasTotalExpenses && totalExpenses !== null ? formatCOP(totalExpenses) : "Sin total"}
         />
@@ -820,33 +819,29 @@ export default function SpendingScreen() {
       (item) => item.target === "cashflow" || item.target === "small_expenses"
     )
   ];
-  const syncedExpenseData = useMemo(
-    () =>
-      syncDebtExpenseCategory({
-        debts: onboarding.debts,
-        expenseCategories: onboarding.expenseCategories,
-        expenseCategoryAmounts: onboarding.expenseCategoryAmounts,
-        preserveExistingReference: true
-      }),
-    [onboarding.debts, onboarding.expenseCategories, onboarding.expenseCategoryAmounts]
+  const expenseCategories = useMemo(
+    () => getRecurringExpenseCategories(onboarding.expenseCategories),
+    [onboarding.expenseCategories]
   );
-  const expenseCategories = syncedExpenseData.expenseCategories;
   const savedCategoryAmounts = useMemo(
     () =>
       normalizeExpenseCategoryAmounts(
-        syncedExpenseData.expenseCategoryAmounts,
+        onboarding.expenseCategoryAmounts,
         expenseCategories
       ),
-    [expenseCategories, syncedExpenseData.expenseCategoryAmounts]
+    [expenseCategories, onboarding.expenseCategoryAmounts]
   );
   const [categoryAmountInputs, setCategoryAmountInputs] = useState<CategoryAmountInputs>(() =>
     getCategoryAmountInputValues(expenseCategories, savedCategoryAmounts)
   );
   const [categoryAmountFeedback, setCategoryAmountFeedback] = useState<string | null>(null);
   const hasExactMonthlyExpenses = snapshot.sourceMap.monthlyExpenses === "exact";
-  const hasExactMonthlyAmounts =
+  const isCashflowExact =
     snapshot.sourceMap.monthlyIncome === "exact" &&
-    snapshot.sourceMap.monthlyExpenses === "exact";
+    snapshot.sourceMap.monthlyExpenses === "exact" &&
+    (snapshot.sourceMap.smallExpenses === "exact" ||
+      snapshot.sourceMap.smallExpenses === "reported_none") &&
+    snapshot.debt.source !== "reported";
   const categoryAmountsFromInputs = useMemo(
     () => getCategoryAmountsFromInputs(expenseCategories, categoryAmountInputs),
     [categoryAmountInputs, expenseCategories]
@@ -864,11 +859,6 @@ export default function SpendingScreen() {
     categoryAmountsFromInputs
   );
   const expenseBarWidth = metrics.expensePercentage ?? 0;
-  const smallExpensesBarWidth = Math.min(
-    getSmallExpensesToIncomePercentage(metrics) ?? 0,
-    expenseBarWidth,
-    100
-  );
   const expensesMayExceedIncome =
     metrics.expensePercentage !== null && metrics.expensePercentage >= 100;
   const expensesAreHigh =
@@ -892,12 +882,22 @@ export default function SpendingScreen() {
   };
 
   const saveCategoryAmounts = () => {
+    const legacyDebtCategoryAmounts = Object.entries(
+      onboarding.expenseCategoryAmounts ?? {}
+    ).reduce<Record<string, number>>((amounts, [category, amount]) => {
+      if (isDebtExpenseCategory(category)) {
+        amounts[category] = amount;
+      }
+
+      return amounts;
+    }, {});
+
     updateOnboarding({
       expenseCategories,
-      expenseCategoryAmounts: normalizeExpenseCategoryAmounts(
-        categoryAmountsFromInputs,
-        expenseCategories
-      )
+      expenseCategoryAmounts: {
+        ...legacyDebtCategoryAmounts,
+        ...normalizeExpenseCategoryAmounts(categoryAmountsFromInputs, expenseCategories)
+      }
     });
     setCategoryAmountFeedback("saved");
   };
@@ -928,7 +928,7 @@ export default function SpendingScreen() {
               <View style={styles.heroTopRow}>
                 <Chip label={getExpenseSourceLabel(snapshot.sourceMap.monthlyExpenses)} tone={hasExactMonthlyExpenses ? "support" : snapshot.sourceMap.monthlyExpenses === "missing" ? "neutral" : "primary"} />
               </View>
-              <Text style={styles.heroKicker}>Gasto mensual</Text>
+              <Text style={styles.heroKicker}>Gastos principales</Text>
               <Text style={styles.heroAmount}>
                 {getAmountLabel(metrics.expenseMidpoint, hasExactMonthlyExpenses)}
               </Text>
@@ -944,20 +944,38 @@ export default function SpendingScreen() {
                   size="small"
                   tone={expensesAreHigh ? "warning" : "primary"}
                 />
-                <Text style={styles.comparisonTitle}>Relación gastos vs ingresos</Text>
+                <Text style={styles.comparisonTitle}>Relación salidas vs ingresos</Text>
                 <FinancialEducationModal
-                  accessibilityLabel="Explicar la relación entre gastos e ingresos"
+                  accessibilityLabel="Explicar la relación entre salidas e ingresos"
                   guidanceMode={guidanceMode}
                   icon={<PieChart color={colors.primary} size={23} strokeWidth={2.4} />}
-                  title="Cómo leer tus gastos frente a tus ingresos"
+                  title="Cómo leer tus salidas frente a tus ingresos"
                 >
                   <FinancialEducationStory
                     calculationItems={[
                       {
-                        label: "Gastos mensuales",
+                        label: "Gastos principales",
                         value:
                           metrics.expenseMidpoint !== null
                             ? formatCOP(metrics.expenseMidpoint)
+                            : "Por calcular"
+                      },
+                      {
+                        label: "Gastos pequeños",
+                        operator: "+",
+                        value: getSmallExpensesComparisonValue(metrics)
+                      },
+                      {
+                        label: "Cuotas de deuda",
+                        operator: "+",
+                        value: getDebtPaymentsComparisonValue(metrics)
+                      },
+                      {
+                        label: "Salidas mensuales",
+                        operator: "=",
+                        value:
+                          snapshot.cashflow.totalMonthlyOutflow !== null
+                            ? formatCOP(snapshot.cashflow.totalMonthlyOutflow)
                             : "Por calcular"
                       },
                       {
@@ -974,19 +992,19 @@ export default function SpendingScreen() {
                         operator: "=",
                         value: getPercentageLabel(
                           metrics.expensePercentage,
-                          hasExactMonthlyAmounts
+                          isCashflowExact
                         )
                       }
                     ]}
                     calculationTitle="Cómo obtenemos el porcentaje"
-                    definition="Esta relación indica qué parte de tus ingresos mensuales se utiliza para cubrir gastos. No califica cada compra; ayuda a entender cuánto margen queda."
+                    definition="Esta relación suma gastos principales, gastos pequeños y cuotas de deuda para mostrar qué parte de tus ingresos ya está comprometida."
                     guidanceMode={guidanceMode}
                     plainLanguage={
                       metrics.expensePercentage !== null
                         ? `De cada $100 que ingresan, aproximadamente $${Math.round(
                             metrics.expensePercentage
-                          )} se destinan a gastos.`
-                        : "Necesitamos una referencia de ingresos y gastos para calcular esta relación."
+                          )} se destinan a salidas mensuales.`
+                        : "Necesitamos ingresos, gastos principales y gastos pequeños para calcular esta relación."
                     }
                     plainLanguageBadge={
                       metrics.expensePercentage !== null
@@ -994,10 +1012,10 @@ export default function SpendingScreen() {
                         : "—"
                     }
                     resultDescription={getQuickReadText(metrics)}
-                    resultLabel="Parte del ingreso usada en gastos"
+                    resultLabel="Parte del ingreso usada en salidas"
                     resultValue={getPercentageLabel(
                       metrics.expensePercentage,
-                      hasExactMonthlyAmounts
+                      isCashflowExact
                     )}
                     tone={
                       expensesMayExceedIncome
@@ -1023,7 +1041,7 @@ export default function SpendingScreen() {
                     expensesMayExceedIncome && styles.comparisonValueWarning
                   ]}
                 >
-                  {getPercentageLabel(metrics.expensePercentage, hasExactMonthlyAmounts)}
+                  {getPercentageLabel(metrics.expensePercentage, isCashflowExact)}
                 </Text>
               </View>
             </View>
@@ -1041,19 +1059,10 @@ export default function SpendingScreen() {
                   { width: toPercentWidth(expenseBarWidth) }
                 ]}
               />
-              {smallExpensesBarWidth > 0 ? (
-                <View
-                  style={[
-                    styles.smallExpenseFill,
-                    expensesAreHigh && styles.smallExpenseFillWarning,
-                    { width: toPercentWidth(smallExpensesBarWidth) }
-                  ]}
-                />
-              ) : null}
             </View>
             <View style={styles.comparisonMetrics}>
               <ComparisonMetric
-                label="Gastos mensuales"
+                label="Gastos principales"
                 tone={expensesAreHigh ? "warning" : "primary"}
                 value={getAmountLabel(metrics.expenseMidpoint, hasExactMonthlyExpenses)}
               />
@@ -1063,7 +1072,12 @@ export default function SpendingScreen() {
                 value={getSmallExpensesComparisonValue(metrics)}
               />
               <ComparisonMetric
-                label={getCashflowMetricLabel(hasExactMonthlyAmounts)}
+                label="Cuotas de deuda"
+                tone="neutral"
+                value={getDebtPaymentsComparisonValue(metrics)}
+              />
+              <ComparisonMetric
+                label={getCashflowMetricLabel(isCashflowExact)}
                 tone={cashflowTone}
                 value={getCashflowMetricValue(metrics)}
               />
@@ -1373,18 +1387,6 @@ const styles = StyleSheet.create({
   },
   expenseFillWarning: {
     backgroundColor: "#F97316"
-  },
-  smallExpenseFill: {
-    backgroundColor: "#F59E0B",
-    borderBottomLeftRadius: radius.pill,
-    borderTopLeftRadius: radius.pill,
-    height: "100%",
-    left: 0,
-    position: "absolute",
-    top: 0
-  },
-  smallExpenseFillWarning: {
-    backgroundColor: "#B45309"
   },
   comparisonMetrics: {
     flexDirection: "row",

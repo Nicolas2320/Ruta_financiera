@@ -81,6 +81,8 @@ export type FinancialSnapshot = {
   cashflow: {
     monthlyIncome: number | null;
     monthlyExpenses: number | null;
+    monthlyDebtPayments: number;
+    totalMonthlyOutflow: number | null;
     monthlyMargin: number | null;
     expensesToIncomeRatio: number | null;
     marginRate: number | null;
@@ -214,7 +216,7 @@ const emergencyFundLabels: Record<EmergencyFundStatus, string> = {
   building: "Vas construyendo protección",
   solid: "Tienes una base sólida",
   strong: "Tienes una protección amplia",
-  unknown: "Necesitamos ahorro actual y gasto mensual para estimar tu fondo"
+  unknown: "Necesitamos ahorro actual y gastos principales para estimar tu fondo"
 };
 
 const goalLabels: Record<GoalStatus, string> = {
@@ -661,9 +663,25 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
     ? primaryGoal.currentAmount
     : currentSavings;
 
+  const selectedDebtLevel = getDebtLevel(onboarding.debtSituation, onboarding.debtPaymentShare);
+  const registeredDebtSummary = getRegisteredDebtSummary({
+    debts: onboarding.debts,
+    debtPaymentShare: onboarding.debtPaymentShare,
+    expenseCategoryAmounts: onboarding.expenseCategoryAmounts,
+    monthlyIncome
+  });
+  const debtLevel =
+    registeredDebtSummary.source !== "none" ? registeredDebtSummary.level : selectedDebtLevel;
+  const totalMonthlyOutflow =
+    monthlyExpenses !== null && smallExpenses !== null
+      ? monthlyExpenses + smallExpenses + registeredDebtSummary.monthlyPaymentTotal
+      : null;
+
   const monthlyMargin =
-    monthlyIncome !== null && monthlyExpenses !== null ? monthlyIncome - monthlyExpenses : null;
-  const expensesToIncomeRatio = safeDivide(monthlyExpenses, monthlyIncome);
+    monthlyIncome !== null && totalMonthlyOutflow !== null
+      ? monthlyIncome - totalMonthlyOutflow
+      : null;
+  const expensesToIncomeRatio = safeDivide(totalMonthlyOutflow, monthlyIncome);
   const marginRate = safeDivide(monthlyMargin, monthlyIncome);
   const savingsCapacityLevel = getSavingsCapacityLevel(monthlyMargin, marginRate);
   const suggestedContributionRate = getSuggestedContributionRate(monthlyMargin, marginRate);
@@ -705,15 +723,6 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const smallExpensesLevel = getSmallExpensesLevel(smallExpenses);
   const smallExpensesOpportunity =
     smallExpenses !== null ? roundDownToNearest(smallExpenses * 0.2, 10000) : null;
-  const selectedDebtLevel = getDebtLevel(onboarding.debtSituation, onboarding.debtPaymentShare);
-  const registeredDebtSummary = getRegisteredDebtSummary({
-    debts: onboarding.debts,
-    debtPaymentShare: onboarding.debtPaymentShare,
-    expenseCategoryAmounts: onboarding.expenseCategoryAmounts,
-    monthlyIncome
-  });
-  const debtLevel =
-    registeredDebtSummary.source !== "none" ? registeredDebtSummary.level : selectedDebtLevel;
 
   const baseSnapshot: Omit<FinancialSnapshot, "priority"> = {
     values: {
@@ -754,6 +763,8 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
     cashflow: {
       monthlyIncome,
       monthlyExpenses,
+      monthlyDebtPayments: registeredDebtSummary.monthlyPaymentTotal,
+      totalMonthlyOutflow,
       monthlyMargin,
       expensesToIncomeRatio,
       marginRate,

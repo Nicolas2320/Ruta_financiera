@@ -32,12 +32,19 @@ import { BottomNavigation } from "../components/BottomNavigation";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { CategoryChip } from "../components/ui/CategoryChip";
 import { ContextHeader } from "../components/ui/ContextHeader";
+import { ExactAmountField } from "../components/ui/ExactAmountField";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import {
+  formatCOP,
+  getSmallExpenseRangeForAmount,
+  hasExactFinancialValue,
+  parseCOPInput
+} from "../utils/financialRanges";
 
 const smallExpensesImage = require("../assets/illustrations/small-expenses.png");
 
@@ -166,6 +173,8 @@ const smallExpenseRanges = [
   "No sé"
 ] as const;
 
+const exactSmallExpenseOption = "Ingresar cifra exacta";
+
 function normalizeSmallExpenseRange(range: string | null) {
   return smallExpenseRanges.includes(range as (typeof smallExpenseRanges)[number])
     ? range
@@ -238,7 +247,12 @@ export default function SmallExpensesScreen() {
   const router = useRouter();
   const { screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ source?: string }>();
-  const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
+  const {
+    exactValues,
+    onboarding,
+    onboardingSyncStatus,
+    saveOnboardingAndExactValues
+  } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isSpendingEditMode = source === "spending";
   const isProfileEditMode = source === "profile";
@@ -262,6 +276,14 @@ export default function SmallExpensesScreen() {
   const [selectedIntention, setSelectedIntention] = useState<string | null>(
     onboarding.smallExpensesIntention
   );
+  const [usesExactSmallExpenses, setUsesExactSmallExpenses] = useState(
+    onboarding.hasSmallExpenses !== "No" && hasExactFinancialValue(exactValues.smallExpenses)
+  );
+  const [exactSmallExpensesInput, setExactSmallExpensesInput] = useState(
+    hasExactFinancialValue(exactValues.smallExpenses)
+      ? formatCOP(exactValues.smallExpenses)
+      : ""
+  );
   const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
 
   useEffect(() => {
@@ -276,14 +298,26 @@ export default function SmallExpensesScreen() {
     );
     setSelectedRange(normalizeSmallExpenseRange(onboarding.smallExpensesRange));
     setSelectedIntention(onboarding.smallExpensesIntention);
-  }, [onboarding, onboardingSyncStatus]);
+    setUsesExactSmallExpenses(
+      onboarding.hasSmallExpenses !== "No" &&
+        hasExactFinancialValue(exactValues.smallExpenses)
+    );
+    setExactSmallExpensesInput(
+      hasExactFinancialValue(exactValues.smallExpenses)
+        ? formatCOP(exactValues.smallExpenses)
+        : ""
+    );
+  }, [exactValues.smallExpenses, onboarding, onboardingSyncStatus]);
 
   const needsCategory = selectedPresence === "Sí";
   const shouldShowDetails = selectedPresence !== "No";
+  const parsedExactSmallExpenses = parseCOPInput(exactSmallExpensesInput);
   const canContinue = Boolean(
     selectedPresence &&
       (selectedPresence === "No" ||
-        (selectedRange &&
+        ((usesExactSmallExpenses
+          ? parsedExactSmallExpenses !== null && parsedExactSmallExpenses > 0
+          : selectedRange) &&
           selectedIntention &&
           (!needsCategory || selectedCategories.length > 0)))
   );
@@ -295,6 +329,7 @@ export default function SmallExpensesScreen() {
       setSelectedCategories([]);
       setSelectedRange(null);
       setSelectedIntention(null);
+      setUsesExactSmallExpenses(false);
     }
   };
 
@@ -306,12 +341,23 @@ export default function SmallExpensesScreen() {
     );
   };
 
-  const handleContinue = () => {
+  const handleExactSmallExpensesChange = (value: string) => {
+    const parsedValue = parseCOPInput(value);
+    setExactSmallExpensesInput(parsedValue === null ? "" : formatCOP(parsedValue));
+  };
+
+  const handleContinue = async () => {
     if (!selectedPresence) {
       return;
     }
 
-    if (selectedPresence !== "No" && (!selectedRange || !selectedIntention)) {
+    if (
+      selectedPresence !== "No" &&
+      (!selectedIntention ||
+        (usesExactSmallExpenses
+          ? parsedExactSmallExpenses === null || parsedExactSmallExpenses <= 0
+          : !selectedRange))
+    ) {
       return;
     }
 
@@ -322,12 +368,38 @@ export default function SmallExpensesScreen() {
       return;
     }
 
-    updateOnboarding({
-      hasSmallExpenses: selectedPresence,
-      smallExpenseCategories: categoriesToSave,
-      smallExpensesRange: selectedPresence === "No" ? null : selectedRange,
-      smallExpensesIntention: selectedPresence === "No" ? null : selectedIntention
-    });
+    const nextExactValues = { ...exactValues };
+    const smallExpensesRange =
+      selectedPresence === "No"
+        ? null
+        : usesExactSmallExpenses && parsedExactSmallExpenses !== null
+          ? getSmallExpenseRangeForAmount(parsedExactSmallExpenses)
+          : selectedRange;
+
+    if (
+      selectedPresence !== "No" &&
+      usesExactSmallExpenses &&
+      parsedExactSmallExpenses !== null
+    ) {
+      nextExactValues.smallExpenses = parsedExactSmallExpenses;
+    } else {
+      delete nextExactValues.smallExpenses;
+    }
+
+    const saved = await saveOnboardingAndExactValues(
+      {
+        hasSmallExpenses: selectedPresence,
+        smallExpenseCategories: categoriesToSave,
+        smallExpensesRange,
+        smallExpensesIntention: selectedPresence === "No" ? null : selectedIntention
+      },
+      nextExactValues
+    );
+
+    if (!saved) {
+      return;
+    }
+
     router.push(
       isSpendingEditMode
         ? "/spending"
@@ -464,12 +536,28 @@ export default function SmallExpensesScreen() {
                   {smallExpenseRanges.map((range) => (
                     <SelectableCard
                       key={range}
-                      onPress={() => setSelectedRange(range)}
-                      selected={selectedRange === range}
+                      onPress={() => {
+                        setUsesExactSmallExpenses(false);
+                        setSelectedRange(range);
+                      }}
+                      selected={!usesExactSmallExpenses && selectedRange === range}
                       title={range}
                     />
                   ))}
+                  <SelectableCard
+                    onPress={() => setUsesExactSmallExpenses(true)}
+                    selected={usesExactSmallExpenses}
+                    title={exactSmallExpenseOption}
+                  />
                 </View>
+                {usesExactSmallExpenses ? (
+                  <ExactAmountField
+                    helper="Usa un promedio mensual; no necesitas sumar cada compra por separado."
+                    label="Gastos pequeños al mes"
+                    onChangeText={handleExactSmallExpensesChange}
+                    value={exactSmallExpensesInput}
+                  />
+                ) : null}
               </View>
 
               <View style={styles.card}>

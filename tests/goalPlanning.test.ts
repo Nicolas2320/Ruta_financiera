@@ -1,18 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { getGoalAllocationPlan, getGoalHorizonMonths } from "../utils/goalPlanning";
+import {
+  getGoalAllocationPlan,
+  getGoalPlanningMonths
+} from "../utils/goalPlanning";
 import { makeGoal } from "./fixtures/financial";
 
 describe("goal planning", () => {
-  it.each([
-    ["Menos de 6 meses", 6],
-    ["6 a 12 meses", 12],
-    ["1 a 3 anos", 36],
-    ["3 a 5 anos", 60],
-    ["Mas de 5 anos", 72],
-    ["No estoy seguro", null]
-  ])("normalizes the horizon %s", (horizon, expected) => {
-    expect(getGoalHorizonMonths(horizon)).toBe(expected);
+  it("uses the selected target month as the only planning deadline", () => {
+    expect(
+      getGoalPlanningMonths(
+        makeGoal({ targetMonth: "2027-01" }),
+        new Date(2026, 7, 1)
+      )
+    ).toBe(5);
   });
 
   it("distributes the full recommended budget without exceeding it", () => {

@@ -264,6 +264,38 @@ export function getGoalAmountRangeEstimate(goalAmountRange: string | null) {
   return getRangeEstimate(goalAmountRange, goalAmountRanges);
 }
 
+export function getIncomeRangeForAmount(value: number) {
+  if (value < 1_500_000) return "Menos de $1.500.000";
+  if (value < 3_000_000) return "$1.500.000 – $3.000.000";
+  if (value < 5_000_000) return "$3.000.000 – $5.000.000";
+  if (value < 8_000_000) return "$5.000.000 – $8.000.000";
+  return "Más de $8.000.000";
+}
+
+export function getExpenseRangeForAmount(value: number) {
+  if (value < 1_000_000) return "Menos de $1.000.000";
+  if (value < 2_000_000) return "$1.000.000 – $2.000.000";
+  if (value < 4_000_000) return "$2.000.000 – $4.000.000";
+  if (value < 6_000_000) return "$4.000.000 – $6.000.000";
+  return "Más de $6.000.000";
+}
+
+export function getSmallExpenseRangeForAmount(value: number) {
+  if (value < 100_000) return "Menos de $100.000";
+  if (value < 250_000) return "$100.000 – $250.000";
+  if (value < 500_000) return "$250.000 – $500.000";
+  return "Más de $500.000";
+}
+
+export function getSavingsRangeForAmount(value: number) {
+  if (value === 0) return "No tengo ahorros";
+  if (value < 500_000) return "Menos de $500.000";
+  if (value < 2_000_000) return "$500.000 – $2.000.000";
+  if (value < 5_000_000) return "$2.000.000 – $5.000.000";
+  if (value < 10_000_000) return "$5.000.000 – $10.000.000";
+  return "Más de $10.000.000";
+}
+
 export function formatCOP(value: number) {
   return `$${Math.round(value).toLocaleString("es-CO")}`;
 }
@@ -403,10 +435,10 @@ export function getMonthlyIncomeDisplay(profile: FinancialValueProfile): Financi
 export function getMonthlyExpensesDisplay(profile: FinancialValueProfile): FinancialValueDisplay {
   return (
     getExactDisplay(
-      "Gasto mensual",
+      "Gastos principales al mes",
       getProfileExactValues(profile).monthlyExpenses,
-      "Dato ingresado para mejorar tus cálculos."
-    ) ?? getRangeDisplay("Rango de gastos", profile.onboarding?.expensesRange)
+      "No incluye cuotas de deuda ni gastos pequeños."
+    ) ?? getRangeDisplay("Rango de gastos principales", profile.onboarding?.expensesRange)
   );
 }
 

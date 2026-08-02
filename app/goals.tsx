@@ -7,18 +7,14 @@ import {
   Baby,
   Banknote,
   BriefcaseBusiness,
-  Calendar,
   Car,
   ChartColumnIncreasing,
-  CircleQuestionMark,
-  Clock,
   CreditCard,
   Crown,
   Dumbbell,
   Gift,
   GraduationCap,
   HeartPulse,
-  Hourglass,
   House,
   Landmark,
   Layers,
@@ -37,6 +33,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { ContextHeader } from "../components/ui/ContextHeader";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
+import { MonthYearPickerField } from "../components/ui/MonthYearPickerField";
+import { OptionalTag } from "../components/ui/OptionalTag";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
@@ -187,45 +185,6 @@ const customGoalIconOptions: VisualOption[] = [
   }
 ];
 
-const goalHorizons: VisualOption[] = [
-  {
-    title: "Menos de 6 meses",
-    icon: Clock,
-    color: colors.support,
-    backgroundColor: colors.supportSoft
-  },
-  {
-    title: "6 – 12 meses",
-    icon: Calendar,
-    color: colors.support,
-    backgroundColor: colors.supportSoft
-  },
-  {
-    title: "1 – 3 años",
-    icon: Calendar,
-    color: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  {
-    title: "3 – 5 años",
-    icon: Calendar,
-    color: "#7C3AED",
-    backgroundColor: "#F1E8FF"
-  },
-  {
-    title: "Más de 5 años",
-    icon: Hourglass,
-    color: "#F97316",
-    backgroundColor: "#FFF1E7"
-  },
-  {
-    title: "No estoy seguro",
-    icon: CircleQuestionMark,
-    color: "#94A3B8",
-    backgroundColor: "#EEF2F7"
-  }
-];
-
 const goalPriorities = ["Baja", "Media", "Alta", "Muy alta"] as const;
 const manualAmountOptionTitle = "Ingresar cifra";
 
@@ -308,7 +267,6 @@ export default function GoalsScreen() {
   const [selectedIconKey, setSelectedIconKey] = useState<string | null>(
     initialGoal?.iconKey ?? null
   );
-  const [selectedHorizon, setSelectedHorizon] = useState<string | null>(initialGoal?.horizon ?? null);
   const [selectedPriority, setSelectedPriority] = useState<string | null>(
     initialGoal?.priority ?? null
   );
@@ -317,6 +275,10 @@ export default function GoalsScreen() {
   );
   const [targetAmountInput, setTargetAmountInput] = useState(
     getCurrencyInputValue(initialGoal?.targetAmount)
+  );
+  const [targetMonth, setTargetMonth] = useState<string | null>(initialGoal?.targetMonth ?? null);
+  const [minimumInitialAmountInput, setMinimumInitialAmountInput] = useState(
+    getCurrencyInputValue(initialGoal?.minimumInitialAmount)
   );
   const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
 
@@ -334,16 +296,26 @@ export default function GoalsScreen() {
       storedGoal && storedGoalSelection === customGoalOption.title ? storedGoal.title : ""
     );
     setSelectedIconKey(storedGoal?.iconKey ?? null);
-    setSelectedHorizon(storedGoal?.horizon ?? null);
     setSelectedPriority(storedGoal?.priority ?? null);
     setSelectedAmountRange(getInitialAmountSelection(storedGoal));
     setTargetAmountInput(getCurrencyInputValue(storedGoal?.targetAmount));
+    setTargetMonth(storedGoal?.targetMonth ?? null);
+    setMinimumInitialAmountInput(getCurrencyInputValue(storedGoal?.minimumInitialAmount));
   }, [isAddMode, onboarding, onboardingSyncStatus]);
 
   const isCustomGoal = selectedGoal === customGoalOption.title;
   const finalGoalTitle = isCustomGoal ? customGoalName.trim() : selectedGoal;
   const isManualAmount = selectedAmountRange === manualAmountOptionTitle;
   const parsedTargetAmount = isManualAmount ? parseCOPInput(targetAmountInput) : null;
+  const parsedMinimumInitialAmount = isManualAmount
+    ? parseCOPInput(minimumInitialAmountInput)
+    : null;
+  const hasValidMinimumInitialAmount =
+    !minimumInitialAmountInput.trim() ||
+    (parsedMinimumInitialAmount !== null &&
+      parsedMinimumInitialAmount > 0 &&
+      parsedTargetAmount !== null &&
+      parsedMinimumInitialAmount <= parsedTargetAmount);
   const finalIconKey =
     selectedIconKey ??
     financialGoals.find((goal) => goal.title === selectedGoal)?.iconKey ??
@@ -351,15 +323,18 @@ export default function GoalsScreen() {
     "other";
   const canContinue = Boolean(
     finalGoalTitle &&
-      selectedHorizon &&
+      targetMonth &&
       selectedPriority &&
-      (!isManualAmount || (parsedTargetAmount !== null && parsedTargetAmount > 0))
+      (!isManualAmount || (parsedTargetAmount !== null && parsedTargetAmount > 0)) &&
+      hasValidMinimumInitialAmount
   );
 
   const handleGoalSelect = (goal: VisualOption) => {
     if (goal.title !== selectedGoal) {
       setSelectedAmountRange(null);
       setTargetAmountInput("");
+      setTargetMonth(null);
+      setMinimumInitialAmountInput("");
     }
 
     setSelectedGoal(goal.title);
@@ -375,6 +350,7 @@ export default function GoalsScreen() {
 
     if (range.title !== manualAmountOptionTitle) {
       setTargetAmountInput("");
+      setMinimumInitialAmountInput("");
     }
   };
 
@@ -383,17 +359,23 @@ export default function GoalsScreen() {
     setTargetAmountInput(parsedValue === null ? "" : formatCOP(parsedValue));
   };
 
+  const handleMinimumInitialAmountChange = (value: string) => {
+    const parsedValue = parseCOPInput(value);
+    setMinimumInitialAmountInput(parsedValue === null ? "" : formatCOP(parsedValue));
+  };
+
   const handleContinue = () => {
-    if (!canContinue || !finalGoalTitle || !selectedHorizon || !selectedPriority) {
+    if (!canContinue || !finalGoalTitle || !targetMonth || !selectedPriority) {
       return;
     }
 
     const nextGoal = createFinancialGoal({
       amountRange: isManualAmount ? null : selectedAmountRange,
-      horizon: selectedHorizon,
       iconKey: finalIconKey,
       isPrimary: !isAddMode,
+      minimumInitialAmount: parsedMinimumInitialAmount,
       priority: selectedPriority,
+      targetMonth,
       targetAmount: parsedTargetAmount,
       title: finalGoalTitle
     });
@@ -550,28 +532,12 @@ export default function GoalsScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.questionTitle}>
-              ¿En cuánto tiempo te gustaría lograr o avanzar en esta meta?
-            </Text>
-            <View style={styles.horizonGrid}>
-              {goalHorizons.map((horizon) => (
-                <VisualSelectable
-                  key={horizon.title}
-                  icon={horizon.icon}
-                  iconBackground={horizon.backgroundColor}
-                  iconColor={horizon.color}
-                  onPress={() => setSelectedHorizon(horizon.title)}
-                  selected={selectedHorizon === horizon.title}
-                  style={[
-                    styles.horizonOption,
-                    isPhone && styles.goalOptionPhone,
-                    isSmallPhone && styles.optionSmallPhone
-                  ]}
-                  title={horizon.title}
-                  titleStyle={styles.compactTitle}
-                />
-              ))}
-            </View>
+            <MonthYearPickerField
+              helper="Con mes y año es suficiente para calcular cuánto tiempo tienes."
+              label="¿Para qué mes quieres alcanzar esta meta?"
+              onChange={setTargetMonth}
+              value={targetMonth}
+            />
           </View>
 
           <View style={styles.card}>
@@ -591,8 +557,8 @@ export default function GoalsScreen() {
 
           <View style={styles.card}>
             <View style={styles.questionRow}>
-              <Text style={styles.questionTitle}>¿Tienes una cifra aproximada en mente?</Text>
-              <Text style={styles.optionalText}>Opcional</Text>
+              <Text style={styles.questionTitle}>¿Cuánto quieres reunir?</Text>
+              <OptionalTag />
             </View>
             <View style={styles.amountGrid}>
               {goalAmountRanges.map((range) => (
@@ -630,6 +596,31 @@ export default function GoalsScreen() {
                     style={styles.input}
                     value={targetAmountInput}
                   />
+                </View>
+                <View style={styles.inputGroup}>
+                  <View style={styles.questionRow}>
+                    <Text style={styles.inputLabel}>Monto mínimo para comenzar</Text>
+                    <OptionalTag />
+                  </View>
+                  <Text style={styles.helperText}>
+                    Úsalo si puedes iniciar la meta con una parte y financiar o reunir el resto después.
+                  </Text>
+                  <TextInput
+                    accessibilityLabel="Monto mínimo para comenzar la meta"
+                    inputMode="numeric"
+                    keyboardType="numeric"
+                    onChangeText={handleMinimumInitialAmountChange}
+                    placeholder="$0"
+                    placeholderTextColor={colors.textSubtle}
+                    returnKeyType="done"
+                    style={styles.input}
+                    value={minimumInitialAmountInput}
+                  />
+                  {minimumInitialAmountInput.trim() && !hasValidMinimumInitialAmount ? (
+                    <Text style={styles.inputErrorText}>
+                      Debe ser mayor que cero y no superar el monto objetivo.
+                    </Text>
+                  ) : null}
                 </View>
               </View>
             ) : null}
@@ -828,6 +819,18 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
   },
+  helperText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  inputErrorText: {
+    color: colors.danger,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption
+  },
   input: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -869,21 +872,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 42
   },
-  horizonGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  horizonOption: {
-    flexBasis: "30%",
-    flexGrow: 1,
-    minHeight: 98,
-    paddingHorizontal: spacing.xs
-  },
-  compactTitle: {
-    fontSize: typography.small,
-    lineHeight: typography.lineHeight.small
-  },
   priorityGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -899,14 +887,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
-  },
-  optionalText: {
-    color: colors.primaryDark,
-    fontSize: typography.small,
-    fontWeight: typography.weight.black,
-    letterSpacing: 0,
-    lineHeight: typography.lineHeight.small,
-    textTransform: "uppercase"
   },
   amountGrid: {
     flexDirection: "row",
@@ -934,6 +914,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.md,
     borderWidth: 1,
+    gap: spacing.md,
     padding: spacing.md
   },
   actions: {

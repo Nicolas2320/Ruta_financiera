@@ -45,6 +45,7 @@ import type {
   ExactFinancialValues
 } from "../types/financial";
 import { getMonthlyPlanPeriodKey } from "../utils/monthlyPlan";
+import { formatTargetMonth } from "../utils/monthYear";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
 type Tone = "primary" | "support" | "warning" | "purple" | "neutral";
@@ -73,6 +74,7 @@ type SimulationBase = {
   smallExpenseValue: number | null;
   estimatedMargin: number | null;
   expensePercentage: number | null;
+  isCashflowExact: boolean;
 };
 
 type Scenario = {
@@ -218,8 +220,8 @@ function getSimulationBase(
     value: snapshot.cashflow.monthlyIncome
   });
   const expenseDisplay = getSnapshotDisplay({
-    exactLabel: "Gasto mensual",
-    estimatedLabel: "Rango de gastos",
+    exactLabel: "Gastos principales al mes",
+    estimatedLabel: "Rango de gastos principales",
     source: snapshot.sourceMap.monthlyExpenses,
     value: snapshot.cashflow.monthlyExpenses
   });
@@ -227,6 +229,12 @@ function getSimulationBase(
     snapshot.cashflow.expensesToIncomeRatio !== null
       ? Math.round(snapshot.cashflow.expensesToIncomeRatio * 100)
       : null;
+  const isCashflowExact =
+    snapshot.sourceMap.monthlyIncome === "exact" &&
+    snapshot.sourceMap.monthlyExpenses === "exact" &&
+    (snapshot.sourceMap.smallExpenses === "exact" ||
+      snapshot.sourceMap.smallExpenses === "reported_none") &&
+    snapshot.debt.source !== "reported";
 
   return {
     snapshot,
@@ -236,7 +244,8 @@ function getSimulationBase(
     expenseValue: snapshot.cashflow.monthlyExpenses,
     smallExpenseValue: snapshot.values.smallExpenses,
     estimatedMargin: snapshot.cashflow.monthlyMargin,
-    expensePercentage
+    expensePercentage,
+    isCashflowExact
   };
 }
 
@@ -441,17 +450,14 @@ function getMarginLabel(metrics: SimulationBase) {
   }
 
   if (metrics.estimatedMargin <= 0) {
-    const isMorePrecise =
-      metrics.incomeDisplay.source === "exact" && metrics.expenseDisplay.source === "exact";
-
-    return isMorePrecise
+    return metrics.isCashflowExact
       ? formatSignedCOP(metrics.estimatedMargin)
       : `${formatSignedCOP(metrics.estimatedMargin)} aprox.`;
   }
 
   return getAmountLabel(
     metrics.estimatedMargin,
-    metrics.incomeDisplay.source === "exact" && metrics.expenseDisplay.source === "exact"
+    metrics.isCashflowExact
   );
 }
 
@@ -460,10 +466,9 @@ function getExpensePercentageLabel(metrics: SimulationBase) {
     return "No disponible";
   }
 
-  const isMorePrecise =
-    metrics.incomeDisplay.source === "exact" && metrics.expenseDisplay.source === "exact";
-
-  return isMorePrecise ? `${metrics.expensePercentage}%` : `${metrics.expensePercentage}% aprox.`;
+  return metrics.isCashflowExact
+    ? `${metrics.expensePercentage}%`
+    : `${metrics.expensePercentage}% aprox.`;
 }
 
 function getSmallExpenseLabel(onboarding: OnboardingSnapshot, metrics: SimulationBase) {
@@ -837,8 +842,9 @@ export default function SimulationScreen() {
     primaryGoalAllocation?.estimatedMonthsToGoal ?? snapshot.goal.estimatedMonthsToGoal;
   const simulatedGoalTitle =
     primaryGoalAllocation?.goal.title ?? onboarding.financialGoal ?? snapshot.goal.name ?? "No definida";
-  const simulatedGoalHorizon =
-    primaryGoalAllocation?.goal.horizon ?? onboarding.goalHorizon ?? "No definido";
+  const simulatedGoalTargetMonth = primaryGoalAllocation?.goal.targetMonth
+    ? formatTargetMonth(primaryGoalAllocation.goal.targetMonth)
+    : "No definido";
   const simulatedGoalContributionLabel = primaryGoalAllocation
     ? formatGoalContribution(primaryGoalAllocation.monthlyContribution)
     : snapshot.cashflow.suggestedMonthlyContribution > 0
@@ -1076,7 +1082,7 @@ export default function SimulationScreen() {
 
           <View style={styles.summaryGrid}>
             <SummaryMetric
-              helper={simulatedGoalHorizon}
+              helper={`Mes objetivo: ${simulatedGoalTargetMonth}`}
               icon={<Target color={getToneColors(goalTone).text} size={22} strokeWidth={2.4} />}
               label="Meta"
               tone={goalTone}
@@ -1090,14 +1096,14 @@ export default function SimulationScreen() {
               value={simulatedGoalContributionLabel}
             />
             <SummaryMetric
-              helper="Después de gastos"
+              helper="Después de gastos y deudas"
               icon={<TrendingUp color={getToneColors(marginTone).text} size={22} strokeWidth={2.4} />}
               label="Margen"
               tone={marginTone}
               value={getMarginLabel(metrics)}
             />
             <SummaryMetric
-              helper="Gastos frente a ingresos"
+              helper="Salidas frente a ingresos"
               icon={<ChartColumnIncreasing color={getToneColors(expensesTone).text} size={22} strokeWidth={2.4} />}
               label="Relación"
               tone={expensesTone}

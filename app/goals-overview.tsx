@@ -46,6 +46,8 @@ import {
   AppModalAction,
   AppModalActions
 } from "../components/ui/AppModal";
+import { MonthYearPickerField } from "../components/ui/MonthYearPickerField";
+import { OptionalTag } from "../components/ui/OptionalTag";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
@@ -59,6 +61,7 @@ import {
   type FinancialGoal
 } from "../types/financial";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
+import { formatTargetMonth } from "../utils/monthYear";
 import { applyGoalContribution, getGoalContributionPeriodSummary } from "../utils/goalContributions";
 import {
   formatGoalContribution,
@@ -232,14 +235,6 @@ const customGoalIconOptions: GoalVisualOption[] = [
   }
 ];
 const allGoalVisualOptions = [...goalVisualOptions, ...customGoalIconOptions];
-const goalHorizons = [
-  "Menos de 6 meses",
-  "6 - 12 meses",
-  "1 - 3 años",
-  "3 - 5 años",
-  "Más de 5 años",
-  "No estoy seguro"
-];
 const goalPriorities = ["Baja", "Media", "Alta", "Muy alta"];
 
 function toPercentWidth(value: number): `${number}%` {
@@ -322,7 +317,7 @@ function getBudgetMarginFeedback({
 }) {
   if (monthlyMargin === null || !Number.isFinite(monthlyMargin) || monthlyMargin <= 0) {
     return {
-      label: "Necesitamos ingresos y gastos para calcular que porcentaje representa.",
+      label: "Necesitamos ingresos y salidas mensuales para calcular qué porcentaje representa.",
       percentage: null
     };
   }
@@ -701,17 +696,22 @@ function GoalIconChoice({
 function CurrencyInputField({
   label,
   onChangeText,
+  optional = false,
   placeholder = "$0",
   value
 }: {
   label: string;
   onChangeText: (value: string) => void;
+  optional?: boolean;
   placeholder?: string;
   value: string;
 }) {
   return (
     <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
+      <View style={styles.inputLabelRow}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        {optional ? <OptionalTag /> : null}
+      </View>
       <TextInput
         accessibilityLabel={label}
         inputMode="numeric"
@@ -771,6 +771,12 @@ function GoalCard({
   const [targetInput, setTargetInput] = useState(
     getCurrencyInputValue(allocation.goal.targetAmount ?? allocation.targetAmount)
   );
+  const [targetMonth, setTargetMonth] = useState<string | null>(
+    allocation.goal.targetMonth ?? null
+  );
+  const [minimumInitialAmountInput, setMinimumInitialAmountInput] = useState(
+    getCurrencyInputValue(allocation.goal.minimumInitialAmount)
+  );
   const [currentInput, setCurrentInput] = useState(
     getCurrencyInputValue(allocation.currentAmount)
   );
@@ -781,7 +787,6 @@ function GoalCard({
     remainingAmount: number;
   } | null>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [selectedHorizon, setSelectedHorizon] = useState(allocation.goal.horizon ?? "");
   const [selectedPriority, setSelectedPriority] = useState(allocation.goal.priority ?? "");
   const viabilityTone = getViabilityTone(allocation.viability);
   const goalVisual = getGoalVisual(allocation.goal);
@@ -829,6 +834,15 @@ function GoalCard({
     !isCompletedGoal &&
     !isPausedGoal &&
     Boolean(onAssignCurrentSavings);
+  const parsedEditorTargetAmount = getParsedCurrencyInput(targetInput);
+  const parsedEditorMinimumInitialAmount = getParsedCurrencyInput(minimumInitialAmountInput);
+  const hasValidEditorTargetMonth = targetMonth !== null;
+  const hasValidEditorMinimumInitialAmount =
+    !minimumInitialAmountInput.trim() ||
+    (parsedEditorMinimumInitialAmount !== null &&
+      parsedEditorMinimumInitialAmount > 0 &&
+      parsedEditorTargetAmount !== null &&
+      parsedEditorMinimumInitialAmount <= parsedEditorTargetAmount);
 
   const resetEditorFields = () => {
     const nextGoalOptionKey = getGoalOptionKey(allocation.goal);
@@ -840,8 +854,9 @@ function GoalCard({
     setTargetInput(
       getCurrencyInputValue(allocation.goal.targetAmount ?? allocation.targetAmount)
     );
+    setTargetMonth(allocation.goal.targetMonth ?? null);
+    setMinimumInitialAmountInput(getCurrencyInputValue(allocation.goal.minimumInitialAmount));
     setCurrentInput(getCurrencyInputValue(allocation.currentAmount));
-    setSelectedHorizon(allocation.goal.horizon ?? "");
     setSelectedPriority(allocation.goal.priority ?? "");
   };
 
@@ -850,9 +865,10 @@ function GoalCard({
     setContributionInput("");
   }, [
     allocation.currentAmount,
-    allocation.goal.horizon,
     allocation.goal.iconKey,
     allocation.goal.priority,
+    allocation.goal.minimumInitialAmount,
+    allocation.goal.targetMonth,
     allocation.goal.targetAmount,
     allocation.goal.title,
     allocation.targetAmount
@@ -898,6 +914,10 @@ function GoalCard({
   };
 
   const handleSaveDetails = () => {
+    if (!hasValidEditorTargetMonth || !hasValidEditorMinimumInitialAmount) {
+      return;
+    }
+
     const selectedOption =
       goalVisualOptions.find((option) => option.iconKey === selectedGoalOptionKey) ??
       goalVisualOptions[goalVisualOptions.length - 1];
@@ -921,9 +941,10 @@ function GoalCard({
       title: cleanTitle,
       iconKey: nextIconKey,
       type: getGoalTypeFromTitle(cleanTitle),
-      horizon: selectedHorizon || null,
       priority: selectedPriority || null,
       targetAmount,
+      targetMonth,
+      minimumInitialAmount: parsedEditorMinimumInitialAmount,
       currentAmount,
       ...(currentAmount <= 0 ? { contributions: [] } : {}),
       status: nextStatus
@@ -1150,8 +1171,21 @@ function GoalCard({
               <Text style={styles.metaValue}>{targetLabel}</Text>
             </View>
             <View style={styles.metaBox}>
-              <Text style={styles.metaLabel}>Tiempo deseado</Text>
-              <Text style={styles.metaValue}>{allocation.goal.horizon ?? "No definido"}</Text>
+              <Text style={styles.metaLabel}>Fecha objetivo</Text>
+              <Text style={styles.metaValue}>
+                {allocation.goal.targetMonth
+                  ? formatTargetMonth(allocation.goal.targetMonth)
+                  : "No definida"}
+              </Text>
+            </View>
+            <View style={styles.metaBox}>
+              <Text style={styles.metaLabel}>Mínimo para comenzar</Text>
+              <Text style={styles.metaValue}>
+                {allocation.goal.minimumInitialAmount !== null &&
+                allocation.goal.minimumInitialAmount !== undefined
+                  ? formatCOP(allocation.goal.minimumInitialAmount)
+                  : "No definido"}
+              </Text>
             </View>
             <View style={styles.metaBox}>
               <Text style={styles.metaLabel}>Aporte necesario</Text>
@@ -1302,6 +1336,7 @@ function GoalCard({
               variant="secondary"
             />
             <AppModalAction
+              disabled={!hasValidEditorTargetMonth || !hasValidEditorMinimumInitialAmount}
               icon={<CheckCircle2 color={colors.surface} size={19} strokeWidth={2.4} />}
               label="Guardar cambios"
               onPress={handleSaveDetails}
@@ -1386,6 +1421,27 @@ function GoalCard({
                   onChangeText={(value) => handleCurrencyInputChange(value, setCurrentInput)}
                   value={currentInput}
                 />
+                <CurrencyInputField
+                  label="Monto mínimo para comenzar"
+                  onChangeText={(value) =>
+                    handleCurrencyInputChange(value, setMinimumInitialAmountInput)
+                  }
+                  optional
+                  value={minimumInitialAmountInput}
+                />
+              </View>
+              {minimumInitialAmountInput.trim() && !hasValidEditorMinimumInitialAmount ? (
+                <Text style={styles.inputErrorText}>
+                  El monto inicial debe ser mayor que cero y no superar el objetivo total.
+                </Text>
+              ) : null}
+              <View style={styles.editGroup}>
+                <MonthYearPickerField
+                  helper="Puedes cambiar el mes sin modificar el dinero ya registrado."
+                  label="¿Cuándo quieres alcanzarla?"
+                  onChange={setTargetMonth}
+                  value={targetMonth}
+                />
               </View>
               {reactivationMessage ? (
                 <View style={styles.editNotice}>
@@ -1393,19 +1449,6 @@ function GoalCard({
                   <Text style={styles.editNoticeText}>{reactivationMessage}</Text>
                 </View>
               ) : null}
-              <View style={styles.editGroup}>
-                <Text style={styles.inputLabel}>¿Cuándo quieres alcanzarla?</Text>
-                <View style={styles.choiceRow}>
-                  {goalHorizons.map((horizon) => (
-                    <ChoicePill
-                      key={horizon}
-                      label={horizon}
-                      onPress={() => setSelectedHorizon(horizon)}
-                      selected={selectedHorizon === horizon}
-                    />
-                  ))}
-                </View>
-              </View>
               <View style={styles.editGroup}>
                 <Text style={styles.inputLabel}>Prioridad frente a tus otras metas</Text>
                 <View style={styles.choiceRow}>
@@ -3032,10 +3075,22 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     minWidth: 180
   },
+  inputLabelRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs
+  },
   inputLabel: {
     color: colors.text,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  inputErrorText: {
+    color: colors.danger,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.caption
   },
   input: {

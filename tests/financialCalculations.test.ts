@@ -86,13 +86,15 @@ describe("calculateFinancialSnapshot", () => {
       smallExpenses: "exact"
     });
     expect(snapshot.cashflow).toMatchObject({
-      monthlyMargin: 2_500_000,
-      expensesToIncomeRatio: 0.375,
-      marginRate: 0.625,
+      monthlyDebtPayments: 0,
+      totalMonthlyOutflow: 1_875_000,
+      monthlyMargin: 2_125_000,
+      expensesToIncomeRatio: 0.46875,
+      marginRate: 0.53125,
       savingsCapacityLevel: "high",
       suggestedContributionRate: 0.45,
-      suggestedContributionBeforeRounding: 1_125_000,
-      suggestedMonthlyContribution: 1_120_000
+      suggestedContributionBeforeRounding: 956_250,
+      suggestedMonthlyContribution: 950_000
     });
     expect(snapshot.emergencyFund.coverageMonths).toBeCloseTo(0.8333, 3);
     expect(snapshot.emergencyFund.status).toBe("starter");
@@ -125,7 +127,7 @@ describe("calculateFinancialSnapshot", () => {
       }
     });
 
-    expect(snapshot.cashflow.monthlyMargin).toBe(-500_000);
+    expect(snapshot.cashflow.monthlyMargin).toBe(-600_000);
     expect(snapshot.cashflow.suggestedContributionRate).toBeNull();
     expect(snapshot.cashflow.suggestedMonthlyContribution).toBe(0);
     expect(snapshot.cashflow.savingsCapacityLevel).toBe("negative");
@@ -161,6 +163,55 @@ describe("calculateFinancialSnapshot", () => {
       shouldPrioritizeDebt: true
     });
     expect(snapshot.priority.key).toBe("debt_pressure");
+  });
+
+  it("releases monthly margin when a registered debt is paid off", () => {
+    const baseInput = {
+      exactValues: {
+        monthlyIncome: 3_000_000,
+        monthlyExpenses: 1_500_000,
+        smallExpenses: 100_000
+      }
+    };
+    const withActiveDebt = calculateFinancialSnapshot({
+      ...baseInput,
+      onboarding: makeOnboarding({
+        debts: [makeDebt({ monthlyPayment: 500_000, remainingAmount: 500_000 })]
+      })
+    });
+    const withPaidDebt = calculateFinancialSnapshot({
+      ...baseInput,
+      onboarding: makeOnboarding({
+        debts: [makeDebt({ monthlyPayment: 500_000, remainingAmount: 0 })]
+      })
+    });
+
+    expect(withActiveDebt.cashflow.monthlyMargin).toBe(900_000);
+    expect(withPaidDebt.cashflow.monthlyMargin).toBe(1_400_000);
+    expect(withPaidDebt.cashflow.monthlyDebtPayments).toBe(0);
+  });
+
+  it("does not count the legacy debt expense category on top of detailed debts", () => {
+    const snapshot = calculateFinancialSnapshot({
+      onboarding: makeOnboarding({
+        debts: [makeDebt({ monthlyPayment: 500_000, remainingAmount: 2_000_000 })],
+        expenseCategories: ["Alimentación", "Deudas"],
+        expenseCategoryAmounts: {
+          Alimentación: 400_000,
+          Deudas: 700_000
+        }
+      }),
+      exactValues: {
+        monthlyIncome: 3_000_000,
+        monthlyExpenses: 1_000_000,
+        smallExpenses: 0
+      }
+    });
+
+    expect(snapshot.debt.source).toBe("registered");
+    expect(snapshot.cashflow.monthlyDebtPayments).toBe(500_000);
+    expect(snapshot.cashflow.totalMonthlyOutflow).toBe(1_500_000);
+    expect(snapshot.cashflow.monthlyMargin).toBe(1_500_000);
   });
 
   it("accepts zero exact savings without replacing it with an estimate", () => {

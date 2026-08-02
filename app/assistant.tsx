@@ -379,7 +379,9 @@ function buildAssistantFinancialContext({
     cashflow: {
       monthlyIncome: snapshot.cashflow.monthlyIncome,
       monthlyExpenses: snapshot.cashflow.monthlyExpenses,
+      monthlyDebtPayments: snapshot.cashflow.monthlyDebtPayments,
       monthlyMargin: snapshot.cashflow.monthlyMargin,
+      totalMonthlyOutflow: snapshot.cashflow.totalMonthlyOutflow,
       expensesToIncomeRatio: snapshot.cashflow.expensesToIncomeRatio,
       suggestedMonthlyContribution: snapshot.cashflow.suggestedMonthlyContribution,
       suggestedMonthlyContributionMeaning:
@@ -410,13 +412,13 @@ function buildAssistantFinancialContext({
     goal: {
       estimatedMonthsToGoal:
         primaryGoalAllocation?.estimatedMonthsToGoal ?? snapshot.goal.estimatedMonthsToGoal,
-      horizon: primaryGoalAllocation?.goal.horizon ?? onboarding.goalHorizon,
       name: primaryGoalAllocation?.goal.title ?? snapshot.goal.name,
       priority: primaryGoalAllocation?.goal.priority ?? onboarding.goalPriority,
       progressPercentage:
         primaryGoalAllocation?.progressPercentage ?? snapshot.goal.progressPercentage,
       remainingAmount: primaryGoalAllocation?.remainingAmount ?? snapshot.goal.remainingAmount,
-      targetAmount: primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount
+      targetAmount: primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount,
+      targetMonth: primaryGoalAllocation?.goal.targetMonth ?? null
     },
     goalsPlan: {
       activeGoals: goalPlan.allocations.filter(

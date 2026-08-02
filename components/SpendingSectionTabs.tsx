@@ -21,7 +21,7 @@ type Route = Parameters<ReturnType<typeof useRouter>["replace"]>[0];
 const tabs = [
   {
     key: "spending" as SpendingTab,
-    label: "Gastos mensuales",
+    label: "Gastos principales",
     route: "/spending",
     icon: ReceiptText
   },

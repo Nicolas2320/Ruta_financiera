@@ -1,6 +1,7 @@
 import type { ExactFinancialValues, OnboardingData } from "../types/financial";
 import { formatCOP, formatSignedCOP } from "./financialRanges";
 import { getGoalPlanFromOnboarding } from "./goalPlanning";
+import { formatTargetMonth } from "./monthYear";
 import {
   getMonthlyActions,
   getMonthlyFocus,
@@ -78,6 +79,8 @@ export function getPlanPreviewData(
     routeEstimateLabel:
       estimatedMonths !== null
         ? `${estimatedMonths} meses aprox.`
-        : primaryGoalAllocation?.goal.horizon ?? data.goalHorizon ?? "Por definir"
+        : primaryGoalAllocation?.goal.targetMonth
+          ? formatTargetMonth(primaryGoalAllocation.goal.targetMonth)
+          : "Por definir"
   };
 }

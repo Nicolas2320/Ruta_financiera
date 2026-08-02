@@ -285,7 +285,7 @@ const detailEvidenceByActionId: Record<string, Omit<EvidenceConfig, "type"> & { 
   "complete-optional-data": {
     title: "Registra el dato agregado",
     prompt: "Anota qué dato completaste para mejorar el plan.",
-    placeholder: "Ej. ingreso exacto o gasto mensual",
+    placeholder: "Ej. ingreso exacto o gastos principales",
     resultLabel: "Dato completado"
   }
 };

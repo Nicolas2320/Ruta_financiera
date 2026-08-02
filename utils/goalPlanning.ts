@@ -9,6 +9,7 @@ import {
   type OnboardingData
 } from "../types/financial";
 import { roundDownToNearest } from "./financialCalculations";
+import { getMonthsUntilTargetMonth } from "./monthYear";
 
 export type GoalViability =
   | "ready"
@@ -89,34 +90,10 @@ export function isEmergencyGoal(goal: Pick<FinancialGoal, "title" | "type"> | nu
   return goal?.type === "security" || normalizedTitle.includes("emergencia");
 }
 
-export function getGoalHorizonMonths(horizon: string | null | undefined) {
-  const normalizedHorizon = normalizeText(horizon);
+export function getGoalPlanningMonths(goal: FinancialGoal, referenceDate = new Date()) {
+  const exactMonths = getMonthsUntilTargetMonth(goal.targetMonth, referenceDate);
 
-  if (!normalizedHorizon || normalizedHorizon.includes("seguro")) {
-    return null;
-  }
-
-  if (normalizedHorizon.includes("menos") && normalizedHorizon.includes("6")) {
-    return 6;
-  }
-
-  if (normalizedHorizon.includes("6") && normalizedHorizon.includes("12")) {
-    return 12;
-  }
-
-  if (normalizedHorizon.includes("1") && normalizedHorizon.includes("3")) {
-    return 36;
-  }
-
-  if (normalizedHorizon.includes("3") && normalizedHorizon.includes("5")) {
-    return 60;
-  }
-
-  if (normalizedHorizon.includes("mas") && normalizedHorizon.includes("5")) {
-    return 72;
-  }
-
-  return null;
+  return exactMonths === null || exactMonths < 0 ? null : Math.max(1, exactMonths);
 }
 
 export function getGoalTargetAmount(
@@ -360,11 +337,13 @@ function getViability({
 }
 
 export function getGoalAllocationPlan({
+  asOfDate = new Date(),
   exactValues = {},
   goals,
   monthlyGoalBudget,
   monthlyGoalBudgetMode = "recommended"
 }: {
+  asOfDate?: Date;
   exactValues?: ExactFinancialValues;
   goals: FinancialGoal[];
   monthlyGoalBudget: number;
@@ -373,7 +352,7 @@ export function getGoalAllocationPlan({
   const safeBudget = Math.max(0, Math.floor(monthlyGoalBudget));
   const normalizedGoals = goals;
   const goalMetrics = normalizedGoals.map((goal, index) => {
-    const horizonMonths = getGoalHorizonMonths(goal.horizon);
+    const horizonMonths = getGoalPlanningMonths(goal, asOfDate);
     const targetAmount = getGoalTargetAmount(goal, exactValues, goal.isPrimary === true || index === 0);
     const isCompleted = goal.status === "completed";
     const currentAmount = Math.max(0, goal.currentAmount ?? 0);

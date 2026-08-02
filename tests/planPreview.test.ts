@@ -19,7 +19,7 @@ describe("getPlanPreviewData", () => {
     );
 
     expect(preview.goalTitle).toBe("Fondo de emergencia");
-    expect(preview.marginLabel).toBe("$2.000.000 aprox.");
+    expect(preview.marginLabel).toBe("$1.800.000 aprox.");
     expect(preview.marginTone).toBe("support");
     expect(preview.contributionLabel).not.toBe("Por definir");
     expect(preview.routeEstimateLabel).toContain("meses");

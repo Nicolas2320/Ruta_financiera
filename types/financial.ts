@@ -1,4 +1,23 @@
+import {
+  getTargetMonthFromLegacyDate,
+  getTargetMonthFromLegacyHorizon,
+  normalizeTargetMonth
+} from "../utils/monthYear";
+
 export type DebtPaymentStatus = "on_track" | "sometimes_heavy" | "overdue" | "not_sure";
+
+export const debtMonthlyPaymentTypes = [
+  "minimum_required",
+  "agreed",
+  "self_selected",
+  "unknown"
+] as const;
+
+export type DebtMonthlyPaymentType = (typeof debtMonthlyPaymentTypes)[number];
+
+export const debtPaymentFlexibilities = ["fixed", "negotiable", "unknown"] as const;
+
+export type DebtPaymentFlexibility = (typeof debtPaymentFlexibilities)[number];
 
 export type DebtPaymentRecord = {
   id: string;
@@ -26,6 +45,9 @@ export type DebtRecord = {
   lender?: string | null;
   remainingAmount?: number | null;
   monthlyPayment: number;
+  monthlyPaymentType?: DebtMonthlyPaymentType;
+  minimumMonthlyPayment?: number | null;
+  paymentFlexibility?: DebtPaymentFlexibility;
   annualInterestRate?: number | null;
   status: DebtPaymentStatus;
   paymentDay?: number | null;
@@ -59,7 +81,6 @@ export type OnboardingData = {
   debts: DebtRecord[];
   investmentSituation: string | null;
   financialGoal: string | null;
-  goalHorizon: string | null;
   goalPriority: string | null;
   goalAmountRange: string | null;
   goalMonthlyBudget: number | null;
@@ -83,10 +104,11 @@ export type FinancialGoal = {
   title: string;
   type: string;
   iconKey?: string | null;
-  horizon: string | null;
   priority: string | null;
   amountRange: string | null;
   targetAmount?: number | null;
+  targetMonth?: string | null;
+  minimumInitialAmount?: number | null;
   currentAmount?: number | null;
   manualMonthlyContribution?: number | null;
   status?: FinancialGoalStatus;
@@ -257,7 +279,6 @@ export const initialOnboarding: OnboardingData = {
   debts: [],
   investmentSituation: null,
   financialGoal: null,
-  goalHorizon: null,
   goalPriority: null,
   goalAmountRange: null,
   goalMonthlyBudget: null,
@@ -296,6 +317,18 @@ function normalizeDebtPaymentStatus(value: unknown): DebtPaymentStatus {
   }
 
   return "not_sure";
+}
+
+function normalizeDebtMonthlyPaymentType(value: unknown): DebtMonthlyPaymentType {
+  return debtMonthlyPaymentTypes.includes(value as DebtMonthlyPaymentType)
+    ? (value as DebtMonthlyPaymentType)
+    : "unknown";
+}
+
+function normalizeDebtPaymentFlexibility(value: unknown): DebtPaymentFlexibility {
+  return debtPaymentFlexibilities.includes(value as DebtPaymentFlexibility)
+    ? (value as DebtPaymentFlexibility)
+    : "unknown";
 }
 
 function normalizeDebtString(value: unknown) {
@@ -420,6 +453,9 @@ export function normalizeDebtRecords(value: unknown): DebtRecord[] {
       lender: normalizeDebtString(rawDebt.lender),
       remainingAmount,
       monthlyPayment,
+      monthlyPaymentType: normalizeDebtMonthlyPaymentType(rawDebt.monthlyPaymentType),
+      minimumMonthlyPayment: normalizeGoalAmount(rawDebt.minimumMonthlyPayment),
+      paymentFlexibility: normalizeDebtPaymentFlexibility(rawDebt.paymentFlexibility),
       annualInterestRate: normalizeAnnualInterestRate(rawDebt.annualInterestRate),
       status: normalizeDebtPaymentStatus(rawDebt.status),
       paymentDay: normalizePaymentDay(rawDebt.paymentDay),
@@ -606,32 +642,36 @@ export function getGoalIconKeyFromTitle(title: string | null | undefined) {
 
 export function createFinancialGoal({
   amountRange,
-  horizon,
   iconKey,
   isPrimary = false,
+  minimumInitialAmount,
   priority,
+  targetMonth,
   targetAmount,
   title
 }: {
   amountRange: string | null;
-  horizon: string | null;
   iconKey?: string | null;
   isPrimary?: boolean;
+  minimumInitialAmount?: number | null;
   priority: string | null;
+  targetMonth?: string | null;
   targetAmount?: number | null;
   title: string;
 }): FinancialGoal {
   const now = new Date().toISOString();
+  const normalizedTargetMonth = normalizeTargetMonth(targetMonth);
 
   return {
     id: `goal-${Date.now()}`,
     title,
     type: getGoalTypeFromTitle(title),
     iconKey: iconKey ?? getGoalIconKeyFromTitle(title),
-    horizon,
     priority,
     amountRange,
     targetAmount: targetAmount ?? null,
+    targetMonth: normalizedTargetMonth,
+    minimumInitialAmount: minimumInitialAmount ?? null,
     currentAmount: 0,
     manualMonthlyContribution: null,
     status: "active",
@@ -642,7 +682,7 @@ export function createFinancialGoal({
   };
 }
 
-export function normalizeFinancialGoals(goals: unknown): FinancialGoal[] {
+export function normalizeFinancialGoals(goals: unknown, referenceDate = new Date()): FinancialGoal[] {
   if (!Array.isArray(goals)) {
     return [];
   }
@@ -652,22 +692,31 @@ export function normalizeFinancialGoals(goals: unknown): FinancialGoal[] {
       return normalizedGoals;
     }
 
-    const rawGoal = goal as Partial<FinancialGoal>;
+    const rawGoal = goal as Partial<FinancialGoal> & {
+      horizon?: unknown;
+      targetDate?: unknown;
+    };
     const title = normalizeGoalString(rawGoal.title);
 
     if (!title) {
       return normalizedGoals;
     }
 
+    const targetMonth =
+      normalizeTargetMonth(rawGoal.targetMonth) ??
+      getTargetMonthFromLegacyDate(rawGoal.targetDate) ??
+      getTargetMonthFromLegacyHorizon(rawGoal.horizon, referenceDate);
+
     normalizedGoals.push({
       id: normalizeGoalString(rawGoal.id) ?? `goal-${index + 1}`,
       title,
       type: normalizeGoalString(rawGoal.type) ?? getGoalTypeFromTitle(title),
       iconKey: normalizeGoalString(rawGoal.iconKey) ?? getGoalIconKeyFromTitle(title),
-      horizon: normalizeGoalString(rawGoal.horizon),
       priority: normalizeGoalString(rawGoal.priority),
       amountRange: normalizeGoalString(rawGoal.amountRange),
       targetAmount: normalizeGoalAmount(rawGoal.targetAmount),
+      targetMonth,
+      minimumInitialAmount: normalizeGoalAmount(rawGoal.minimumInitialAmount),
       currentAmount: normalizeGoalAmount(rawGoal.currentAmount) ?? 0,
       manualMonthlyContribution: normalizeGoalAmount(rawGoal.manualMonthlyContribution),
       status: normalizeGoalStatus(rawGoal.status),
@@ -682,10 +731,10 @@ export function normalizeFinancialGoals(goals: unknown): FinancialGoal[] {
 }
 
 export function getLegacyGoalFromOnboarding(
-  onboarding: Pick<
-    OnboardingData,
-    "financialGoal" | "goalHorizon" | "goalPriority" | "goalAmountRange"
-  >
+  onboarding: Pick<OnboardingData, "financialGoal" | "goalPriority" | "goalAmountRange"> & {
+    goalHorizon?: unknown;
+  },
+  referenceDate = new Date()
 ): FinancialGoal | null {
   if (!onboarding.financialGoal) {
     return null;
@@ -696,10 +745,11 @@ export function getLegacyGoalFromOnboarding(
     title: onboarding.financialGoal,
     type: getGoalTypeFromTitle(onboarding.financialGoal),
     iconKey: getGoalIconKeyFromTitle(onboarding.financialGoal),
-    horizon: onboarding.goalHorizon,
     priority: onboarding.goalPriority,
     amountRange: onboarding.goalAmountRange,
     targetAmount: null,
+    targetMonth: getTargetMonthFromLegacyHorizon(onboarding.goalHorizon, referenceDate),
+    minimumInitialAmount: null,
     currentAmount: 0,
     manualMonthlyContribution: null,
     status: "active",
@@ -729,7 +779,6 @@ export function getPrimaryFinancialGoal(onboarding: OnboardingData) {
 export function getLegacyFieldsFromGoal(goal: FinancialGoal | null) {
   return {
     financialGoal: goal?.title ?? null,
-    goalHorizon: goal?.horizon ?? null,
     goalPriority: goal?.priority ?? null,
     goalAmountRange: goal?.amountRange ?? null
   };
@@ -772,7 +821,7 @@ export function hasCompletedOnboarding(onboarding: OnboardingData) {
       onboarding.debtPaymentShare &&
       onboarding.investmentSituation &&
       primaryGoal?.title &&
-      primaryGoal.horizon &&
+      primaryGoal.targetMonth &&
       primaryGoal.priority
   );
 }

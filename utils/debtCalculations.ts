@@ -195,26 +195,6 @@ export function getDebtToIncomeRatio(
   return monthlyPaymentTotal / monthlyIncome;
 }
 
-export function hasDebtMonthlyExpenseMismatch({
-  isExactMonthlyExpense,
-  monthlyExpenses,
-  monthlyPaymentTotal
-}: {
-  isExactMonthlyExpense: boolean;
-  monthlyExpenses: number | null | undefined;
-  monthlyPaymentTotal: number;
-}) {
-  const normalizedMonthlyExpenses = safeNumber(monthlyExpenses);
-  const normalizedMonthlyPaymentTotal = safeNumber(monthlyPaymentTotal);
-
-  return Boolean(
-    isExactMonthlyExpense &&
-      normalizedMonthlyExpenses !== null &&
-      normalizedMonthlyPaymentTotal !== null &&
-      normalizedMonthlyPaymentTotal > normalizedMonthlyExpenses
-  );
-}
-
 export function getDebtCategoryMonthlyPaymentTotal(
   expenseCategoryAmounts: ExpenseCategoryAmounts | null | undefined
 ) {
@@ -428,7 +408,7 @@ export function evaluateNewDebt({
       viability: "missing",
       label: "Faltan ingresos y gastos",
       message:
-        "Completa ingreso y gasto mensual para calcular el margen que quedaría después de esta cuota.",
+        "Completa ingreso y gastos principales para calcular el margen que quedaría después de esta cuota.",
       marginAfterNewPayment,
       totalDebtPayment,
       totalDebtToIncomeRatio

@@ -8,6 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { ContextHeader } from "../components/ui/ContextHeader";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
+import { OptionalTag } from "../components/ui/OptionalTag";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
@@ -169,7 +170,7 @@ export default function ProfileScreen() {
           <View style={styles.card}>
             <View style={styles.questionRow}>
               <Text style={styles.questionTitle}>¿En qué ciudad vives?</Text>
-              <Text style={styles.optionalText}>Opcional</Text>
+              <OptionalTag />
             </View>
             <View style={styles.inputWrap}>
               <MapPin color="#4E6285" size={20} strokeWidth={2.3} />
@@ -329,13 +330,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm,
     justifyContent: "space-between"
-  },
-  optionalText: {
-    color: colors.textSubtle,
-    fontSize: typography.small,
-    fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.small,
-    textTransform: "uppercase"
   },
   inputWrap: {
     alignItems: "center",

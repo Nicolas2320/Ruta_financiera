@@ -20,7 +20,7 @@ import { normalizeExactValues } from "../utils/financialRanges";
 const FINANCIAL_PROFILES_TABLE = "financial_profiles";
 
 type FinancialProfileRow = {
-  onboarding: Partial<OnboardingData> | null;
+  onboarding: (Partial<OnboardingData> & { goalHorizon?: unknown }) | null;
   completed_actions: CompletedActionsState | null;
   exact_values: ExactFinancialValues | null;
 };
@@ -41,8 +41,14 @@ function getSupabaseClient() {
 }
 
 export function normalizeOnboardingData(
-  onboarding: Partial<OnboardingData> | null | undefined
+  onboarding:
+    | (Partial<OnboardingData> & { goalHorizon?: unknown })
+    | null
+    | undefined,
+  referenceDate = new Date()
 ) {
+  const { goalHorizon: legacyGoalHorizon, ...onboardingWithoutLegacyHorizon } =
+    onboarding ?? {};
   const debts = normalizeDebtRecords(onboarding?.debts);
   const expenseData = syncDebtExpenseCategory({
     debts,
@@ -56,7 +62,7 @@ export function normalizeOnboardingData(
   });
   const normalizedBase: OnboardingData = {
     ...initialOnboarding,
-    ...(onboarding ?? {}),
+    ...onboardingWithoutLegacyHorizon,
     firstName: typeof onboarding?.firstName === "string" ? onboarding.firstName : "",
     lastName: typeof onboarding?.lastName === "string" ? onboarding.lastName : "",
     financialGuidanceMode: normalizeFinancialGuidanceMode(onboarding?.financialGuidanceMode),
@@ -67,10 +73,18 @@ export function normalizeOnboardingData(
       ? onboarding.smallExpenseCategories
       : [],
     goalMonthlyBudget: normalizeGoalMonthlyBudget(onboarding?.goalMonthlyBudget),
-    goals: normalizeFinancialGoals(onboarding?.goals)
+    goals: normalizeFinancialGoals(onboarding?.goals, referenceDate)
   };
 
-  const legacyGoal = getLegacyGoalFromOnboarding(normalizedBase);
+  const legacyGoal = getLegacyGoalFromOnboarding(
+    {
+      financialGoal: normalizedBase.financialGoal,
+      goalAmountRange: normalizedBase.goalAmountRange,
+      goalHorizon: legacyGoalHorizon,
+      goalPriority: normalizedBase.goalPriority
+    },
+    referenceDate
+  );
   const goals =
     normalizedBase.goals.length > 0 ? normalizedBase.goals : legacyGoal ? [legacyGoal] : [];
   const normalizedWithGoals = {

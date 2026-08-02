@@ -8,11 +8,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { ContextHeader } from "../components/ui/ContextHeader";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
+import { ExactAmountField } from "../components/ui/ExactAmountField";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import {
+  formatCOP,
+  getIncomeRangeForAmount,
+  hasExactFinancialValue,
+  parseCOPInput
+} from "../utils/financialRanges";
 
 const incomePiggy = require("../assets/illustrations/income-piggy.png");
 const frequencyMonthly = require("../assets/icons/frequency-monthly.png");
@@ -71,11 +78,18 @@ const incomeFrequencies = [
   }
 ] as const;
 
+const exactIncomeOption = "Ingresar cifra exacta";
+
 export default function IncomeScreen() {
   const router = useRouter();
   const { screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ source?: string }>();
-  const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
+  const {
+    exactValues,
+    onboarding,
+    onboardingSyncStatus,
+    saveOnboardingAndExactValues
+  } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isProfileEditMode = source === "profile";
   const [selectedIncomeRange, setSelectedIncomeRange] = useState<string | null>(
@@ -86,6 +100,14 @@ export default function IncomeScreen() {
   );
   const [selectedIncomeFrequency, setSelectedIncomeFrequency] = useState<string | null>(
     onboarding.incomeFrequency
+  );
+  const [usesExactIncome, setUsesExactIncome] = useState(
+    hasExactFinancialValue(exactValues.monthlyIncome)
+  );
+  const [exactIncomeInput, setExactIncomeInput] = useState(
+    hasExactFinancialValue(exactValues.monthlyIncome)
+      ? formatCOP(exactValues.monthlyIncome)
+      : ""
   );
   const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
 
@@ -98,22 +120,64 @@ export default function IncomeScreen() {
     setSelectedIncomeRange(onboarding.incomeRange);
     setSelectedIncomeType(onboarding.incomeType);
     setSelectedIncomeFrequency(onboarding.incomeFrequency);
-  }, [onboarding, onboardingSyncStatus]);
+    setUsesExactIncome(hasExactFinancialValue(exactValues.monthlyIncome));
+    setExactIncomeInput(
+      hasExactFinancialValue(exactValues.monthlyIncome)
+        ? formatCOP(exactValues.monthlyIncome)
+        : ""
+    );
+  }, [exactValues.monthlyIncome, onboarding, onboardingSyncStatus]);
+
+  const parsedExactIncome = parseCOPInput(exactIncomeInput);
 
   const canContinue = Boolean(
-    selectedIncomeRange && selectedIncomeType && selectedIncomeFrequency
+    (usesExactIncome
+      ? parsedExactIncome !== null && parsedExactIncome > 0
+      : selectedIncomeRange) &&
+      selectedIncomeType &&
+      selectedIncomeFrequency
   );
 
-  const handleContinue = () => {
-    if (!selectedIncomeRange || !selectedIncomeType || !selectedIncomeFrequency) {
+  const handleExactIncomeChange = (value: string) => {
+    const parsedValue = parseCOPInput(value);
+    setExactIncomeInput(parsedValue === null ? "" : formatCOP(parsedValue));
+  };
+
+  const handleContinue = async () => {
+    if (
+      !selectedIncomeType ||
+      !selectedIncomeFrequency ||
+      (usesExactIncome
+        ? parsedExactIncome === null || parsedExactIncome <= 0
+        : !selectedIncomeRange)
+    ) {
       return;
     }
 
-    updateOnboarding({
-      incomeRange: selectedIncomeRange,
-      incomeType: selectedIncomeType,
-      incomeFrequency: selectedIncomeFrequency
-    });
+    const nextExactValues = { ...exactValues };
+    const incomeRange = usesExactIncome
+      ? getIncomeRangeForAmount(parsedExactIncome as number)
+      : selectedIncomeRange;
+
+    if (usesExactIncome && parsedExactIncome !== null) {
+      nextExactValues.monthlyIncome = parsedExactIncome;
+    } else {
+      delete nextExactValues.monthlyIncome;
+    }
+
+    const saved = await saveOnboardingAndExactValues(
+      {
+        incomeRange,
+        incomeType: selectedIncomeType,
+        incomeFrequency: selectedIncomeFrequency
+      },
+      nextExactValues
+    );
+
+    if (!saved) {
+      return;
+    }
+
     router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/expenses");
   };
 
@@ -149,7 +213,7 @@ export default function IncomeScreen() {
             badge="Puedes ajustar esta información más adelante."
             image={incomePiggy}
             imageStyle={styles.heroImage}
-            text="No necesitamos saber tu salario exacto. Con un rango aproximado podemos darte una primera orientación."
+            text="Puedes elegir un rango para avanzar rápido o ingresar una cifra si ya la tienes clara."
             title="Tus ingresos"
           />
 
@@ -159,12 +223,28 @@ export default function IncomeScreen() {
               {incomeRanges.map((incomeRange) => (
                 <SelectableCard
                   key={incomeRange}
-                  onPress={() => setSelectedIncomeRange(incomeRange)}
-                  selected={selectedIncomeRange === incomeRange}
+                  onPress={() => {
+                    setUsesExactIncome(false);
+                    setSelectedIncomeRange(incomeRange);
+                  }}
+                  selected={!usesExactIncome && selectedIncomeRange === incomeRange}
                   title={incomeRange}
                 />
               ))}
+              <SelectableCard
+                onPress={() => setUsesExactIncome(true)}
+                selected={usesExactIncome}
+                title={exactIncomeOption}
+              />
             </View>
+            {usesExactIncome ? (
+              <ExactAmountField
+                helper="Usaremos esta cifra desde ahora y también quedará disponible en Mejorar mi plan."
+                label="Ingreso promedio mensual"
+                onChangeText={handleExactIncomeChange}
+                value={exactIncomeInput}
+              />
+            ) : null}
           </View>
 
           <View style={styles.card}>

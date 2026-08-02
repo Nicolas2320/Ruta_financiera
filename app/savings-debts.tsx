@@ -21,12 +21,19 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
 import { ContextHeader } from "../components/ui/ContextHeader";
+import { ExactAmountField } from "../components/ui/ExactAmountField";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import {
+  formatCOP,
+  getSavingsRangeForAmount,
+  hasExactFinancialValue,
+  parseCOPInput
+} from "../utils/financialRanges";
 
 const financialFoundation = require("../assets/illustrations/financial-foundation.png");
 
@@ -78,6 +85,8 @@ const savingsRanges = [
   "Más de $10.000.000",
   "Prefiero no responder"
 ] as const;
+
+const exactSavingsOption = "Ingresar cifra exacta";
 
 const emergencyCoverageOptions = [
   {
@@ -208,7 +217,12 @@ export default function SavingsDebtsScreen() {
   const router = useRouter();
   const { screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ source?: string }>();
-  const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
+  const {
+    exactValues,
+    onboarding,
+    onboardingSyncStatus,
+    saveOnboardingAndExactValues
+  } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isProfileEditMode = source === "profile";
   const [selectedSavingsRange, setSelectedSavingsRange] = useState<string | null>(
@@ -227,6 +241,14 @@ export default function SavingsDebtsScreen() {
   const [selectedInvestmentSituation, setSelectedInvestmentSituation] = useState<string | null>(
     onboarding.investmentSituation
   );
+  const [usesExactSavings, setUsesExactSavings] = useState(
+    hasExactFinancialValue(exactValues.currentSavings)
+  );
+  const [exactSavingsInput, setExactSavingsInput] = useState(
+    hasExactFinancialValue(exactValues.currentSavings)
+      ? formatCOP(exactValues.currentSavings)
+      : ""
+  );
   const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
 
   useEffect(() => {
@@ -243,10 +265,18 @@ export default function SavingsDebtsScreen() {
         (onboarding.debtSituation === "No tengo deudas" ? "No pago deudas" : null)
     );
     setSelectedInvestmentSituation(onboarding.investmentSituation);
-  }, [onboarding, onboardingSyncStatus]);
+    setUsesExactSavings(hasExactFinancialValue(exactValues.currentSavings));
+    setExactSavingsInput(
+      hasExactFinancialValue(exactValues.currentSavings)
+        ? formatCOP(exactValues.currentSavings)
+        : ""
+    );
+  }, [exactValues.currentSavings, onboarding, onboardingSyncStatus]);
+
+  const parsedExactSavings = parseCOPInput(exactSavingsInput);
 
   const canContinue = Boolean(
-    selectedSavingsRange &&
+    (usesExactSavings ? parsedExactSavings !== null : selectedSavingsRange) &&
       selectedEmergencyCoverage &&
       selectedDebtSituation &&
       selectedDebtPaymentShare &&
@@ -269,9 +299,14 @@ export default function SavingsDebtsScreen() {
     }
   };
 
-  const handleContinue = () => {
+  const handleExactSavingsChange = (value: string) => {
+    const parsedValue = parseCOPInput(value);
+    setExactSavingsInput(parsedValue === null ? "" : formatCOP(parsedValue));
+  };
+
+  const handleContinue = async () => {
     if (
-      !selectedSavingsRange ||
+      (usesExactSavings ? parsedExactSavings === null : !selectedSavingsRange) ||
       !selectedEmergencyCoverage ||
       !selectedDebtSituation ||
       !selectedDebtPaymentShare ||
@@ -280,13 +315,32 @@ export default function SavingsDebtsScreen() {
       return;
     }
 
-    updateOnboarding({
-      savingsRange: selectedSavingsRange,
-      emergencyCoverage: selectedEmergencyCoverage,
-      debtSituation: selectedDebtSituation,
-      debtPaymentShare: selectedDebtPaymentShare,
-      investmentSituation: selectedInvestmentSituation
-    });
+    const nextExactValues = { ...exactValues };
+    const savingsRange = usesExactSavings
+      ? getSavingsRangeForAmount(parsedExactSavings as number)
+      : selectedSavingsRange;
+
+    if (usesExactSavings && parsedExactSavings !== null) {
+      nextExactValues.currentSavings = parsedExactSavings;
+    } else {
+      delete nextExactValues.currentSavings;
+    }
+
+    const saved = await saveOnboardingAndExactValues(
+      {
+        savingsRange,
+        emergencyCoverage: selectedEmergencyCoverage,
+        debtSituation: selectedDebtSituation,
+        debtPaymentShare: selectedDebtPaymentShare,
+        investmentSituation: selectedInvestmentSituation
+      },
+      nextExactValues
+    );
+
+    if (!saved) {
+      return;
+    }
+
     router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/goals");
   };
 
@@ -322,7 +376,7 @@ export default function SavingsDebtsScreen() {
             badge="Puedes elegir “Prefiero no responder” si algún dato te incomoda."
             image={financialFoundation}
             imageStyle={styles.heroImage}
-            text="No necesitas dar cifras exactas. Con rangos aproximados podemos entender si conviene priorizar ahorro, deudas o inversión."
+            text="Puedes usar rangos aproximados o ingresar una cifra exacta de tus ahorros si ya la tienes clara. Con eso podemos entender si conviene priorizar ahorro, deudas o inversión."
             title={"Tu punto de partida\nfinanciero"}
           />
 
@@ -334,13 +388,30 @@ export default function SavingsDebtsScreen() {
               {savingsRanges.map((range) => (
                 <SelectableCard
                   key={range}
-                  onPress={() => setSelectedSavingsRange(range)}
-                  selected={selectedSavingsRange === range}
+                  onPress={() => {
+                    setUsesExactSavings(false);
+                    setSelectedSavingsRange(range);
+                  }}
+                  selected={!usesExactSavings && selectedSavingsRange === range}
                   style={styles.moneyOption}
                   title={range}
                 />
               ))}
+              <SelectableCard
+                onPress={() => setUsesExactSavings(true)}
+                selected={usesExactSavings}
+                style={styles.moneyOption}
+                title={exactSavingsOption}
+              />
             </View>
+            {usesExactSavings ? (
+              <ExactAmountField
+                helper="Incluye únicamente dinero disponible como respaldo general, no lo reservado para una meta."
+                label="Ahorro disponible actualmente"
+                onChangeText={handleExactSavingsChange}
+                value={exactSavingsInput}
+              />
+            ) : null}
           </SectionCard>
 
           <SectionCard

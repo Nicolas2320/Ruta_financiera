@@ -1,10 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../lib/supabase", () => ({ supabase: null }));
 
 import {
   hasCompletedOnboarding,
   normalizeDebtRecords,
+  normalizeFinancialGoals,
   type OnboardingData
 } from "../types/financial";
+import { normalizeOnboardingData } from "../lib/financialProfile";
 import { makeGoal, makeOnboarding } from "./fixtures/financial";
 
 function makeCompletedOnboarding(overrides: Partial<OnboardingData> = {}) {
@@ -104,5 +108,121 @@ describe("debt normalization", () => {
       "payment-1"
     ]);
     expect(debt.payments?.[0].date).toBe("2026-07-31");
+  });
+
+  it("keeps payment meaning explicit and defaults legacy debts to unknown", () => {
+    const normalized = normalizeDebtRecords([
+      {
+        id: "planned-card-payment",
+        type: "Tarjeta de crédito",
+        monthlyPayment: 500_000,
+        monthlyPaymentType: "self_selected",
+        minimumMonthlyPayment: 175_000,
+        paymentFlexibility: "negotiable",
+        status: "on_track"
+      },
+      {
+        id: "legacy-debt",
+        type: "Préstamo",
+        monthlyPayment: 300_000,
+        status: "on_track"
+      }
+    ]);
+
+    expect(normalized[0]).toMatchObject({
+      monthlyPaymentType: "self_selected",
+      minimumMonthlyPayment: 175_000,
+      paymentFlexibility: "negotiable"
+    });
+    expect(normalized[1]).toMatchObject({
+      monthlyPaymentType: "unknown",
+      minimumMonthlyPayment: null,
+      paymentFlexibility: "unknown"
+    });
+  });
+});
+
+describe("goal planning data normalization", () => {
+  it("preserves a target month and a minimum initial amount", () => {
+    const [goal] = normalizeFinancialGoals([
+      {
+        id: "education",
+        title: "Ahorrar para estudiar",
+        type: "education",
+        horizon: "Menos de 6 meses",
+        priority: "Muy alta",
+        amountRange: null,
+        targetAmount: 12_000_000,
+        targetMonth: "2027-01",
+        minimumInitialAmount: 6_000_000
+      }
+    ], new Date(2026, 7, 1));
+
+    expect(goal).toMatchObject({
+      targetAmount: 12_000_000,
+      targetMonth: "2027-01",
+      minimumInitialAmount: 6_000_000
+    });
+    expect(goal).not.toHaveProperty("horizon");
+  });
+
+  it("converts the previous exact-date format to month and year", () => {
+    const [goal] = normalizeFinancialGoals([
+      {
+        id: "education",
+        title: "Ahorrar para estudiar",
+        type: "education",
+        horizon: "Menos de 6 meses",
+        priority: "Muy alta",
+        amountRange: null,
+        targetDate: "2027-02-15"
+      }
+    ], new Date(2026, 7, 1));
+
+    expect(goal.targetMonth).toBe("2027-02");
+    expect(goal).not.toHaveProperty("horizon");
+  });
+
+  it("replaces a legacy horizon with one concrete target month", () => {
+    const [goal] = normalizeFinancialGoals(
+      [
+        {
+          id: "legacy",
+          title: "Ahorrar para estudiar",
+          horizon: "Menos de 6 meses",
+          priority: "Alta"
+        }
+      ],
+      new Date(2026, 7, 1)
+    );
+
+    expect(goal.targetMonth).toBe("2026-11");
+    expect(goal).not.toHaveProperty("horizon");
+  });
+
+  it("removes legacy horizon keys from the profile saved in Supabase", () => {
+    const normalized = normalizeOnboardingData(
+      {
+        ...makeOnboarding(),
+        financialGoal: "Ahorrar para estudiar",
+        goalHorizon: "Menos de 6 meses",
+        goalPriority: "Alta",
+        goals: [
+          {
+            id: "legacy",
+            title: "Ahorrar para estudiar",
+            type: "education",
+            horizon: "Menos de 6 meses",
+            priority: "Alta",
+            amountRange: null
+          }
+        ]
+      } as unknown as Partial<OnboardingData> & { goalHorizon: string },
+      new Date(2026, 7, 1)
+    );
+
+    expect(normalized).not.toHaveProperty("goalHorizon");
+    expect(normalized.goals[0]).toMatchObject({ targetMonth: "2026-11" });
+    expect(normalized.goals[0]).not.toHaveProperty("horizon");
   });
 });

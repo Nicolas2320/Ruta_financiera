@@ -1,0 +1,179 @@
+import { describe, expect, it } from "vitest";
+
+import { buildFinancialProjectionInput } from "../utils/financialProjectionInput";
+import { makeDebt, makeGoal, makeOnboarding } from "./fixtures/financial";
+
+describe("financial projection input", () => {
+  it("keeps baseline expenses and planned debt payments separate", () => {
+    const input = buildFinancialProjectionInput({
+      asOfDate: "2026-07-31",
+      exactValues: {
+        monthlyExpenses: 920_000,
+        monthlyIncome: 4_800_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        debts: [
+          makeDebt({
+            id: "icetex",
+            monthlyPayment: 577_000,
+            monthlyPaymentType: "minimum_required"
+          }),
+          makeDebt({
+            id: "friend",
+            monthlyPayment: 250_000,
+            monthlyPaymentType: "agreed",
+            paymentFlexibility: "negotiable"
+          }),
+          makeDebt({
+            id: "card",
+            minimumMonthlyPayment: 200_000,
+            monthlyPayment: 500_000,
+            monthlyPaymentType: "self_selected"
+          })
+        ],
+        goals: [
+          makeGoal({
+            minimumInitialAmount: 6_000_000,
+            targetAmount: 12_000_000,
+            targetMonth: "2027-01"
+          })
+        ]
+      })
+    });
+
+    expect(input.cashflow).toMatchObject({
+      monthlyIncome: 4_800_000,
+      baselineMonthlyExpenses: 920_000,
+      smallMonthlyExpenses: 0,
+      totalMonthlyExpenses: 2_247_000,
+      plannedDebtPaymentsTotal: 1_327_000,
+      knownRequiredDebtPaymentsTotal: 1_027_000,
+      hasCompleteRequiredDebtPayments: true,
+      availableAfterPlannedPayments: 2_553_000,
+      availableAfterRequiredPayments: 2_853_000
+    });
+    expect(input.cashflow.baselineMonthlyExpensesSource).toBe("exact");
+    expect(input.goals[0]).toMatchObject({
+      minimumInitialAmount: 6_000_000,
+      targetAmount: 12_000_000,
+      targetMonth: "2027-01"
+    });
+  });
+
+  it("does not invent a required payment for legacy or self-selected amounts", () => {
+    const input = buildFinancialProjectionInput({
+      exactValues: {
+        monthlyExpenses: 1_000_000,
+        monthlyIncome: 3_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        debts: [makeDebt({ monthlyPaymentType: "self_selected" })],
+        goals: [makeGoal({ targetMonth: null })]
+      })
+    });
+
+    expect(input.cashflow.hasCompleteRequiredDebtPayments).toBe(false);
+    expect(input.cashflow.availableAfterRequiredPayments).toBeNull();
+    expect(input.issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(["missing_debt_minimum_payment", "missing_goal_target_month"])
+    );
+  });
+
+  it("routes missing facts back to their owning sections", () => {
+    const input = buildFinancialProjectionInput({
+      onboarding: makeOnboarding({
+        debts: [makeDebt({ annualInterestRate: undefined })],
+        goals: [makeGoal({ targetAmount: null })]
+      })
+    });
+
+    expect(input.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "missing_income", ownerRoute: "/income" }),
+        expect.objectContaining({ code: "missing_expenses", ownerRoute: "/improve-plan" }),
+        expect.objectContaining({ code: "missing_goal_target", ownerRoute: "/goals-overview" }),
+        expect.objectContaining({ code: "unknown_debt_payment_type", ownerRoute: "/debts" })
+      ])
+    );
+  });
+
+  it("blocks an inconsistent required payment saved outside the form", () => {
+    const input = buildFinancialProjectionInput({
+      exactValues: {
+        monthlyExpenses: 1_000_000,
+        monthlyIncome: 3_000_000
+      },
+      onboarding: makeOnboarding({
+        debts: [
+          makeDebt({
+            minimumMonthlyPayment: 600_000,
+            monthlyPayment: 500_000,
+            monthlyPaymentType: "self_selected"
+          })
+        ]
+      })
+    });
+
+    expect(input.issues).toContainEqual(
+      expect.objectContaining({
+        code: "invalid_debt_minimum_payment",
+        ownerRoute: "/debts",
+        severity: "blocking"
+      })
+    );
+  });
+
+  it("adds debts to exact main expenses without counting either component twice", () => {
+    const input = buildFinancialProjectionInput({
+      exactValues: {
+        monthlyExpenses: 2_000_000,
+        monthlyIncome: 4_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        debts: [
+          makeDebt({
+            monthlyPayment: 500_000,
+            monthlyPaymentType: "minimum_required"
+          })
+        ]
+      })
+    });
+
+    expect(input.cashflow).toMatchObject({
+      totalMonthlyExpenses: 2_500_000,
+      baselineMonthlyExpenses: 2_000_000,
+      baselineMonthlyExpensesSource: "exact",
+      availableAfterPlannedPayments: 1_500_000
+    });
+    expect(input.issues.some((issue) => issue.owner === "expenses")).toBe(false);
+  });
+
+  it("accepts main expenses lower than debt payments because they are separate components", () => {
+    const input = buildFinancialProjectionInput({
+      exactValues: {
+        monthlyExpenses: 400_000,
+        monthlyIncome: 4_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        debts: [
+          makeDebt({
+            monthlyPayment: 500_000,
+            monthlyPaymentType: "minimum_required"
+          })
+        ]
+      })
+    });
+
+    expect(input.cashflow).toMatchObject({
+      baselineMonthlyExpenses: 400_000,
+      plannedDebtPaymentsTotal: 500_000,
+      totalMonthlyExpenses: 900_000,
+      availableAfterPlannedPayments: 3_100_000
+    });
+    expect(input.issues.some((issue) => issue.owner === "expenses")).toBe(false);
+  });
+});
