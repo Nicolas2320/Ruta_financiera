@@ -33,17 +33,17 @@ function getHeadline(scenario: DistributionScenarioPresentation) {
   if (scenario.id === "reduce_interest") {
     const destination = scenario.targetDebtTitles.join(", ");
     return scenario.extraDebtPayment > 0
-      ? `${formatCOP(scenario.extraDebtPayment)} adicionales para ${destination}.`
+      ? `En el primer mes: ${formatCOP(scenario.extraDebtPayment)} adicionales para ${destination}.`
       : "No se encontró una deuda elegible para recibir un pago adicional.";
   }
 
   if (scenario.id === "accelerate_goal") {
     return scenario.goalContribution > 0
-      ? `${formatCOP(scenario.goalContribution)} mensuales para la meta.`
+      ? `En el primer mes: ${formatCOP(scenario.goalContribution)} para la meta.`
       : "No se pudo asignar dinero a una meta activa.";
   }
 
-  return `${formatCOP(scenario.extraDebtPayment)} adicionales a deuda y ${formatCOP(
+  return `En el primer mes: ${formatCOP(scenario.extraDebtPayment)} adicionales a deuda y ${formatCOP(
     scenario.goalContribution
   )} a la meta.`;
 }

@@ -184,13 +184,23 @@ function allocateExtraToDebts({
   );
   const eligibleStates = debtStates
     .filter(
-      ({ balance, debt }) =>
-        balance !== null &&
-        balance > 0 &&
-        debt.annualInterestRate !== null &&
-        debt.annualInterestRate > 0
+      ({ balance }) => balance !== null && balance > 0
     )
     .sort((left, right) => {
+      if (
+        left.debt.annualInterestRate === null &&
+        right.debt.annualInterestRate !== null
+      ) {
+        return 1;
+      }
+
+      if (
+        right.debt.annualInterestRate === null &&
+        left.debt.annualInterestRate !== null
+      ) {
+        return -1;
+      }
+
       const rateDifference =
         (right.debt.annualInterestRate ?? 0) - (left.debt.annualInterestRate ?? 0);
 
