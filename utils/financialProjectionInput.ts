@@ -31,10 +31,7 @@ export type ProjectionDataIssue = {
     | "missing_goal_target"
     | "missing_goal_target_month"
     | "goal_target_month_in_past"
-    | "invalid_goal_initial_amount"
     | "unknown_debt_payment_type"
-    | "missing_debt_minimum_payment"
-    | "invalid_debt_minimum_payment"
     | "unknown_debt_flexibility"
     | "missing_debt_interest_rate";
   entityId?: string;
@@ -62,10 +59,11 @@ export type ProjectionGoalInput = {
   title: string;
   targetAmount: number | null;
   currentAmount: number;
-  minimumInitialAmount: number | null;
+  manualMonthlyContribution: number | null;
   targetMonth: string | null;
   priority: string | null;
   isPrimary: boolean;
+  status: FinancialGoal["status"];
 };
 
 export type FinancialProjectionInput = {
@@ -97,6 +95,10 @@ function getRequiredMonthlyPayment(
   debt: OnboardingData["debts"][number],
   monthlyPaymentType: DebtMonthlyPaymentType
 ) {
+  if (monthlyPaymentType === "self_selected") {
+    return 0;
+  }
+
   if (typeof debt.minimumMonthlyPayment === "number" && debt.minimumMonthlyPayment >= 0) {
     return debt.minimumMonthlyPayment;
   }
@@ -112,10 +114,11 @@ function toProjectionGoal(goal: FinancialGoal): ProjectionGoalInput {
     title: goal.title,
     targetAmount: goal.targetAmount ?? null,
     currentAmount: goal.currentAmount ?? 0,
-    minimumInitialAmount: goal.minimumInitialAmount ?? null,
+    manualMonthlyContribution: goal.manualMonthlyContribution ?? null,
     targetMonth: goal.targetMonth ?? null,
     priority: goal.priority,
-    isPrimary: goal.isPrimary === true
+    isPrimary: goal.isPrimary === true,
+    status: goal.status
   };
 }
 
@@ -145,32 +148,6 @@ export function buildFinancialProjectionInput({
         owner: "debts",
         ownerRoute: "/debts",
         severity: "review"
-      });
-    }
-
-    if (monthlyPaymentType === "self_selected" && requiredMonthlyPayment === null) {
-      issues.push({
-        code: "missing_debt_minimum_payment",
-        entityId: debt.id,
-        message: `Registra el pago mínimo exigido de ${title}, si existe.`,
-        owner: "debts",
-        ownerRoute: "/debts",
-        severity: "review"
-      });
-    }
-
-    if (
-      monthlyPaymentType === "self_selected" &&
-      requiredMonthlyPayment !== null &&
-      requiredMonthlyPayment > debt.monthlyPayment
-    ) {
-      issues.push({
-        code: "invalid_debt_minimum_payment",
-        entityId: debt.id,
-        message: `El pago mínimo exigido de ${title} supera el pago mensual planeado.`,
-        owner: "debts",
-        ownerRoute: "/debts",
-        severity: "blocking"
       });
     }
 
@@ -251,21 +228,6 @@ export function buildFinancialProjectionInput({
         code: "goal_target_month_in_past",
         entityId: goal.id,
         message: `El mes objetivo de ${goal.title} ya pasó. Elige uno nuevo.`,
-        owner: "goals",
-        ownerRoute: "/goals-overview",
-        severity: "blocking"
-      });
-    }
-
-    if (
-      goal.minimumInitialAmount !== null &&
-      goal.targetAmount !== null &&
-      goal.minimumInitialAmount > goal.targetAmount
-    ) {
-      issues.push({
-        code: "invalid_goal_initial_amount",
-        entityId: goal.id,
-        message: `El monto mínimo inicial de ${goal.title} supera su objetivo total.`,
         owner: "goals",
         ownerRoute: "/goals-overview",
         severity: "blocking"

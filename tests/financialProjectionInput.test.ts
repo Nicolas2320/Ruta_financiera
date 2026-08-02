@@ -32,13 +32,7 @@ describe("financial projection input", () => {
             monthlyPaymentType: "self_selected"
           })
         ],
-        goals: [
-          makeGoal({
-            minimumInitialAmount: 6_000_000,
-            targetAmount: 12_000_000,
-            targetMonth: "2027-01"
-          })
-        ]
+        goals: [makeGoal({ targetAmount: 6_000_000, targetMonth: "2027-01" })]
       })
     });
 
@@ -48,20 +42,19 @@ describe("financial projection input", () => {
       smallMonthlyExpenses: 0,
       totalMonthlyExpenses: 2_247_000,
       plannedDebtPaymentsTotal: 1_327_000,
-      knownRequiredDebtPaymentsTotal: 1_027_000,
+      knownRequiredDebtPaymentsTotal: 827_000,
       hasCompleteRequiredDebtPayments: true,
       availableAfterPlannedPayments: 2_553_000,
-      availableAfterRequiredPayments: 2_853_000
+      availableAfterRequiredPayments: 3_053_000
     });
     expect(input.cashflow.baselineMonthlyExpensesSource).toBe("exact");
     expect(input.goals[0]).toMatchObject({
-      minimumInitialAmount: 6_000_000,
-      targetAmount: 12_000_000,
+      targetAmount: 6_000_000,
       targetMonth: "2027-01"
     });
   });
 
-  it("does not invent a required payment for legacy or self-selected amounts", () => {
+  it("treats a self-selected payment as adjustable with a zero required floor", () => {
     const input = buildFinancialProjectionInput({
       exactValues: {
         monthlyExpenses: 1_000_000,
@@ -74,11 +67,10 @@ describe("financial projection input", () => {
       })
     });
 
-    expect(input.cashflow.hasCompleteRequiredDebtPayments).toBe(false);
-    expect(input.cashflow.availableAfterRequiredPayments).toBeNull();
-    expect(input.issues.map((issue) => issue.code)).toEqual(
-      expect.arrayContaining(["missing_debt_minimum_payment", "missing_goal_target_month"])
-    );
+    expect(input.cashflow.hasCompleteRequiredDebtPayments).toBe(true);
+    expect(input.cashflow.knownRequiredDebtPaymentsTotal).toBe(0);
+    expect(input.cashflow.availableAfterRequiredPayments).toBe(2_000_000);
+    expect(input.issues.map((issue) => issue.code)).toContain("missing_goal_target_month");
   });
 
   it("routes missing facts back to their owning sections", () => {
@@ -99,7 +91,7 @@ describe("financial projection input", () => {
     );
   });
 
-  it("blocks an inconsistent required payment saved outside the form", () => {
+  it("ignores a legacy separate minimum when the payment is self-selected", () => {
     const input = buildFinancialProjectionInput({
       exactValues: {
         monthlyExpenses: 1_000_000,
@@ -116,13 +108,8 @@ describe("financial projection input", () => {
       })
     });
 
-    expect(input.issues).toContainEqual(
-      expect.objectContaining({
-        code: "invalid_debt_minimum_payment",
-        ownerRoute: "/debts",
-        severity: "blocking"
-      })
-    );
+    expect(input.debts[0].requiredMonthlyPayment).toBe(0);
+    expect(input.cashflow.hasCompleteRequiredDebtPayments).toBe(true);
   });
 
   it("adds debts to exact main expenses without counting either component twice", () => {

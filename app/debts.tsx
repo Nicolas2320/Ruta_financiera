@@ -86,6 +86,8 @@ type IconProps = {
 };
 
 type Tone = "primary" | "support" | "warning" | "purple" | "neutral" | "danger";
+type SelectableDebtPaymentType = Exclude<DebtMonthlyPaymentType, "unknown">;
+type SelectableDebtPaymentFlexibility = Exclude<DebtPaymentFlexibility, "unknown">;
 
 type DebtTypeOption = {
   icon: ComponentType<IconProps>;
@@ -97,12 +99,11 @@ type DebtTypeOption = {
 type DebtFormState = {
   annualInterestRate: string;
   lender: string;
-  minimumMonthlyPayment: string;
   monthlyPayment: string;
-  monthlyPaymentType: DebtMonthlyPaymentType;
+  monthlyPaymentType: SelectableDebtPaymentType | null;
   name: string;
   paymentDay: string;
-  paymentFlexibility: DebtPaymentFlexibility;
+  paymentFlexibility: SelectableDebtPaymentFlexibility | null;
   remainingAmount: string;
   status: DebtPaymentStatus;
   type: string;
@@ -212,7 +213,7 @@ const monthlyPaymentTypeOptions: Array<{
   helper: string;
   label: string;
   tone: Tone;
-  type: DebtMonthlyPaymentType;
+  type: SelectableDebtPaymentType;
 }> = [
   {
     helper: "Es la cuota mínima o pactada que exige la entidad.",
@@ -227,21 +228,15 @@ const monthlyPaymentTypeOptions: Array<{
     type: "agreed"
   },
   {
-    helper: "Es un valor que elegiste para avanzar más rápido.",
+    helper: "No existe una cuota fija; este es el valor que decidiste destinar.",
     label: "Lo decidí yo",
     tone: "purple",
     type: "self_selected"
-  },
-  {
-    helper: "Todavía no sabes si es mínimo o voluntario.",
-    label: "No estoy seguro/a",
-    tone: "neutral",
-    type: "unknown"
   }
 ];
 
 const paymentFlexibilityOptions: Array<{
-  flexibility: DebtPaymentFlexibility;
+  flexibility: SelectableDebtPaymentFlexibility;
   helper: string;
   label: string;
   tone: Tone;
@@ -257,24 +252,17 @@ const paymentFlexibilityOptions: Array<{
     helper: "El valor acordado debe mantenerse.",
     label: "No, es fijo",
     tone: "primary"
-  },
-  {
-    flexibility: "unknown",
-    helper: "Conviene confirmarlo antes de simular.",
-    label: "No estoy seguro/a",
-    tone: "neutral"
   }
 ];
 
 const emptyDebtForm: DebtFormState = {
   annualInterestRate: "",
   lender: "",
-  minimumMonthlyPayment: "",
   monthlyPayment: "",
-  monthlyPaymentType: "unknown",
+  monthlyPaymentType: null,
   name: "",
   paymentDay: "",
-  paymentFlexibility: "unknown",
+  paymentFlexibility: null,
   remainingAmount: "",
   status: "on_track",
   type: debtTypeOptions[0].label
@@ -959,6 +947,67 @@ function StatusButton({
   );
 }
 
+function SegmentedQuestion<T extends string>({
+  helper,
+  label,
+  onChange,
+  options,
+  value
+}: {
+  helper: string;
+  label: string;
+  onChange: (value: T) => void;
+  options: Array<{ helper: string; label: string; tone: Tone; value: T }>;
+  value: T | null;
+}) {
+  const selectedOption = options.find((option) => option.value === value) ?? null;
+
+  return (
+    <View style={styles.segmentedQuestion}>
+      <View style={styles.segmentedQuestionCopy}>
+        <InputLabel label={label} />
+        <Text style={styles.inputHelper}>{helper}</Text>
+      </View>
+      <View style={styles.segmentedQuestionControl}>
+        <View style={styles.segmentedControl}>
+          {options.map((option) => {
+            const selected = option.value === value;
+            const toneColors = getToneColors(option.tone);
+
+            return (
+              <Pressable
+                accessibilityLabel={`${option.label}. ${option.helper}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                key={option.value}
+                onPress={() => onChange(option.value)}
+                style={({ pressed }) => [
+                  styles.segmentedOption,
+                  selected && {
+                    backgroundColor: toneColors.background,
+                    borderColor: toneColors.border
+                  },
+                  pressed && styles.pressed
+                ]}
+              >
+                <Text
+                  numberOfLines={2}
+                  style={[styles.segmentedOptionText, selected && { color: toneColors.text }]}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.segmentedSelectionHelper}>
+          {selectedOption?.helper ?? "Elige una opción para continuar."}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function MonthYearField({
   value,
   onPress
@@ -1569,16 +1618,6 @@ function DebtFormContent({
   debtForm: DebtFormState;
   onUpdate: (patch: Partial<DebtFormState>) => void;
 }) {
-  const plannedMonthlyPayment = parseCOPInput(debtForm.monthlyPayment);
-  const minimumMonthlyPayment = parseCOPInput(debtForm.minimumMonthlyPayment);
-  const hasInvalidMinimumMonthlyPayment =
-    debtForm.monthlyPaymentType === "self_selected" &&
-    Boolean(debtForm.minimumMonthlyPayment.trim()) &&
-    (minimumMonthlyPayment === null ||
-      minimumMonthlyPayment <= 0 ||
-      plannedMonthlyPayment === null ||
-      minimumMonthlyPayment > plannedMonthlyPayment);
-
   return (
     <>
       <Text style={styles.text}>
@@ -1635,69 +1674,44 @@ function DebtFormContent({
         </View>
       </View>
 
-      <View style={styles.inputGroup}>
-        <InputLabel label="¿Qué representa ese pago mensual?" />
-        <Text style={styles.inputHelper}>
-          Esta diferencia permite separar obligaciones de decisiones que puedes ajustar.
-        </Text>
-        <View style={styles.statusGrid}>
-          {monthlyPaymentTypeOptions.map((option) => (
-            <StatusButton
-              helper={option.helper}
-              key={option.type}
-              label={option.label}
-              onPress={() =>
-                onUpdate({
-                  monthlyPaymentType: option.type,
-                  paymentFlexibility:
-                    option.type === "minimum_required"
-                      ? "fixed"
-                      : option.type === "self_selected"
-                        ? "negotiable"
-                        : option.type === "unknown"
-                          ? "unknown"
-                          : debtForm.paymentFlexibility
-                })
-              }
-              selected={debtForm.monthlyPaymentType === option.type}
-              tone={option.tone}
-            />
-          ))}
-        </View>
-      </View>
-
-      {debtForm.monthlyPaymentType === "self_selected" ? (
-        <View style={styles.inputGroup}>
-          <CurrencyInput
-            label="Pago mínimo exigido"
-            onChangeText={(value) => onUpdate({ minimumMonthlyPayment: value })}
-            optional
-            value={debtForm.minimumMonthlyPayment}
-          />
-          {hasInvalidMinimumMonthlyPayment ? (
-            <Text style={styles.inputErrorText}>
-              El pago mínimo debe ser mayor que cero y no superar el pago planeado.
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
+      <SegmentedQuestion
+        helper="Define qué parte del pago debe respetar la simulación antes de repartir el resto."
+        label="¿Qué representa ese pago mensual?"
+        onChange={(type) =>
+          onUpdate({
+            monthlyPaymentType: type,
+            paymentFlexibility:
+              type === "minimum_required"
+                ? "fixed"
+                : type === "self_selected"
+                  ? "negotiable"
+                  : debtForm.monthlyPaymentType === "agreed"
+                    ? debtForm.paymentFlexibility
+                    : null
+          })
+        }
+        options={monthlyPaymentTypeOptions.map((option) => ({
+          helper: option.helper,
+          label: option.label,
+          tone: option.tone,
+          value: option.type
+        }))}
+        value={debtForm.monthlyPaymentType}
+      />
 
       {debtForm.monthlyPaymentType === "agreed" ? (
-        <View style={styles.inputGroup}>
-          <InputLabel label="¿Ese acuerdo se puede ajustar?" />
-          <View style={styles.statusGrid}>
-            {paymentFlexibilityOptions.map((option) => (
-              <StatusButton
-                helper={option.helper}
-                key={option.flexibility}
-                label={option.label}
-                onPress={() => onUpdate({ paymentFlexibility: option.flexibility })}
-                selected={debtForm.paymentFlexibility === option.flexibility}
-                tone={option.tone}
-              />
-            ))}
-          </View>
-        </View>
+        <SegmentedQuestion
+          helper="La simulación no reducirá este pago por sí sola; esta respuesta indica si puedes renegociarlo."
+          label="¿Ese acuerdo se puede ajustar?"
+          onChange={(paymentFlexibility) => onUpdate({ paymentFlexibility })}
+          options={paymentFlexibilityOptions.map((option) => ({
+            helper: option.helper,
+            label: option.label,
+            tone: option.tone,
+            value: option.flexibility
+          }))}
+          value={debtForm.paymentFlexibility}
+        />
       ) : null}
 
       <View style={styles.formQuestionSection}>
@@ -1791,21 +1805,17 @@ export default function DebtsScreen() {
   const hasOnlyPaidDebts = debts.length > 0 && debts.every(isDebtPaid);
   const debtFormRemainingAmount = parseCOPInput(debtForm.remainingAmount);
   const debtFormMonthlyPayment = parseCOPInput(debtForm.monthlyPayment);
-  const debtFormMinimumMonthlyPayment = parseCOPInput(debtForm.minimumMonthlyPayment);
-  const hasValidDebtMinimumMonthlyPayment =
-    debtForm.monthlyPaymentType !== "self_selected" ||
-    !debtForm.minimumMonthlyPayment.trim() ||
-    (debtFormMinimumMonthlyPayment !== null &&
-      debtFormMinimumMonthlyPayment > 0 &&
-      debtFormMonthlyPayment !== null &&
-      debtFormMinimumMonthlyPayment <= debtFormMonthlyPayment);
+  const hasCompleteDebtClassification = Boolean(
+    debtForm.monthlyPaymentType &&
+      (debtForm.monthlyPaymentType !== "agreed" || debtForm.paymentFlexibility)
+  );
   const canSaveDebt = Boolean(
     debtForm.name.trim() &&
       debtFormRemainingAmount !== null &&
       (editingDebtId ? debtFormRemainingAmount >= 0 : debtFormRemainingAmount > 0) &&
       debtFormMonthlyPayment !== null &&
       debtFormMonthlyPayment > 0 &&
-      hasValidDebtMinimumMonthlyPayment
+      hasCompleteDebtClassification
   );
   const paymentDebt = debts.find((debt) => debt.id === paymentDebtId) ?? null;
   const paymentAmount = parseCOPInput(paymentForm.amount);
@@ -1852,15 +1862,17 @@ export default function DebtsScreen() {
           ? `${debt.annualInterestRate}`
           : "",
       lender: debt.lender ?? "",
-      minimumMonthlyPayment:
-        debt.minimumMonthlyPayment !== null && debt.minimumMonthlyPayment !== undefined
-          ? formatCOP(debt.minimumMonthlyPayment)
-          : "",
       monthlyPayment: formatCOP(debt.monthlyPayment),
-      monthlyPaymentType: debt.monthlyPaymentType ?? "unknown",
+      monthlyPaymentType:
+        debt.monthlyPaymentType && debt.monthlyPaymentType !== "unknown"
+          ? debt.monthlyPaymentType
+          : null,
       name: debt.name ?? "",
       paymentDay: debt.paymentDay ? `${debt.paymentDay}` : "",
-      paymentFlexibility: debt.paymentFlexibility ?? "unknown",
+      paymentFlexibility:
+        debt.paymentFlexibility && debt.paymentFlexibility !== "unknown"
+          ? debt.paymentFlexibility
+          : null,
       remainingAmount:
         debt.remainingAmount !== null && debt.remainingAmount !== undefined
           ? formatCOP(debt.remainingAmount)
@@ -1888,7 +1900,8 @@ export default function DebtsScreen() {
       (editingDebtId ? remainingAmount < 0 : remainingAmount <= 0) ||
       monthlyPayment === null ||
       monthlyPayment <= 0 ||
-      !hasValidDebtMinimumMonthlyPayment
+      !hasCompleteDebtClassification ||
+      debtForm.monthlyPaymentType === null
     ) {
       return;
     }
@@ -1910,7 +1923,7 @@ export default function DebtsScreen() {
         debtForm.monthlyPaymentType === "minimum_required"
           ? monthlyPayment
           : debtForm.monthlyPaymentType === "self_selected"
-            ? debtFormMinimumMonthlyPayment
+            ? 0
             : null,
       paymentFlexibility:
         debtForm.monthlyPaymentType === "minimum_required"
@@ -1918,8 +1931,8 @@ export default function DebtsScreen() {
           : debtForm.monthlyPaymentType === "self_selected"
             ? "negotiable"
             : debtForm.monthlyPaymentType === "agreed"
-              ? debtForm.paymentFlexibility
-              : "unknown",
+              ? (debtForm.paymentFlexibility ?? "fixed")
+              : "fixed",
       annualInterestRate: parseInterestRateInput(debtForm.annualInterestRate),
       status: debtForm.status,
       paymentDay: normalizedPaymentDay,
@@ -2790,6 +2803,62 @@ const styles = StyleSheet.create({
   },
   formQuestionCopy: {
     gap: spacing.xs
+  },
+  segmentedQuestion: {
+    alignItems: "flex-start",
+    borderColor: colors.border,
+    borderTopWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    paddingTop: spacing.md,
+    width: "100%"
+  },
+  segmentedQuestionCopy: {
+    flexBasis: 230,
+    flexGrow: 1,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  segmentedQuestionControl: {
+    flexBasis: 360,
+    flexGrow: 2,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  segmentedControl: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    overflow: "hidden",
+    padding: 3
+  },
+  segmentedOption: {
+    alignItems: "center",
+    borderColor: "transparent",
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 42,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs
+  },
+  segmentedOptionText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption,
+    textAlign: "center"
+  },
+  segmentedSelectionHelper: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.small,
+    paddingHorizontal: spacing.xs
   },
   stackedInputGroup: {
     flexBasis: "auto",

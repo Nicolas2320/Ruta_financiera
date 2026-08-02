@@ -143,7 +143,7 @@ describe("debt normalization", () => {
 });
 
 describe("goal planning data normalization", () => {
-  it("preserves a target month and a minimum initial amount", () => {
+  it("keeps a single target amount and drops the previous minimum field", () => {
     const [goal] = normalizeFinancialGoals([
       {
         id: "education",
@@ -152,18 +152,18 @@ describe("goal planning data normalization", () => {
         horizon: "Menos de 6 meses",
         priority: "Muy alta",
         amountRange: null,
-        targetAmount: 12_000_000,
+        targetAmount: 6_000_000,
         targetMonth: "2027-01",
         minimumInitialAmount: 6_000_000
       }
     ], new Date(2026, 7, 1));
 
     expect(goal).toMatchObject({
-      targetAmount: 12_000_000,
-      targetMonth: "2027-01",
-      minimumInitialAmount: 6_000_000
+      targetAmount: 6_000_000,
+      targetMonth: "2027-01"
     });
     expect(goal).not.toHaveProperty("horizon");
+    expect(goal).not.toHaveProperty("minimumInitialAmount");
   });
 
   it("converts the previous exact-date format to month and year", () => {

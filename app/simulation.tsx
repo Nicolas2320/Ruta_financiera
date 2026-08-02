@@ -4,14 +4,10 @@ import { StatusBar } from "expo-status-bar";
 import {
   AlertCircle,
   Bot,
-  ChartColumnIncreasing,
-  ChevronDown,
-  ChevronUp,
   ClipboardCheck,
   Flag,
   Home,
   LineChart,
-  PiggyBank,
   PieChart,
   ShieldCheck,
   Target,
@@ -22,29 +18,24 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
-import { FinancialEducationCarousel } from "../components/FinancialEducationCarousel";
-import { FinancialEducationModal } from "../components/FinancialEducationModal";
-import {
-  FinancialEducationStory,
-  type FinancialEducationStoryTone
-} from "../components/FinancialEducationStory";
+import { DistributionScenarioCard } from "../components/DistributionScenarioCard";
 import { PrimaryButton } from "../components/PrimaryButton";
+import {
+  ProtectedMarginControl,
+  type ProtectedMarginMode
+} from "../components/ProtectedMarginControl";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
-import { usePlan } from "../context/PlanContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
 import {
-  calculateFinancialSnapshot,
-  type FinancialSnapshot
-} from "../utils/financialCalculations";
-import { formatCOP, formatSignedCOP } from "../utils/financialRanges";
-import { formatGoalContribution, getGoalPlanFromOnboarding } from "../utils/goalPlanning";
-import type {
-  ExactFinancialValues
-} from "../types/financial";
-import { getMonthlyPlanPeriodKey } from "../utils/monthlyPlan";
+  buildDistributionScenarios,
+  type ProtectedMarginPreference
+} from "../utils/financialDistribution";
+import { presentDistributionScenarios } from "../utils/financialDistributionPresentation";
+import { buildFinancialProjectionInput } from "../utils/financialProjectionInput";
+import { calculateFinancialSnapshot } from "../utils/financialCalculations";
+import { formatCOP, parseCOPInput } from "../utils/financialRanges";
 import { formatTargetMonth } from "../utils/monthYear";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
@@ -57,41 +48,6 @@ type IconProps = {
   size?: number;
   strokeWidth?: number;
 };
-
-type FinancialDisplay = {
-  label: string;
-  value: string;
-  source: "exact" | "range" | "empty";
-  helper: string;
-};
-
-type SimulationBase = {
-  snapshot: FinancialSnapshot;
-  incomeDisplay: FinancialDisplay;
-  expenseDisplay: FinancialDisplay;
-  incomeValue: number | null;
-  expenseValue: number | null;
-  smallExpenseValue: number | null;
-  estimatedMargin: number | null;
-  expensePercentage: number | null;
-  isCashflowExact: boolean;
-};
-
-type Scenario = {
-  key: string;
-  name: string;
-  monthlyContribution: number | null;
-  assumption: string;
-  tags: string[];
-  tone: Tone;
-  kind?: "contribution" | "deficit-reduction";
-  currentMargin?: number;
-  marginAfterAdjustment?: number;
-  unavailableContributionLabel?: string;
-  unavailableAdvanceLabel?: string;
-  recommended?: boolean;
-};
-
 function hasLowEmergencyCoverage(emergencyCoverage: string | null) {
   return emergencyCoverage === "No podría cubrirlos" || emergencyCoverage === "Menos de 1 mes";
 }
@@ -109,10 +65,6 @@ function wantsInvestmentEducation(investmentSituation: string | null) {
     investmentSituation === "No, pero quiero aprender" ||
     investmentSituation === "Sí, pero no entiendo bien cómo funcionan"
   );
-}
-
-function toPercentWidth(value: number): `${number}%` {
-  return `${Math.max(0, Math.min(value, 100))}%`;
 }
 
 function getToneColors(tone: Tone) {
@@ -154,335 +106,6 @@ function getToneColors(tone: Tone) {
     text: colors.primary
   };
 }
-
-function toFinancialDisplaySource(
-  source: "exact" | "estimated" | "withheld" | "missing"
-): FinancialDisplay["source"] {
-  if (source === "exact") {
-    return "exact";
-  }
-
-  if (source === "estimated") {
-    return "range";
-  }
-
-  return "empty";
-}
-
-function getSnapshotDisplay({
-  exactLabel,
-  estimatedLabel,
-  source,
-  value
-}: {
-  exactLabel: string;
-  estimatedLabel: string;
-  source: "exact" | "estimated" | "withheld" | "missing";
-  value: number | null;
-}): FinancialDisplay {
-  if (source === "withheld") {
-    return {
-      label: estimatedLabel,
-      value: "No compartido",
-      source: "empty",
-      helper: "Elegiste no compartir este dato."
-    };
-  }
-
-  if (value === null) {
-    return {
-      label: estimatedLabel,
-      value: "No disponible",
-      source: "empty",
-      helper: "Falta información para calcularlo."
-    };
-  }
-
-  const isExact = source === "exact";
-
-  return {
-    label: isExact ? exactLabel : estimatedLabel,
-    value: isExact ? formatCOP(value) : `${formatCOP(value)} aprox.`,
-    source: toFinancialDisplaySource(source),
-    helper: isExact ? "Dato ingresado." : "Estimado por rango."
-  };
-}
-
-function getSimulationBase(
-  onboarding: OnboardingSnapshot,
-  exactValues: ExactFinancialValues
-): SimulationBase {
-  const snapshot = calculateFinancialSnapshot({ onboarding, exactValues });
-  const incomeDisplay = getSnapshotDisplay({
-    exactLabel: "Ingreso mensual",
-    estimatedLabel: "Rango de ingresos",
-    source: snapshot.sourceMap.monthlyIncome,
-    value: snapshot.cashflow.monthlyIncome
-  });
-  const expenseDisplay = getSnapshotDisplay({
-    exactLabel: "Gastos principales al mes",
-    estimatedLabel: "Rango de gastos principales",
-    source: snapshot.sourceMap.monthlyExpenses,
-    value: snapshot.cashflow.monthlyExpenses
-  });
-  const expensePercentage =
-    snapshot.cashflow.expensesToIncomeRatio !== null
-      ? Math.round(snapshot.cashflow.expensesToIncomeRatio * 100)
-      : null;
-  const isCashflowExact =
-    snapshot.sourceMap.monthlyIncome === "exact" &&
-    snapshot.sourceMap.monthlyExpenses === "exact" &&
-    (snapshot.sourceMap.smallExpenses === "exact" ||
-      snapshot.sourceMap.smallExpenses === "reported_none") &&
-    snapshot.debt.source !== "reported";
-
-  return {
-    snapshot,
-    incomeDisplay,
-    expenseDisplay,
-    incomeValue: snapshot.cashflow.monthlyIncome,
-    expenseValue: snapshot.cashflow.monthlyExpenses,
-    smallExpenseValue: snapshot.values.smallExpenses,
-    estimatedMargin: snapshot.cashflow.monthlyMargin,
-    expensePercentage,
-    isCashflowExact
-  };
-}
-
-function contributionFromPositiveValue(value: number | null, share: number) {
-  if (value === null || value <= 0) {
-    return null;
-  }
-
-  return value * share;
-}
-
-function sumAvailableParts(parts: Array<number | null>) {
-  const availableParts = parts.filter((part): part is number => part !== null);
-
-  if (availableParts.length === 0) {
-    return null;
-  }
-
-  return availableParts.reduce((total, part) => total + part, 0);
-}
-
-function getSharePercentLabel(amount: number | null, base: number | null) {
-  if (amount === null || amount <= 0 || base === null || base <= 0) {
-    return null;
-  }
-
-  return `${Math.max(1, Math.round((amount / base) * 100))}%`;
-}
-
-function getScenarioDescription(parts: Array<string | null>, fallback: string) {
-  const availableParts = parts.filter((part): part is string => part !== null);
-
-  return availableParts.length > 0 ? `${availableParts.join(" + ")}.` : fallback;
-}
-
-function getMarginShareDescription(label: string, amount: number | null, metrics: SimulationBase) {
-  const percentLabel = getSharePercentLabel(amount, metrics.estimatedMargin);
-
-  return percentLabel !== null
-    ? `${label} (cerca del ${percentLabel} de tu margen mensual)`
-    : null;
-}
-
-function getSmallExpensesShareDescription(
-  label: string,
-  amount: number | null,
-  metrics: SimulationBase
-) {
-  const percentLabel = getSharePercentLabel(amount, metrics.smallExpenseValue);
-
-  return percentLabel !== null
-    ? `${label} (cerca del ${percentLabel} de tus gastos pequeños)`
-    : null;
-}
-
-function getScenarios(
-  metrics: SimulationBase,
-  registeredContribution = 0,
-  assignedGoalContribution: number | null = null
-): Scenario[] {
-  const capacityContribution =
-    metrics.snapshot.cashflow.suggestedMonthlyContribution > 0
-      ? metrics.snapshot.cashflow.suggestedMonthlyContribution
-      : null;
-  const assignedContribution =
-    assignedGoalContribution !== null && assignedGoalContribution > 0
-      ? assignedGoalContribution
-      : capacityContribution;
-  const scenarioWithSmallExpenses =
-    capacityContribution !== null
-      ? capacityContribution
-      : contributionFromPositiveValue(metrics.estimatedMargin, 0.2);
-  const balancedSmallExpensePart = metrics.snapshot.smallExpenses.opportunityAmount;
-  const scenarios: Scenario[] = [
-    ...(registeredContribution > 0
-      ? [
-          {
-            key: "registered",
-            name: "Aporte registrado",
-            monthlyContribution: registeredContribution,
-            assumption: getScenarioDescription(
-              [getMarginShareDescription("Aporte registrado", registeredContribution, metrics)],
-              "Monto que registraste en el plan mensual."
-            ),
-            tags: ["Real del mes", "No reemplaza"],
-            tone: "purple" as Tone
-          }
-        ]
-      : []),
-    {
-      key: "assigned",
-      name: "Aporte meta",
-      monthlyContribution: assignedContribution,
-      assumption: getScenarioDescription(
-        assignedGoalContribution !== null && assignedGoalContribution > 0
-          ? [getMarginShareDescription("Aporte asignado a esta meta", assignedContribution, metrics)]
-          : [getMarginShareDescription("Aporte sugerido", assignedContribution, metrics)],
-        "Necesitamos una meta con aporte asignado o un margen mensual positivo para calcular este aporte."
-      ),
-      tags: ["Actual", "Meta"],
-      tone: "primary",
-      unavailableContributionLabel: "No disponible",
-      unavailableAdvanceLabel: "No calculado"
-    },
-    {
-      key: "capacity",
-      name: "Aporte sugerido",
-      monthlyContribution: capacityContribution,
-      assumption: getScenarioDescription(
-        [
-          getMarginShareDescription("Referencia calculada desde tu margen", capacityContribution, metrics)
-        ],
-        metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
-          ? "No sugerimos aportes mientras tu margen mensual sea cero o negativo."
-          : "Referencia de aporte calculada desde tu margen mensual."
-      ),
-      tags: ["Referencia", "No asigna solo"],
-      tone: "support",
-      unavailableContributionLabel:
-        metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
-          ? "No sugerido con déficit"
-          : "No disponible",
-      unavailableAdvanceLabel:
-        metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
-          ? "No aplica"
-          : "No disponible",
-      recommended:
-        capacityContribution !== null &&
-        (assignedGoalContribution === null || assignedGoalContribution <= 0)
-    }
-  ];
-
-  if (balancedSmallExpensePart !== null && balancedSmallExpensePart > 0) {
-    if (metrics.estimatedMargin !== null && metrics.estimatedMargin < 0) {
-      const deficitReduction = Math.min(
-        balancedSmallExpensePart,
-        Math.abs(metrics.estimatedMargin)
-      );
-
-      scenarios.push({
-        key: "with-small-expenses",
-        name: "Reducir el déficit",
-        monthlyContribution: deficitReduction,
-        assumption:
-          "Revisar una parte de tus gastos pequeños podría reducir el déficit mensual. No es dinero disponible para aportar.",
-        tags: ["No es ahorro", "Explorar"],
-        tone: "warning",
-        kind: "deficit-reduction",
-        currentMargin: metrics.estimatedMargin,
-        marginAfterAdjustment: metrics.estimatedMargin + balancedSmallExpensePart,
-        recommended: true
-      });
-    } else {
-      scenarios.push({
-        key: "with-small-expenses",
-        name: "Aporte con ajuste opcional",
-        monthlyContribution: sumAvailableParts([
-          scenarioWithSmallExpenses,
-          balancedSmallExpensePart
-        ]),
-        assumption: getScenarioDescription(
-          [
-            getMarginShareDescription("Aporte sugerido", scenarioWithSmallExpenses, metrics),
-            getSmallExpensesShareDescription(
-              "Parte de gastos pequeños",
-              balancedSmallExpensePart,
-              metrics
-            )
-          ],
-          "Combina el aporte sugerido con una parte opcional de tus gastos pequeños."
-        ),
-        tags: ["Más exigente", "Revisar"],
-        tone: "warning"
-      });
-    }
-  }
-
-  return scenarios;
-}
-
-function getAdvanceLabel(scenario: Scenario, months: number) {
-  const { monthlyContribution } = scenario;
-
-  if (monthlyContribution === null) {
-    return scenario.unavailableAdvanceLabel ?? "No disponible";
-  }
-
-  return `${formatCOP(monthlyContribution * months)} aprox.`;
-}
-
-function getAmountLabel(value: number | null, isMorePrecise = false) {
-  if (value === null) {
-    return "No disponible";
-  }
-
-  return isMorePrecise ? formatCOP(value) : `${formatCOP(value)} aprox.`;
-}
-
-function getMarginLabel(metrics: SimulationBase) {
-  if (metrics.estimatedMargin === null) {
-    return "No disponible";
-  }
-
-  if (metrics.estimatedMargin <= 0) {
-    return metrics.isCashflowExact
-      ? formatSignedCOP(metrics.estimatedMargin)
-      : `${formatSignedCOP(metrics.estimatedMargin)} aprox.`;
-  }
-
-  return getAmountLabel(
-    metrics.estimatedMargin,
-    metrics.isCashflowExact
-  );
-}
-
-function getExpensePercentageLabel(metrics: SimulationBase) {
-  if (metrics.expensePercentage === null) {
-    return "No disponible";
-  }
-
-  return metrics.isCashflowExact
-    ? `${metrics.expensePercentage}%`
-    : `${metrics.expensePercentage}% aprox.`;
-}
-
-function getSmallExpenseLabel(onboarding: OnboardingSnapshot, metrics: SimulationBase) {
-  if (onboarding.hasSmallExpenses === "No") {
-    return "No identificados";
-  }
-
-  if (metrics.smallExpenseValue === null) {
-    return "No disponible";
-  }
-
-  return `${formatCOP(metrics.smallExpenseValue)} aprox.`;
-}
-
 function getInvestmentEducationMessage(onboarding: OnboardingSnapshot) {
   if (hasLowEmergencyCoverage(onboarding.emergencyCoverage)) {
     return "Primero conviene fortalecer una base para imprevistos.";
@@ -499,36 +122,10 @@ function getInvestmentEducationMessage(onboarding: OnboardingSnapshot) {
   return "Si después confirmas que tu base está estable, puedes explorar inversión con calma y educación.";
 }
 
-function getGoalMonthsLabel(months: number | null, fallback: string) {
-  if (months === null) {
-    return fallback;
-  }
-
-  return `${months} meses aprox.`;
-}
-
 function IconBubble({ icon, tone = "primary" }: { icon: ReactNode; tone?: Tone }) {
   return (
     <View style={[styles.iconBubble, { backgroundColor: getToneColors(tone).background }]}>
       {icon}
-    </View>
-  );
-}
-
-function Chip({ label, tone = "primary" }: { label: string; tone?: Tone }) {
-  const toneColors = getToneColors(tone);
-
-  return (
-    <View
-      style={[
-        styles.chip,
-        {
-          backgroundColor: toneColors.background,
-          borderColor: toneColors.border
-        }
-      ]}
-    >
-      <Text style={[styles.chipText, { color: toneColors.text }]}>{label}</Text>
     </View>
   );
 }
@@ -641,426 +238,110 @@ function BottomNavItem({
   );
 }
 
-function ScenarioCard({
-  expanded,
-  scenario,
-  maxMonthlyContribution,
-  onToggle,
-  compact = false
-}: {
-  expanded: boolean;
-  scenario: Scenario;
-  maxMonthlyContribution: number;
-  onToggle: () => void;
-  compact?: boolean;
-}) {
-  const toneColors = getToneColors(scenario.tone);
-  const relativeWidth =
-    scenario.monthlyContribution !== null && maxMonthlyContribution > 0
-      ? Math.max(10, Math.round((scenario.monthlyContribution / maxMonthlyContribution) * 100))
-      : 0;
-  const scenarioName = scenario.key === "assigned" ? "Aporte meta" : scenario.name;
-  const scenarioTags =
-    scenario.tags;
-  const isDeficitReduction = scenario.kind === "deficit-reduction";
-
-  return (
-    <View
-      style={[
-        styles.scenarioCard,
-        compact && styles.scenarioCardPhone,
-        scenario.recommended && styles.scenarioCardRecommended
-      ]}
-    >
-      <View style={styles.scenarioTopRow}>
-        <View style={styles.scenarioTitleGroup}>
-          <Text style={styles.scenarioTitle}>{scenarioName}</Text>
-          <Text style={styles.scenarioAssumption}>{scenario.assumption}</Text>
-        </View>
-        {scenario.recommended ? <Chip label="Recomendado" tone="support" /> : null}
-      </View>
-
-      <View style={styles.scenarioMainRow}>
-        <View style={styles.scenarioAmountBlock}>
-          <Text style={styles.amountLabel}>
-            {isDeficitReduction ? "Reducción mensual potencial" : "Aporte mensual"}
-          </Text>
-          <Text style={[styles.amountValue, { color: toneColors.text }]}>
-            {scenario.monthlyContribution !== null
-              ? `${formatCOP(scenario.monthlyContribution)} aprox.`
-              : scenario.unavailableContributionLabel ?? "No disponible"}
-          </Text>
-        </View>
-        <View style={styles.scenarioChips}>
-          {scenarioTags.map((tag) => (
-            <Chip
-              key={tag}
-              label={tag}
-              tone={tag === "Recomendado" || scenario.recommended ? "support" : scenario.tone}
-            />
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.scenarioCompactFooter}>
-        <Text style={styles.scenarioCompactResult}>
-          {isDeficitReduction && scenario.marginAfterAdjustment !== undefined
-            ? `Margen después: ${formatSignedCOP(scenario.marginAfterAdjustment)} aprox.`
-            : `6 meses: ${getAdvanceLabel(scenario, 6)}`}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onToggle}
-          style={({ pressed }) => [styles.detailToggle, pressed && styles.pressed]}
-        >
-          <Text style={styles.detailToggleText}>{expanded ? "Ocultar detalle" : "Ver detalle"}</Text>
-          {expanded ? (
-            <ChevronUp color={colors.primary} size={18} strokeWidth={2.5} />
-          ) : (
-            <ChevronDown color={colors.primary} size={18} strokeWidth={2.5} />
-          )}
-        </Pressable>
-      </View>
-
-      {expanded ? (
-        <View style={styles.scenarioDetailBlock}>
-          {isDeficitReduction ? (
-            <View style={styles.advanceGrid}>
-              <ValuePill
-                label="Déficit actual"
-                tone="warning"
-                value={
-                  scenario.currentMargin !== undefined
-                    ? `${formatSignedCOP(scenario.currentMargin)} aprox.`
-                    : "No disponible"
-                }
-              />
-              <ValuePill
-                label="Reducción potencial"
-                tone="support"
-                value={
-                  scenario.monthlyContribution !== null
-                    ? `${formatCOP(scenario.monthlyContribution)} aprox.`
-                    : "No disponible"
-                }
-              />
-              <ValuePill
-                label="Margen después"
-                tone="warning"
-                value={
-                  scenario.marginAfterAdjustment !== undefined
-                    ? `${formatSignedCOP(scenario.marginAfterAdjustment)} aprox.`
-                    : "No disponible"
-                }
-              />
-            </View>
-          ) : (
-            <>
-              <View style={styles.progressTrack}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    { backgroundColor: toneColors.text, width: toPercentWidth(relativeWidth) }
-                  ]}
-                />
-              </View>
-
-              <View style={styles.advanceGrid}>
-                <ValuePill label="3 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 3)} />
-                <ValuePill label="6 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 6)} />
-                <ValuePill label="12 meses" tone={scenario.tone} value={getAdvanceLabel(scenario, 12)} />
-              </View>
-            </>
-          )}
-
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
 export default function SimulationScreen() {
   const router = useRouter();
   const { isPhone, screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ source?: string }>();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isFlowMode = source === "flow";
-  const [expandedScenarioKey, setExpandedScenarioKey] = useState<string | null | undefined>(undefined);
   const navigate = (route: Route) => router.push(route);
   const { session } = useAuth();
   const { exactValues, onboarding } = useOnboarding();
-  const { completedActions } = usePlan();
-  const guidanceMode = onboarding.financialGuidanceMode;
+  const [protectedMarginMode, setProtectedMarginMode] =
+    useState<ProtectedMarginMode>("automatic");
+  const [customProtectedMarginInput, setCustomProtectedMarginInput] = useState("");
+  const [expandedDistributionId, setExpandedDistributionId] =
+    useState<string>("current_reference");
+  const [splitDebtPercent, setSplitDebtPercent] = useState(50);
 
-  const metrics = useMemo(
-    () => getSimulationBase(onboarding, exactValues),
+  const projectionInput = useMemo(
+    () => buildFinancialProjectionInput({ exactValues, onboarding }),
     [exactValues, onboarding]
   );
-  const impactSummary = useMemo(
-    () =>
-      getMonthlyActionImpactSummary(completedActions, {
-        periodKey: getMonthlyPlanPeriodKey()
-      }),
-    [completedActions]
+  const automaticProtectedMargin = Math.round(
+    Math.max(0, projectionInput.cashflow.availableAfterRequiredPayments ?? 0) * 0.1
   );
-  const snapshot = metrics.snapshot;
-  const goalPlan = useMemo(
-    () =>
-      getGoalPlanFromOnboarding(
-        onboarding,
-        snapshot.cashflow.suggestedMonthlyContribution,
-        exactValues
-      ),
-    [exactValues, onboarding, snapshot.cashflow.suggestedMonthlyContribution]
-  );
-  const primaryGoalAllocation =
-    goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
-    goalPlan.allocations[0] ??
+  const customProtectedMargin = parseCOPInput(customProtectedMarginInput) ?? 0;
+  const protectedMarginPreference: ProtectedMarginPreference =
+    protectedMarginMode === "custom"
+      ? { amount: customProtectedMargin, mode: "custom" }
+      : { mode: protectedMarginMode };
+  const selectedProjectionGoal =
+    projectionInput.goals.find((goal) => goal.isPrimary) ??
+    projectionInput.goals[0] ??
     null;
-  const scenarios = useMemo(
+  const selectedGoalId = selectedProjectionGoal?.id ?? null;
+  const distributionScenarioSet = useMemo(
     () =>
-      getScenarios(
-        metrics,
-        impactSummary.realContributionTotal,
-        primaryGoalAllocation?.monthlyContribution ?? null
-      ),
-    [impactSummary.realContributionTotal, metrics, primaryGoalAllocation?.monthlyContribution]
+      buildDistributionScenarios({
+        input: projectionInput,
+        protectedMarginPreference,
+        selectedGoalId,
+        splitDebtShare: splitDebtPercent / 100
+      }),
+    [projectionInput, protectedMarginPreference, selectedGoalId, splitDebtPercent]
   );
-  const defaultExpandedScenarioKey =
-    scenarios.find((scenario) => scenario.recommended)?.key ?? scenarios[0]?.key ?? null;
-  const activeExpandedScenarioKey =
-    expandedScenarioKey === undefined ? defaultExpandedScenarioKey : expandedScenarioKey;
-  const maxMonthlyContribution = Math.max(
-    ...scenarios.map((scenario) => scenario.monthlyContribution ?? 0),
-    0
+  const distributionScenarios = useMemo(
+    () =>
+      presentDistributionScenarios({
+        input: projectionInput,
+        scenarios: distributionScenarioSet
+      }),
+    [distributionScenarioSet, projectionInput]
   );
-  const simulatedGoalTargetAmount =
-    primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount;
-  const simulatedGoalRemainingAmount =
-    primaryGoalAllocation?.remainingAmount ?? snapshot.goal.remainingAmount;
-  const simulatedGoalEstimatedMonths =
-    primaryGoalAllocation?.estimatedMonthsToGoal ?? snapshot.goal.estimatedMonthsToGoal;
-  const simulatedGoalTitle =
-    primaryGoalAllocation?.goal.title ?? onboarding.financialGoal ?? snapshot.goal.name ?? "No definida";
-  const simulatedGoalTargetMonth = primaryGoalAllocation?.goal.targetMonth
-    ? formatTargetMonth(primaryGoalAllocation.goal.targetMonth)
-    : "No definido";
-  const simulatedGoalContributionLabel = primaryGoalAllocation
-    ? formatGoalContribution(primaryGoalAllocation.monthlyContribution)
-    : snapshot.cashflow.suggestedMonthlyContribution > 0
-      ? `${formatCOP(snapshot.cashflow.suggestedMonthlyContribution)} aprox.`
-      : "Por definir";
-  const capacityContributionLabel =
-    snapshot.cashflow.suggestedMonthlyContribution > 0
-      ? `${formatCOP(snapshot.cashflow.suggestedMonthlyContribution)} aprox.`
-      : metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
-        ? "No sugerido con déficit"
-        : "Por definir";
-  const contributionRateLabel =
-    snapshot.cashflow.suggestedContributionRate !== null
-      ? `${Math.round(snapshot.cashflow.suggestedContributionRate * 100)}%`
-      : "No aplica";
-  const marginRateLabel =
-    snapshot.cashflow.marginRate !== null
-      ? `${Math.round(snapshot.cashflow.marginRate * 100)}%`
-      : "No disponible";
-  const contributionRuleText =
-    metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
-      ? "Mientras el margen sea cero o negativo, no sugerimos un aporte. Los ajustes se muestran únicamente como una posible reducción del déficit."
-      : snapshot.cashflow.suggestedContributionRate !== null
-        ? `Tu margen equivale al ${marginRateLabel} de tus ingresos. Usamos el ${contributionRateLabel} de ese margen y redondeamos hacia abajo a los $10.000 más cercanos: ${formatCOP(snapshot.cashflow.suggestedContributionBeforeRounding)} antes del redondeo y ${formatCOP(snapshot.cashflow.suggestedMonthlyContribution)} como referencia final.`
-        : "Necesitamos una referencia de ingresos y gastos para explicar el aporte sugerido.";
-  const contributionBandRuleText =
-    "La regla cambia según cuánto representa el margen sobre tus ingresos: hasta 10% usamos 25% del margen; más de 10% y hasta 25% usamos 35%; por encima de 25% usamos 45%.";
-  const contributionTone: FinancialEducationStoryTone =
-    metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
-      ? "critical"
-      : snapshot.cashflow.suggestedMonthlyContribution > 0
-        ? "positive"
-        : "neutral";
-  const contributionPlainLanguage =
-    snapshot.cashflow.suggestedContributionRate !== null
-      ? `De cada $100 de margen, usamos $${Math.round(
-          snapshot.cashflow.suggestedContributionRate * 100
-        )} como referencia para tu aporte mensual.`
-      : "Necesitamos una referencia de ingresos y gastos para traducir tu margen en un aporte.";
-  const contributionResultLabel =
-    metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0
-      ? "Aporte no sugerido con déficit"
-      : "Aporte mensual sugerido";
-  const goalBudgetLabel =
-    goalPlan.monthlyGoalBudget > 0 ? `${formatCOP(goalPlan.monthlyGoalBudget)} aprox.` : "Por definir";
-  const goalBudgetModeLabel =
-    goalPlan.monthlyGoalBudgetMode === "manual" ? "Bolsa manual" : "Bolsa recomendada";
-  const goalMonthsLabel = getGoalMonthsLabel(
-    simulatedGoalEstimatedMonths,
-    primaryGoalAllocation?.viabilityLabel ?? snapshot.goal.label
+  const strategyBaseScenario = distributionScenarioSet.reduceInterest;
+  const hasDistributionBase = strategyBaseScenario.surplusBeforeProtection !== null;
+  const surplusBeforeProtection = hasDistributionBase
+    ? Math.max(0, strategyBaseScenario.surplusBeforeProtection ?? 0)
+    : null;
+  const protectedAmount = hasDistributionBase
+    ? strategyBaseScenario.protectedMargin.amount
+    : null;
+  const distributableAmount = hasDistributionBase
+    ? strategyBaseScenario.distributableAmount
+    : null;
+  const monthlyOperatingCosts =
+    projectionInput.cashflow.baselineMonthlyExpenses !== null &&
+    projectionInput.cashflow.smallMonthlyExpenses !== null
+      ? projectionInput.cashflow.baselineMonthlyExpenses +
+        projectionInput.cashflow.smallMonthlyExpenses
+      : null;
+  const cashflowIssueRoute =
+    projectionInput.issues.find(
+      (issue) => issue.code === "missing_income" || issue.code === "missing_expenses"
+    )?.ownerRoute ?? "/improve-plan";
+
+  const handleProtectedMarginModeChange = (mode: ProtectedMarginMode) => {
+    if (mode === "custom" && customProtectedMarginInput.length === 0) {
+      setCustomProtectedMarginInput(formatCOP(automaticProtectedMargin));
+    }
+
+    setProtectedMarginMode(mode);
+  };
+
+  const handleCustomProtectedMarginChange = (value: string) => {
+    const parsedValue = parseCOPInput(value);
+    setCustomProtectedMarginInput(parsedValue === null ? "" : formatCOP(parsedValue));
+  };
+
+  const getResolutionRoute = (
+    issueCodes: Array<(typeof distributionScenarios)[number]["issueCodes"][number]>
+  ): Route => {
+    if (issueCodes.includes("missing_cashflow")) return cashflowIssueRoute;
+    if (
+      issueCodes.includes("missing_goal") ||
+      issueCodes.includes("missing_goal_target")
+    ) {
+      return "/goals-overview";
+    }
+
+    return "/debts";
+  };
+
+  const snapshot = useMemo(
+    () => calculateFinancialSnapshot({ onboarding, exactValues }),
+    [exactValues, onboarding]
   );
-  const goalTone: Tone =
-    simulatedGoalTargetAmount !== null && simulatedGoalEstimatedMonths !== null
-      ? "support"
-      : "warning";
-  const expensesTone: Tone =
-    metrics.expensePercentage !== null && metrics.expensePercentage >= 85 ? "warning" : "primary";
-  const marginTone: Tone =
-    metrics.estimatedMargin !== null && metrics.estimatedMargin > 0 ? "support" : "warning";
-  const scenarioOverviewSlide = (
-    <View style={styles.educationSlideContent}>
-      <Text style={styles.scenarioGuideTitle}>Qué estás comparando</Text>
-      <Text style={styles.scenarioGuideText}>
-        Cada escenario muestra una forma distinta de avanzar hacia tu meta. Solo compara
-        posibilidades educativas: no mueve dinero ni modifica tu plan.
-      </Text>
-      <View style={styles.valueGrid}>
-        <ValuePill label="Aporte meta" tone="support" value={simulatedGoalContributionLabel} />
-        <ValuePill label="Aporte sugerido" tone="warning" value={capacityContributionLabel} />
-      </View>
-    </View>
-  );
-  const scenarioTermsSlide = (
-    <View style={styles.educationSlideContent}>
-      <Text style={styles.scenarioGuideTitle}>De dónde sale cada monto</Text>
-      <View style={styles.scenarioEducationList}>
-        <View style={styles.scenarioEducationItem}>
-          <Text style={styles.scenarioGuideTerm}>Aporte meta</Text>
-          <Text style={styles.scenarioGuideText}>Lo asignado a tu meta principal.</Text>
-        </View>
-        <View style={styles.scenarioEducationItem}>
-          <Text style={styles.scenarioGuideTerm}>Bolsa manual o recomendada</Text>
-          <Text style={styles.scenarioGuideText}>
-            El presupuesto total que se reparte entre tus metas.
-          </Text>
-        </View>
-        <View style={styles.scenarioEducationItem}>
-          <Text style={styles.scenarioGuideTerm}>Aporte sugerido</Text>
-          <Text style={styles.scenarioGuideText}>
-            Una referencia calculada desde tu margen; no cambia tu plan.
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-  const scenarioAdjustmentSlide = (
-    <View style={styles.educationSlideContent}>
-      <Text style={styles.scenarioGuideTitle}>Ajuste de gastos pequeños</Text>
-      <View style={styles.scenarioEducationWarning}>
-        <Text style={styles.scenarioGuideText}>
-          Si tienes déficit, este escenario solo muestra cuánto podría reducirse al revisar
-          gastos pequeños.
-        </Text>
-        <Text style={styles.scenarioGuideTerm}>
-          No representa ahorro ni dinero disponible.
-        </Text>
-      </View>
-    </View>
-  );
-  const scenarioSlides =
-    guidanceMode === "guided"
-      ? [scenarioOverviewSlide, scenarioTermsSlide, scenarioAdjustmentSlide]
-      : guidanceMode === "brief"
-        ? [
-            scenarioOverviewSlide,
-            <View style={styles.educationSlideContent}>
-              {scenarioTermsSlide}
-              {scenarioAdjustmentSlide}
-            </View>
-          ]
-        : [
-            <View style={styles.educationSlideContent}>
-              {scenarioTermsSlide}
-              {scenarioAdjustmentSlide}
-            </View>
-          ];
-  const simulatedGoalOverviewSlide = (
-    <View style={styles.educationSlideContent}>
-      <Text style={styles.scenarioGuideTitle}>Qué representa esta simulación</Text>
-      <Text style={styles.scenarioGuideText}>
-        Proyecta una ruta posible hacia tu meta usando los datos actuales. No separa
-        dinero ni cambia los aportes de tu plan.
-      </Text>
-      <View style={styles.valueGrid}>
-        <ValuePill
-          label="Objetivo"
-          tone={goalTone}
-          value={
-            simulatedGoalTargetAmount !== null
-              ? `${formatCOP(simulatedGoalTargetAmount)} aprox.`
-              : "Por definir"
-          }
-        />
-        <ValuePill
-          label="Restante"
-          tone="primary"
-          value={
-            simulatedGoalRemainingAmount !== null
-              ? `${formatCOP(simulatedGoalRemainingAmount)} aprox.`
-              : "Por calcular"
-          }
-        />
-      </View>
-    </View>
-  );
-  const simulatedGoalTermsSlide = (
-    <View style={styles.educationSlideContent}>
-      <Text style={styles.scenarioGuideTitle}>Cómo leer los demás datos</Text>
-      <View style={styles.scenarioEducationList}>
-        <View style={styles.scenarioEducationItem}>
-          <Text style={styles.scenarioGuideTerm}>Tiempo</Text>
-          <Text style={styles.scenarioGuideText}>
-            Meses aproximados para cubrir lo restante con el aporte asignado.
-          </Text>
-        </View>
-        <View style={styles.scenarioEducationItem}>
-          <Text style={styles.scenarioGuideTerm}>{goalBudgetModeLabel}</Text>
-          <Text style={styles.scenarioGuideText}>
-            Presupuesto mensual disponible para repartir entre tus metas.
-          </Text>
-        </View>
-        <View style={styles.scenarioEducationItem}>
-          <Text style={styles.scenarioGuideTerm}>Aporte sugerido</Text>
-          <Text style={styles.scenarioGuideText}>
-            Referencia calculada desde tu margen; no reemplaza el aporte que tú
-            decidas asignar.
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-  const simulatedGoalCautionSlide = (
-    <View style={styles.educationSlideContent}>
-      <Text style={styles.scenarioGuideTitle}>Recuerda que puede cambiar</Text>
-      <View style={styles.scenarioEducationWarning}>
-        <Text style={styles.scenarioGuideText}>
-          El tiempo estimado cambia si ajustas el objetivo, registras un ahorro o
-          modificas el aporte mensual.
-        </Text>
-        <Text style={styles.scenarioGuideTerm}>
-          Es una orientación educativa, no una garantía.
-        </Text>
-      </View>
-    </View>
-  );
-  const simulatedGoalSlides =
-    guidanceMode === "guided"
-      ? [
-          simulatedGoalOverviewSlide,
-          simulatedGoalTermsSlide,
-          simulatedGoalCautionSlide
-        ]
-      : guidanceMode === "brief"
-        ? [
-            simulatedGoalOverviewSlide,
-            <View style={styles.educationSlideContent}>
-              {simulatedGoalTermsSlide}
-              {simulatedGoalCautionSlide}
-            </View>
-          ]
-        : [
-            <View style={styles.educationSlideContent}>
-              {simulatedGoalTermsSlide}
-              {simulatedGoalCautionSlide}
-            </View>
-          ];
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1077,180 +358,150 @@ export default function SimulationScreen() {
             </View>
             <View style={styles.heroTextGroup}>
               <Text style={[styles.title, isPhone && styles.titlePhone]}>Simulación</Text>
+              <Text style={styles.subtitle}>
+                Compara distintas formas de repartir el mismo dinero mensual. Ninguna
+                alternativa cambia tu plan hasta que tú lo decidas.
+              </Text>
             </View>
           </View>
 
           <View style={styles.summaryGrid}>
             <SummaryMetric
-              helper={`Mes objetivo: ${simulatedGoalTargetMonth}`}
-              icon={<Target color={getToneColors(goalTone).text} size={22} strokeWidth={2.4} />}
-              label="Meta"
-              tone={goalTone}
-              value={simulatedGoalTitle}
-            />
-            <SummaryMetric
-              helper="Desde tu bolsa de metas"
-              icon={<PiggyBank color={colors.support} size={22} strokeWidth={2.4} />}
-              label="Aporte meta"
+              helper={
+                projectionInput.cashflow.monthlyIncomeSource === "exact"
+                  ? "Dato registrado"
+                  : "Estimado desde tu rango"
+              }
+              icon={<WalletCards color={colors.support} size={22} strokeWidth={2.4} />}
+              label="Ingreso mensual"
               tone="support"
-              value={simulatedGoalContributionLabel}
+              value={
+                projectionInput.cashflow.monthlyIncome === null
+                  ? "No disponible"
+                  : formatCOP(projectionInput.cashflow.monthlyIncome)
+              }
             />
             <SummaryMetric
-              helper="Después de gastos y deudas"
-              icon={<TrendingUp color={getToneColors(marginTone).text} size={22} strokeWidth={2.4} />}
-              label="Margen"
-              tone={marginTone}
-              value={getMarginLabel(metrics)}
+              helper="Principales y pequeños; no incluye deudas"
+              icon={<PieChart color={colors.primary} size={22} strokeWidth={2.4} />}
+              label="Gastos sin deudas"
+              value={
+                monthlyOperatingCosts === null
+                  ? "No disponible"
+                  : formatCOP(monthlyOperatingCosts)
+              }
             />
             <SummaryMetric
-              helper="Salidas frente a ingresos"
-              icon={<ChartColumnIncreasing color={getToneColors(expensesTone).text} size={22} strokeWidth={2.4} />}
-              label="Relación"
-              tone={expensesTone}
-              value={getExpensePercentageLabel(metrics)}
+              helper={
+                projectionInput.cashflow.hasCompleteRequiredDebtPayments
+                  ? "Pagos mínimos o acordados"
+                  : "Falta confirmar una o más cuotas"
+              }
+              icon={<ClipboardCheck color="#B45309" size={22} strokeWidth={2.4} />}
+              label="Cuotas requeridas"
+              tone="warning"
+              value={formatCOP(projectionInput.cashflow.knownRequiredDebtPaymentsTotal)}
             />
-          </View>
-
-          <View style={styles.calculationHelp}>
-            <FinancialEducationModal
-              accessibilityLabel="Explicar cómo calculamos el aporte sugerido"
-              guidanceMode={guidanceMode}
-              icon={<WalletCards color={colors.primary} size={23} strokeWidth={2.4} />}
-              title="Cómo calculamos tu aporte sugerido"
-              triggerLabel="¿Cómo calculamos este aporte?"
-            >
-              <FinancialEducationStory
-                calculationItems={[
-                  {
-                    label: "Margen mensual",
-                    value:
-                      metrics.estimatedMargin !== null
-                        ? formatSignedCOP(metrics.estimatedMargin)
-                        : getMarginLabel(metrics)
-                  },
-                  {
-                    label: "Porcentaje usado",
-                    operator: "×",
-                    value: contributionRateLabel
-                  },
-                  {
-                    emphasis: true,
-                    label: "Aporte sugerido",
-                    operator: "=",
-                    value:
-                      snapshot.cashflow.suggestedMonthlyContribution > 0
-                        ? formatCOP(snapshot.cashflow.suggestedMonthlyContribution)
-                        : capacityContributionLabel
-                  }
-                ]}
-                calculationTitle="Cómo estimamos el aporte"
-                closeLabel="Cerrar"
-                definition={`${contributionRuleText} ${contributionBandRuleText}`}
-                estimateLabel={snapshot.precision.label}
-                guidanceMode={guidanceMode}
-                plainLanguage={contributionPlainLanguage}
-                plainLanguageBadge={
-                  snapshot.cashflow.suggestedContributionRate !== null
-                    ? `${Math.round(snapshot.cashflow.suggestedContributionRate * 100)}%`
-                    : "Aporte"
-                }
-                resultDescription="Es una referencia educativa calculada desde tu margen; no modifica tu plan."
-                resultLabel={contributionResultLabel}
-                resultValue={
-                  snapshot.cashflow.suggestedMonthlyContribution > 0
-                    ? formatCOP(snapshot.cashflow.suggestedMonthlyContribution)
-                    : capacityContributionLabel
-                }
-                tone={contributionTone}
-              />
-            </FinancialEducationModal>
+            <SummaryMetric
+              helper="Margen libre y decisiones voluntarias, después de proteger"
+              icon={<TrendingUp color={colors.primary} size={22} strokeWidth={2.4} />}
+              label="Para repartir"
+              value={
+                distributableAmount === null
+                  ? "No disponible"
+                  : formatCOP(distributableAmount)
+              }
+            />
           </View>
 
           <SectionCard
             compact={isPhone}
-            headerAction={
-              <FinancialEducationModal
-                accessibilityLabel="Explicar la meta simulada"
-                guidanceMode={guidanceMode}
-                icon={<Target color={colors.primary} size={23} strokeWidth={2.4} />}
-                title="Cómo leer tu meta simulada"
-              >
-                <FinancialEducationCarousel
-                  closeLabel="Cerrar"
-                  resetKey={`simulated-goal-${guidanceMode}`}
-                  slides={simulatedGoalSlides}
-                />
-              </FinancialEducationModal>
-            }
-            icon={<Target color={colors.primary} size={22} strokeWidth={2.4} />}
-            title="Meta simulada"
+            icon={<ShieldCheck color={colors.primary} size={22} strokeWidth={2.4} />}
+            title="Antes de distribuir"
           >
-            <View style={styles.valueGrid}>
-              <ValuePill
-                label="Objetivo"
-                tone={goalTone}
-                value={
-                  simulatedGoalTargetAmount !== null
-                    ? `${formatCOP(simulatedGoalTargetAmount)} aprox.`
-                    : "Por definir"
-                }
-              />
-              <ValuePill
-                label="Restante"
-                tone="primary"
-                value={
-                  simulatedGoalRemainingAmount !== null
-                    ? `${formatCOP(simulatedGoalRemainingAmount)} aprox.`
-                    : "Por calcular"
-                }
-              />
-              <ValuePill label="Tiempo" tone={goalTone} value={goalMonthsLabel} />
-              <ValuePill label={goalBudgetModeLabel} tone="support" value={goalBudgetLabel} />
-              <ValuePill
-                label="Aporte sugerido"
-                tone="warning"
-                value={capacityContributionLabel}
-              />
-            </View>
+            <ProtectedMarginControl
+              customAmountInput={customProtectedMarginInput}
+              distributableAmount={distributableAmount}
+              mode={protectedMarginMode}
+              onCustomAmountChange={handleCustomProtectedMarginChange}
+              onModeChange={handleProtectedMarginModeChange}
+              poolBreakdown={strategyBaseScenario.poolBreakdown}
+              protectedAmount={protectedAmount}
+              surplusBeforeProtection={surplusBeforeProtection}
+            />
           </SectionCard>
 
           <SectionCard
             compact={isPhone}
-            headerAction={
-              <FinancialEducationModal
-                accessibilityLabel="Explicar escenarios"
-                guidanceMode={guidanceMode}
-                icon={<ClipboardCheck color={colors.primary} size={23} strokeWidth={2.4} />}
-                title="Cómo leer estos escenarios"
-              >
-                <FinancialEducationCarousel
-                  closeLabel="Cerrar"
-                  resetKey={`scenarios-${guidanceMode}`}
-                  slides={scenarioSlides}
-                />
-              </FinancialEducationModal>
-            }
-            icon={<ClipboardCheck color={colors.primary} size={22} strokeWidth={2.4} />}
-            title="Escenarios"
+            icon={<Target color={colors.primary} size={22} strokeWidth={2.4} />}
+            title="Meta usada en la comparación"
           >
+            {selectedProjectionGoal ? (
+              <View style={styles.valueGrid}>
+                <ValuePill label="Meta" tone="primary" value={selectedProjectionGoal.title} />
+                <ValuePill
+                  label="Quieres reunir"
+                  tone="support"
+                  value={
+                    selectedProjectionGoal.targetAmount === null
+                      ? "Por definir"
+                      : formatCOP(selectedProjectionGoal.targetAmount)
+                  }
+                />
+                <ValuePill
+                  label="Mes objetivo"
+                  value={formatTargetMonth(selectedProjectionGoal.targetMonth)}
+                />
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.text}>
+                  Crea o elige una meta principal para comparar estrategias que le asignen dinero.
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/goals-overview")}
+                  style={({ pressed }) => [styles.inlineButton, pressed && styles.pressed]}
+                >
+                  <Text style={styles.inlineButtonText}>Ir a metas</Text>
+                </Pressable>
+              </View>
+            )}
+          </SectionCard>
+
+          <SectionCard
+            compact={isPhone}
+            icon={<ClipboardCheck color={colors.primary} size={22} strokeWidth={2.4} />}
+            title="Estrategias para el mismo dinero"
+          >
+            <Text style={styles.sectionDescription}>
+              Todas conservan primero tus gastos y cuotas requeridas. Lo único que cambia
+              es el destino del dinero que queda disponible.
+            </Text>
             <View style={styles.scenariosList}>
-              {scenarios.map((scenario) => (
-                <ScenarioCard
-                  compact={isPhone}
-                  key={scenario.key}
-                  expanded={activeExpandedScenarioKey === scenario.key}
-                  maxMonthlyContribution={maxMonthlyContribution}
+              {distributionScenarios.map((scenario) => (
+                <DistributionScenarioCard
+                  expanded={expandedDistributionId === scenario.id}
+                  key={scenario.id}
+                  onResolve={
+                    scenario.status === "ready"
+                      ? undefined
+                      : () => router.push(getResolutionRoute(scenario.issueCodes))
+                  }
+                  onSplitDebtPercentChange={setSplitDebtPercent}
                   onToggle={() =>
-                    setExpandedScenarioKey((current) => {
-                      const currentExpandedKey =
-                        current === undefined ? defaultExpandedScenarioKey : current;
-                      return currentExpandedKey === scenario.key ? null : scenario.key;
-                    })
+                    setExpandedDistributionId((current) =>
+                      current === scenario.id ? "" : scenario.id
+                    )
                   }
                   scenario={scenario}
                 />
               ))}
             </View>
+            <Text style={styles.disclaimerText}>
+              Estos escenarios son comparaciones educativas. No registran pagos, no separan
+              dinero y no crean una deuda nueva.
+            </Text>
           </SectionCard>
 
           <View style={styles.insightsGrid}>
@@ -1485,6 +736,34 @@ const styles = StyleSheet.create({
   },
   scenariosList: {
     gap: spacing.md
+  },
+  sectionDescription: {
+    color: colors.textMuted,
+    fontSize: typography.body,
+    lineHeight: typography.lineHeight.body
+  },
+  emptyState: {
+    alignItems: "flex-start",
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  inlineButton: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  inlineButtonText: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   scenarioGuideTitle: {
     color: colors.text,

@@ -4,7 +4,7 @@
 
 Construir escenarios mensuales sin volver a pedir datos que la persona ya registró y sin permitir que cada pantalla calcule una versión distinta de su situación financiera.
 
-La primera etapa no genera recomendaciones ni modifica `/simulation`. Establece las fuentes de verdad, separa hechos de decisiones y crea una única entrada para el futuro motor.
+La base y la primera integración en `/simulation` ya están implementadas. La pantalla consume una única entrada financiera, separa hechos de decisiones y compara estrategias sin declarar una alternativa universalmente óptima.
 
 ## Principios
 
@@ -27,13 +27,12 @@ La primera etapa no genera recomendaciones ni modifica `/simulation`. Establece 
 | Saldo, tasa, estado y día de pago | `onboarding.debts` | `/debts` | Evolución de cada obligación |
 | Pago mensual planeado | `DebtRecord.monthlyPayment` | `/debts` | Escenario que conserva la decisión actual |
 | Naturaleza del pago | `DebtRecord.monthlyPaymentType` | `/debts` | Distinguir mínimo, acuerdo, decisión propia o dato desconocido |
-| Pago mínimo exigido | `DebtRecord.minimumMonthlyPayment` | `/debts` | Piso que no puede reasignarse sin incumplir |
+| Pago requerido calculado | Tipo del pago y `DebtRecord.monthlyPayment` | `/debts` | Piso que no puede reasignarse sin incumplir; el campo separado anterior queda solo por compatibilidad |
 | Flexibilidad de un acuerdo | `DebtRecord.paymentFlexibility` | `/debts` | Identificar valores potencialmente negociables |
 | Pagos reales y saldo reportado | `DebtRecord.payments` y `remainingAmount` | `/debts` | Recalibrar el siguiente período |
-| Objetivo total y ahorro actual | `FinancialGoal` | `/goals` y `/goals-overview` | Brecha total y progreso real |
+| Monto que quiere reunir y ahorro actual | `FinancialGoal` | `/goals` y `/goals-overview` | Brecha y progreso real sin suponer la parte que será financiada |
 | Mes objetivo | `FinancialGoal.targetMonth` | `/goals` y `/goals-overview` | Única referencia temporal para calcular los períodos disponibles |
-| Monto mínimo para comenzar | `FinancialGoal.minimumInitialAmount` | `/goals` y `/goals-overview` | Diferenciar éxito mínimo de financiación total |
-| Margen libre mensual deseado | Preferencia de planificación pendiente | Futuro plan mensual | Dinero que la persona decide no comprometer ese mes; nunca usa un monto fijo global |
+| Margen libre mensual deseado | Supuesto visible de `/simulation` | `/simulation`; persistencia pendiente | Dinero que la persona decide no comprometer ese mes; nunca usa un monto fijo global |
 | Fondo de emergencia acumulado | Ahorro general o meta de emergencia | Ahorros / metas | Saldo acumulado disponible para imprevistos |
 | Crédito aún no contratado | Borrador del escenario | `/simulation` | Hipótesis que no se convierte en deuda hasta ser aceptada |
 
@@ -45,10 +44,10 @@ La primera etapa no genera recomendaciones ni modifica `/simulation`. Establece 
 
 - `minimum_required`: cuota mínima o pactada contractualmente; si no existe otro valor, `monthlyPayment` es el piso obligatorio.
 - `agreed`: compromiso acordado con una persona o entidad; se considera en el plan base y puede estar marcado como negociable.
-- `self_selected`: valor voluntario elegido por la persona; el motor usa `minimumMonthlyPayment` como piso si fue registrado.
-- `unknown`: perfiles anteriores o casos sin confirmar; el motor muestra una advertencia y no inventa un mínimo.
+- `self_selected`: valor voluntario elegido por la persona y sin cuota mensual fija; el motor usa `$0` como piso requerido y conserva `monthlyPayment` únicamente en “Así estás hoy”. Si existe un mínimo bancario, debe elegirse `minimum_required`.
+- `unknown`: existe únicamente para perfiles anteriores. Ya no se ofrece al crear o editar; la persona debe clasificar el pago para guardar la deuda.
 
-`paymentFlexibility` puede ser `fixed`, `negotiable` o `unknown`. Solo describe la posibilidad de cambiar un acuerdo; no lo modifica automáticamente.
+`paymentFlexibility` puede ser `fixed`, `negotiable` o `unknown`. `unknown` se conserva solo para perfiles anteriores y ya no se ofrece en el formulario. La flexibilidad describe la posibilidad de cambiar un acuerdo; no lo modifica automáticamente.
 
 ## Entrada canónica
 
@@ -58,7 +57,7 @@ La primera etapa no genera recomendaciones ni modifica `/simulation`. Establece 
 - pagos de deuda planeados y mínimos conocidos por separado;
 - dinero disponible después del plan actual;
 - dinero disponible después de obligaciones solo cuando todos los mínimos son conocidos;
-- metas con objetivo total, mínimo inicial y mes objetivo;
+- metas con un único monto que la persona quiere reunir y un mes objetivo;
 - faltantes con una ruta de origen para completarlos.
 
 La simulación no debe leer directamente campos dispersos de `onboarding`. Debe consumir esta entrada o una evolución compatible de ella.
@@ -87,6 +86,7 @@ Los datos de metas y deudas siguen dentro de `financial_profiles.onboarding`, qu
 - una fecha con día se convierte a mes y año, descartando el día;
 - un horizonte aproximado antiguo se convierte una sola vez a un mes objetivo determinista;
 - al normalizar y volver a guardar el perfil, `FinancialGoal.targetMonth` queda como única fecha de la meta y los campos de horizonte heredados dejan de persistirse.
+- el campo anterior `minimumInitialAmount` se descarta al normalizar. La parte que la persona ya sabe que financiará no se registra como ahorro ni como deuda hasta que el crédito exista.
 
 ## Margen libre mensual y fondo de emergencia
 
@@ -111,7 +111,13 @@ Todas las comparaciones deben partir del mismo orden. Una estrategia solo puede 
 
 `dinero distribuible = máximo(0, ingreso - gastos principales - gastos pequeños - obligaciones de deuda - margen protegido)`
 
+El dinero distribuible no es dinero adicional. Se desglosa en el margen que aún no tenía destino, pagos voluntarios de deuda que pueden reasignarse y aportes voluntarios a metas. Un pago `self_selected` mantiene su valor en “Así estás hoy”, pero su piso obligatorio continúa siendo `$0`; convertirlo en obligación impediría que los escenarios compararan otras decisiones.
+
 El margen protegido no usa un valor universal. Será un supuesto visible del escenario hasta que la persona decida guardarlo como preferencia. Si falta el mínimo de alguna deuda, el motor puede mostrar la referencia actual, pero no debe afirmar cuánto dinero es redistribuible.
+
+Cuando la persona no tiene una cifra en mente, el modo **automático** protege el 10% del excedente positivo después de gastos y obligaciones. Es una heurística operativa visible y ajustable, no una recomendación financiera universal. Los otros modos son **usar todo**, que debe elegirse de forma explícita, y **monto personalizado**.
+
+La heurística no se presenta como una regla oficial: el [CFPB indica que el monto de protección depende de la situación de cada persona](https://www.consumerfinance.gov/an-essential-guide-to-building-an-emergency-fund/) y la [Superintendencia Financiera de Colombia recomienda presupuestar y crear protección para imprevistos](https://www.superfinanciera.gov.co/publicaciones/10115048/sfc-adelanta-campana-de-educacion-financiera-a-estudiantes-de-soacha/), sin fijar un porcentaje mensual único.
 
 Los acuerdos marcados como negociables no se reducen automáticamente. Una comparación puede mostrar el efecto de negociarlos, pero debe identificarlo como una acción pendiente de confirmación.
 
@@ -141,8 +147,7 @@ Nombre visible recomendado: **Reducir intereses**.
 
 Después de cubrir obligaciones y margen protegido, dirige el dinero distribuible a una meta activa elegida por la persona.
 
-- Si la meta tiene `minimumInitialAmount`, el primer hito es alcanzar ese monto.
-- Si no tiene monto mínimo, el hito es el objetivo total.
+- El hito es el único monto que la persona indicó que quiere reunir. Si una parte será financiada, esa parte no se suma a la meta de ahorro.
 - La estrategia no supone que el dinero restante será financiado ni que la meta generará una deuda.
 - Si existen varias metas, la persona elige cuál acelerar; la aplicación no cambia silenciosamente la meta principal.
 
@@ -150,12 +155,12 @@ Nombre visible recomendado: **Acelerar una meta**.
 
 ### Estrategia: Avanzar en deuda y meta
 
-Después de cubrir obligaciones y margen protegido, divide el dinero distribuible en dos partes visibles:
+Después de cubrir obligaciones y margen protegido, divide el dinero distribuible en dos partes visibles y ajustables:
 
-- 50% como pago adicional a la deuda con mayor tasa conocida;
-- 50% para la meta seleccionada.
+- una proporción para el pago adicional a la deuda con mayor tasa conocida;
+- la proporción restante para la meta seleccionada.
 
-El reparto 50/50 es un punto de comparación explícito, no una regla óptima. La interfaz podrá permitir ajustarlo. Si no existe una deuda con interés o no hay una meta elegible, el 100% pasa al componente disponible.
+El reparto comienza en 50/50 como punto de comparación, no como regla óptima. La persona puede moverlo entre 10/90 y 90/10 en pasos de cinco puntos porcentuales. La comparación solo se habilita cuando existen tanto una deuda con interés conocido como una meta con monto definido; cuando falta alguno, se muestra como “No aplica” junto con el dato que debe completarse. Si uno de los dos objetivos termina durante la proyección, su parte pasa al otro.
 
 Nombre visible recomendado: **Avanzar en deuda y meta**. Evita el nombre genérico “Plan equilibrado”, que no explica qué se está repartiendo.
 
@@ -174,12 +179,19 @@ La hipótesis crea una deuda temporal únicamente dentro del escenario y muestra
 
 Si la cuota y el plazo todavía no están claros, la aplicación puede guardar el borrador, pero debe mostrar “Faltan condiciones” en lugar de calificar la financiación como viable.
 
-## Etapas siguientes
+## Estado y etapas siguientes
 
-1. Validar la captura y el significado de los nuevos datos con casos reales.
-2. Incorporar una preferencia de margen libre mensual elegida por la persona, sin confundirla con el fondo acumulado.
-3. Construir la proyección mes a mes como funciones puras, sin interfaz.
-4. Implementar la referencia actual y las estrategias “Reducir intereses”, “Acelerar una meta” y “Avanzar en deuda y meta”.
-5. Rediseñar `/simulation` para comparar resultados y completar faltantes en sus rutas propietarias.
-6. Permitir guardar un escenario como referencia del plan mensual sin alterar los hechos originales.
-7. Comparar lo planeado con pagos y aportes reales para recalibrar el mes siguiente.
+Completado:
+
+1. Entrada financiera canónica con rutas propietarias para los datos faltantes.
+2. Margen protegido automático, uso explícito de todo el margen y monto personalizado.
+3. Motor puro para la referencia actual y las estrategias “Reducir intereses”, “Acelerar una meta” y “Avanzar en deuda y meta”.
+4. Integración de `/simulation` con una base mensual común, estados incompletos y proyección de la meta hasta su mes objetivo.
+5. Proyección mes a mes que calcula intereses con la tasa E.A. registrada, libera cuotas cuando una deuda termina y redistribuye el dinero desde el período siguiente.
+6. Desglose visible del origen de “Para repartir”, separando margen sin destino, pagos voluntarios de deuda y aportes voluntarios a metas.
+
+Siguiente:
+
+1. Añadir la financiación como hipótesis temporal sobre esa proyección, con sus condiciones incompletas claramente visibles.
+2. Permitir guardar un escenario como referencia del plan mensual sin alterar los hechos originales.
+3. Comparar lo planeado con pagos y aportes reales para recalibrar el mes siguiente.

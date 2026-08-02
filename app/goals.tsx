@@ -277,9 +277,6 @@ export default function GoalsScreen() {
     getCurrencyInputValue(initialGoal?.targetAmount)
   );
   const [targetMonth, setTargetMonth] = useState<string | null>(initialGoal?.targetMonth ?? null);
-  const [minimumInitialAmountInput, setMinimumInitialAmountInput] = useState(
-    getCurrencyInputValue(initialGoal?.minimumInitialAmount)
-  );
   const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
 
   useEffect(() => {
@@ -300,22 +297,12 @@ export default function GoalsScreen() {
     setSelectedAmountRange(getInitialAmountSelection(storedGoal));
     setTargetAmountInput(getCurrencyInputValue(storedGoal?.targetAmount));
     setTargetMonth(storedGoal?.targetMonth ?? null);
-    setMinimumInitialAmountInput(getCurrencyInputValue(storedGoal?.minimumInitialAmount));
   }, [isAddMode, onboarding, onboardingSyncStatus]);
 
   const isCustomGoal = selectedGoal === customGoalOption.title;
   const finalGoalTitle = isCustomGoal ? customGoalName.trim() : selectedGoal;
   const isManualAmount = selectedAmountRange === manualAmountOptionTitle;
   const parsedTargetAmount = isManualAmount ? parseCOPInput(targetAmountInput) : null;
-  const parsedMinimumInitialAmount = isManualAmount
-    ? parseCOPInput(minimumInitialAmountInput)
-    : null;
-  const hasValidMinimumInitialAmount =
-    !minimumInitialAmountInput.trim() ||
-    (parsedMinimumInitialAmount !== null &&
-      parsedMinimumInitialAmount > 0 &&
-      parsedTargetAmount !== null &&
-      parsedMinimumInitialAmount <= parsedTargetAmount);
   const finalIconKey =
     selectedIconKey ??
     financialGoals.find((goal) => goal.title === selectedGoal)?.iconKey ??
@@ -325,8 +312,7 @@ export default function GoalsScreen() {
     finalGoalTitle &&
       targetMonth &&
       selectedPriority &&
-      (!isManualAmount || (parsedTargetAmount !== null && parsedTargetAmount > 0)) &&
-      hasValidMinimumInitialAmount
+      (!isManualAmount || (parsedTargetAmount !== null && parsedTargetAmount > 0))
   );
 
   const handleGoalSelect = (goal: VisualOption) => {
@@ -334,7 +320,6 @@ export default function GoalsScreen() {
       setSelectedAmountRange(null);
       setTargetAmountInput("");
       setTargetMonth(null);
-      setMinimumInitialAmountInput("");
     }
 
     setSelectedGoal(goal.title);
@@ -350,18 +335,12 @@ export default function GoalsScreen() {
 
     if (range.title !== manualAmountOptionTitle) {
       setTargetAmountInput("");
-      setMinimumInitialAmountInput("");
     }
   };
 
   const handleTargetAmountChange = (value: string) => {
     const parsedValue = parseCOPInput(value);
     setTargetAmountInput(parsedValue === null ? "" : formatCOP(parsedValue));
-  };
-
-  const handleMinimumInitialAmountChange = (value: string) => {
-    const parsedValue = parseCOPInput(value);
-    setMinimumInitialAmountInput(parsedValue === null ? "" : formatCOP(parsedValue));
   };
 
   const handleContinue = () => {
@@ -373,7 +352,6 @@ export default function GoalsScreen() {
       amountRange: isManualAmount ? null : selectedAmountRange,
       iconKey: finalIconKey,
       isPrimary: !isAddMode,
-      minimumInitialAmount: parsedMinimumInitialAmount,
       priority: selectedPriority,
       targetMonth,
       targetAmount: parsedTargetAmount,
@@ -584,9 +562,9 @@ export default function GoalsScreen() {
             {isManualAmount ? (
               <View style={styles.manualAmountBox}>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Monto objetivo</Text>
+                  <Text style={styles.inputLabel}>Cifra exacta</Text>
                   <TextInput
-                    accessibilityLabel="Monto objetivo de la meta"
+                    accessibilityLabel="Monto que quieres reunir para la meta"
                     inputMode="numeric"
                     keyboardType="numeric"
                     onChangeText={handleTargetAmountChange}
@@ -596,31 +574,6 @@ export default function GoalsScreen() {
                     style={styles.input}
                     value={targetAmountInput}
                   />
-                </View>
-                <View style={styles.inputGroup}>
-                  <View style={styles.questionRow}>
-                    <Text style={styles.inputLabel}>Monto mínimo para comenzar</Text>
-                    <OptionalTag />
-                  </View>
-                  <Text style={styles.helperText}>
-                    Úsalo si puedes iniciar la meta con una parte y financiar o reunir el resto después.
-                  </Text>
-                  <TextInput
-                    accessibilityLabel="Monto mínimo para comenzar la meta"
-                    inputMode="numeric"
-                    keyboardType="numeric"
-                    onChangeText={handleMinimumInitialAmountChange}
-                    placeholder="$0"
-                    placeholderTextColor={colors.textSubtle}
-                    returnKeyType="done"
-                    style={styles.input}
-                    value={minimumInitialAmountInput}
-                  />
-                  {minimumInitialAmountInput.trim() && !hasValidMinimumInitialAmount ? (
-                    <Text style={styles.inputErrorText}>
-                      Debe ser mayor que cero y no superar el monto objetivo.
-                    </Text>
-                  ) : null}
                 </View>
               </View>
             ) : null}

@@ -108,7 +108,6 @@ export type FinancialGoal = {
   amountRange: string | null;
   targetAmount?: number | null;
   targetMonth?: string | null;
-  minimumInitialAmount?: number | null;
   currentAmount?: number | null;
   manualMonthlyContribution?: number | null;
   status?: FinancialGoalStatus;
@@ -644,7 +643,6 @@ export function createFinancialGoal({
   amountRange,
   iconKey,
   isPrimary = false,
-  minimumInitialAmount,
   priority,
   targetMonth,
   targetAmount,
@@ -653,7 +651,6 @@ export function createFinancialGoal({
   amountRange: string | null;
   iconKey?: string | null;
   isPrimary?: boolean;
-  minimumInitialAmount?: number | null;
   priority: string | null;
   targetMonth?: string | null;
   targetAmount?: number | null;
@@ -671,7 +668,6 @@ export function createFinancialGoal({
     amountRange,
     targetAmount: targetAmount ?? null,
     targetMonth: normalizedTargetMonth,
-    minimumInitialAmount: minimumInitialAmount ?? null,
     currentAmount: 0,
     manualMonthlyContribution: null,
     status: "active",
@@ -716,7 +712,6 @@ export function normalizeFinancialGoals(goals: unknown, referenceDate = new Date
       amountRange: normalizeGoalString(rawGoal.amountRange),
       targetAmount: normalizeGoalAmount(rawGoal.targetAmount),
       targetMonth,
-      minimumInitialAmount: normalizeGoalAmount(rawGoal.minimumInitialAmount),
       currentAmount: normalizeGoalAmount(rawGoal.currentAmount) ?? 0,
       manualMonthlyContribution: normalizeGoalAmount(rawGoal.manualMonthlyContribution),
       status: normalizeGoalStatus(rawGoal.status),
@@ -749,7 +744,6 @@ export function getLegacyGoalFromOnboarding(
     amountRange: onboarding.goalAmountRange,
     targetAmount: null,
     targetMonth: getTargetMonthFromLegacyHorizon(onboarding.goalHorizon, referenceDate),
-    minimumInitialAmount: null,
     currentAmount: 0,
     manualMonthlyContribution: null,
     status: "active",
