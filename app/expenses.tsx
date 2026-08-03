@@ -65,7 +65,7 @@ const expenseRanges = [
   "Más de $6.000.000"
 ] as const;
 
-const exactExpenseOption = "Ingresar cifra exacta";
+const exactExpenseOption = "Ingresar cifra";
 
 function normalizeExpenseRange(expensesRange: string | null) {
   return expenseRanges.includes(expensesRange as (typeof expenseRanges)[number])
@@ -345,8 +345,8 @@ export default function ExpensesScreen() {
             <View style={[styles.card, showSideBySide && styles.rangePanel]}>
               <Text style={styles.questionTitle}>¿Cuál es tu rango de gastos mensuales?</Text>
               <Text style={styles.helperText}>
-                Incluye vivienda, alimentación, transporte, servicios y otros gastos principales.
-                Las cuotas de deuda y los gastos pequeños se calculan aparte.
+                Incluye gastos principales o vitales. Las cuotas de deuda y los gastos pequeños se
+                calculan aparte.
               </Text>
               <View style={styles.compactList}>
                 {expenseRanges.map((expenseRange) => (
@@ -370,8 +370,7 @@ export default function ExpensesScreen() {
               </View>
               {usesExactExpenses ? (
                 <ExactAmountField
-                  helper="No incluyas cuotas de préstamos, tarjetas ni consumos pequeños frecuentes."
-                  label="Gastos principales al mes"
+                  accessibilityLabel="Gastos principales al mes"
                   onChangeText={handleExactExpensesChange}
                   value={exactExpensesInput}
                 />

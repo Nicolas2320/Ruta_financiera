@@ -78,7 +78,7 @@ const incomeFrequencies = [
   }
 ] as const;
 
-const exactIncomeOption = "Ingresar cifra exacta";
+const exactIncomeOption = "Ingresar cifra";
 
 export default function IncomeScreen() {
   const router = useRouter();
@@ -239,8 +239,7 @@ export default function IncomeScreen() {
             </View>
             {usesExactIncome ? (
               <ExactAmountField
-                helper="Usaremos esta cifra desde ahora y también quedará disponible en Mejorar mi plan."
-                label="Ingreso promedio mensual"
+                accessibilityLabel="Ingreso promedio mensual"
                 onChangeText={handleExactIncomeChange}
                 value={exactIncomeInput}
               />

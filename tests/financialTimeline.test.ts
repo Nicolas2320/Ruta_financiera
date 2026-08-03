@@ -50,12 +50,14 @@ describe("month-by-month financial timeline", () => {
       goalContributionTotal: 1_800_000,
       month: "2026-09",
       newlyPaidDebtIds: ["short-debt"],
-      releasedPaymentNextMonth: 200_000
+      releasedPaymentNextMonth: 200_000,
+      trackedGoalAmount: 1_800_000
     });
     expect(timeline.months[1]).toMatchObject({
       baseDebtPayments: 0,
       goalContributionTotal: 2_000_000,
-      month: "2026-10"
+      month: "2026-10",
+      trackedGoalAmount: 3_800_000
     });
   });
 
@@ -101,5 +103,65 @@ describe("month-by-month financial timeline", () => {
     expect(buildFinancialScenarioTimeline({ input, scenario }).hasUnknownInterestRates).toBe(
       true
     );
+  });
+
+  it("continues with zero-rate and unknown-rate debts after costly debts", () => {
+    const input = buildFinancialProjectionInput({
+      asOfDate: "2026-08-02",
+      exactValues: {
+        monthlyExpenses: 1_000_000,
+        monthlyIncome: 3_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        debts: [
+          makeDebt({
+            annualInterestRate: 25,
+            id: "costly-debt",
+            monthlyPayment: 200_000,
+            monthlyPaymentType: "minimum_required",
+            name: "Deuda costosa",
+            remainingAmount: 200_000
+          }),
+          makeDebt({
+            annualInterestRate: 0,
+            id: "zero-rate-debt",
+            monthlyPayment: 100_000,
+            monthlyPaymentType: "self_selected",
+            name: "Deuda sin interés",
+            remainingAmount: 1_000_000
+          }),
+          makeDebt({
+            annualInterestRate: null,
+            id: "unknown-rate-debt",
+            monthlyPayment: 100_000,
+            monthlyPaymentType: "self_selected",
+            name: "Deuda sin tasa confirmada",
+            remainingAmount: 500_000
+          })
+        ],
+        goals: [makeGoal()]
+      })
+    });
+    const scenario = buildDistributionScenarios({
+      input,
+      protectedMarginPreference: { mode: "use_all" }
+    }).reduceInterest;
+    const timeline = buildFinancialScenarioTimeline({ input, scenario });
+    const firstMonthPayments = timeline.months[0].debtPayments;
+
+    expect(
+      firstMonthPayments.find((payment) => payment.debtId === "zero-rate-debt")
+        ?.extraPayment
+    ).toBeGreaterThan(0);
+    expect(
+      timeline.months.some((month) =>
+        month.debtPayments.some(
+          (payment) =>
+            payment.debtId === "unknown-rate-debt" && payment.extraPayment > 0
+        )
+      )
+    ).toBe(true);
+    expect(timeline.allKnownDebtsPaidMonth).not.toBeNull();
   });
 });

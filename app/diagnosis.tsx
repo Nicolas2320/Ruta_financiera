@@ -25,6 +25,7 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   calculateFinancialSnapshot,
+  getSmallExpensesMonthlySummary,
   type FinancialSnapshot,
   type SnapshotSource
 } from "../utils/financialCalculations";
@@ -290,7 +291,7 @@ function getFinancialMetrics(
       ? "No usamos gastos pequeños para estimar aportes o escenarios."
       : smallExpensePercentage !== null
       ? snapshot.sourceMap.smallExpenses === "exact"
-        ? `Dato exacto: cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
+        ? `Según el valor ingresado: cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
         : `Cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
       : onboarding.smallExpensesRange
         ? "Rango seleccionado, sin porcentaje calculado."
@@ -382,7 +383,11 @@ function getSmallExpensesMessages(onboarding: OnboardingSnapshot, metrics: Finan
         : "categorías por revisar";
     const messages = [
       `Identificaste pequeños gastos frecuentes en: ${categories}.`,
-      `Estimación mensual: ${onboarding.smallExpensesRange ?? "No respondido"}.`
+      getSmallExpensesMonthlySummary({
+        amount: metrics.snapshot.values.smallExpenses,
+        range: onboarding.smallExpensesRange,
+        source: metrics.snapshot.sourceMap.smallExpenses
+      })
     ];
 
     if (metrics.smallExpensePercentage !== null) {

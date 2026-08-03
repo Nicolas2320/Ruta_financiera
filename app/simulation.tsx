@@ -18,6 +18,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
+import { DistributionComparisonSummary } from "../components/DistributionComparisonSummary";
 import { DistributionScenarioCard } from "../components/DistributionScenarioCard";
 import { PrimaryButton } from "../components/PrimaryButton";
 import {
@@ -467,6 +468,17 @@ export default function SimulationScreen() {
                 </Pressable>
               </View>
             )}
+          </SectionCard>
+
+          <SectionCard
+            compact={isPhone}
+            icon={<TrendingUp color={colors.primary} size={22} strokeWidth={2.4} />}
+            title="Resumen comparativo"
+          >
+            <DistributionComparisonSummary
+              compact={isPhone}
+              scenarios={distributionScenarios}
+            />
           </SectionCard>
 
           <SectionCard

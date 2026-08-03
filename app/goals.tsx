@@ -5,25 +5,19 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   Baby,
-  Banknote,
   BriefcaseBusiness,
   Car,
   ChartColumnIncreasing,
   CreditCard,
-  Crown,
   Dumbbell,
   Gift,
   GraduationCap,
   HeartPulse,
   House,
-  Landmark,
-  Layers,
-  PenLine,
   PiggyBank,
   Plane,
   Sparkles,
   Store,
-  Ticket,
   UserRound,
   Wallet
 } from "lucide-react-native";
@@ -32,6 +26,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
 import { ContextHeader } from "../components/ui/ContextHeader";
+import { ExactAmountField } from "../components/ui/ExactAmountField";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
 import { MonthYearPickerField } from "../components/ui/MonthYearPickerField";
 import { OptionalTag } from "../components/ui/OptionalTag";
@@ -188,44 +183,14 @@ const customGoalIconOptions: VisualOption[] = [
 const goalPriorities = ["Baja", "Media", "Alta", "Muy alta"] as const;
 const manualAmountOptionTitle = "Ingresar cifra";
 
-const goalAmountRanges: VisualOption[] = [
-  {
-    title: "Menos de $1.000.000",
-    icon: Banknote,
-    color: colors.support,
-    backgroundColor: colors.supportSoft
-  },
-  {
-    title: "$1.000.000 – $5.000.000",
-    icon: Ticket,
-    color: "#0E7490",
-    backgroundColor: "#E6F7FB"
-  },
-  {
-    title: "$5.000.000 – $20.000.000",
-    icon: Layers,
-    color: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  {
-    title: "$20.000.000 – $50.000.000",
-    icon: Landmark,
-    color: "#7C3AED",
-    backgroundColor: "#F1E8FF"
-  },
-  {
-    title: "Más de $50.000.000",
-    icon: Crown,
-    color: "#DB2777",
-    backgroundColor: "#FCE7F3"
-  },
-  {
-    title: manualAmountOptionTitle,
-    icon: PenLine,
-    color: colors.primary,
-    backgroundColor: colors.primarySoft
-  }
-];
+const goalAmountRanges = [
+  "Menos de $1.000.000",
+  "$1.000.000 – $5.000.000",
+  "$5.000.000 – $20.000.000",
+  "$20.000.000 – $50.000.000",
+  "Más de $50.000.000",
+  manualAmountOptionTitle
+] as const;
 
 function getInitialGoalSelection(goal: FinancialGoal | null) {
   if (!goal) {
@@ -330,10 +295,10 @@ export default function GoalsScreen() {
     );
   };
 
-  const handleAmountSelect = (range: VisualOption) => {
-    setSelectedAmountRange(range.title);
+  const handleAmountSelect = (range: string) => {
+    setSelectedAmountRange(range);
 
-    if (range.title !== manualAmountOptionTitle) {
+    if (range !== manualAmountOptionTitle) {
       setTargetAmountInput("");
     }
   };
@@ -540,42 +505,23 @@ export default function GoalsScreen() {
             </View>
             <View style={styles.amountGrid}>
               {goalAmountRanges.map((range) => (
-                <VisualSelectable
-                  key={range.title}
-                  icon={range.icon}
-                  iconBackground={range.backgroundColor}
-                  iconColor={range.color}
+                <SelectableCard
+                  key={range}
                   onPress={() => handleAmountSelect(range)}
-                  selected={selectedAmountRange === range.title}
-                  style={[
-                    range.title === manualAmountOptionTitle
-                      ? styles.amountOptionFeatured
-                      : styles.amountOption,
-                    isSmallPhone && styles.optionSmallPhone
-                  ]}
-                  title={range.title}
+                  selected={selectedAmountRange === range}
+                  style={[styles.amountOption, isSmallPhone && styles.optionSmallPhone]}
+                  title={range}
                   titleStyle={styles.amountTitle}
                 />
               ))}
             </View>
 
             {isManualAmount ? (
-              <View style={styles.manualAmountBox}>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Cifra exacta</Text>
-                  <TextInput
-                    accessibilityLabel="Monto que quieres reunir para la meta"
-                    inputMode="numeric"
-                    keyboardType="numeric"
-                    onChangeText={handleTargetAmountChange}
-                    placeholder="$0"
-                    placeholderTextColor={colors.textSubtle}
-                    returnKeyType="done"
-                    style={styles.input}
-                    value={targetAmountInput}
-                  />
-                </View>
-              </View>
+              <ExactAmountField
+                accessibilityLabel="Monto que quieres reunir para la meta"
+                onChangeText={handleTargetAmountChange}
+                value={targetAmountInput}
+              />
             ) : null}
           </View>
 
@@ -849,26 +795,11 @@ const styles = StyleSheet.create({
   amountOption: {
     flexBasis: "47%",
     flexGrow: 1,
-    minHeight: 104,
-    paddingHorizontal: spacing.xs
-  },
-  amountOptionFeatured: {
-    flexBasis: "47%",
-    flexGrow: 1,
-    minHeight: 104,
-    paddingHorizontal: spacing.xs
+    minHeight: 64
   },
   amountTitle: {
     fontSize: typography.badge,
     lineHeight: typography.lineHeight.badge
-  },
-  manualAmountBox: {
-    backgroundColor: "#F8FAFC",
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: spacing.md,
-    padding: spacing.md
   },
   actions: {
     gap: spacing.sm,
