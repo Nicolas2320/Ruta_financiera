@@ -173,7 +173,7 @@ const smallExpenseRanges = [
   "No sé"
 ] as const;
 
-const exactSmallExpenseOption = "Ingresar cifra exacta";
+const exactSmallExpenseOption = "Ingresar cifra";
 
 function normalizeSmallExpenseRange(range: string | null) {
   return smallExpenseRanges.includes(range as (typeof smallExpenseRanges)[number])
@@ -552,8 +552,7 @@ export default function SmallExpensesScreen() {
                 </View>
                 {usesExactSmallExpenses ? (
                   <ExactAmountField
-                    helper="Usa un promedio mensual; no necesitas sumar cada compra por separado."
-                    label="Gastos pequeños al mes"
+                    accessibilityLabel="Gastos pequeños al mes"
                     onChangeText={handleExactSmallExpensesChange}
                     value={exactSmallExpensesInput}
                   />

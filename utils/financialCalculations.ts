@@ -359,6 +359,22 @@ export function estimateSmallExpensesFromRange(label: string | null | undefined)
   return getRangeEstimate(label, smallExpenseRangeEstimates);
 }
 
+export function getSmallExpensesMonthlySummary({
+  amount,
+  range,
+  source
+}: {
+  amount: number | null;
+  range: string | null;
+  source: SmallExpensesSource;
+}) {
+  if (source === "exact" && isNonNegativeNumber(amount)) {
+    return `Monto mensual ingresado: ${formatCOP(amount)}.`;
+  }
+
+  return `Estimación mensual: ${range ?? "No respondido"}.`;
+}
+
 function estimateGoalTargetAmountFromRange(label: string | null | undefined) {
   return getRangeEstimate(label, goalAmountRangeEstimates);
 }

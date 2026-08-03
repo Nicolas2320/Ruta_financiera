@@ -10,17 +10,17 @@ export function ExactAmountField({
   value
 }: {
   accessibilityLabel?: string;
-  helper: string;
-  label: string;
+  helper?: string;
+  label?: string;
   onChangeText: (value: string) => void;
   value: string;
 }) {
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.helper}>{helper}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {helper ? <Text style={styles.helper}>{helper}</Text> : null}
       <TextInput
-        accessibilityLabel={accessibilityLabel ?? label}
+        accessibilityLabel={accessibilityLabel ?? label ?? "Ingresar cifra"}
         inputMode="numeric"
         keyboardType="numeric"
         onChangeText={onChangeText}

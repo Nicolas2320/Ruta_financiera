@@ -86,7 +86,7 @@ const savingsRanges = [
   "Prefiero no responder"
 ] as const;
 
-const exactSavingsOption = "Ingresar cifra exacta";
+const exactSavingsOption = "Ingresar cifra";
 
 const emergencyCoverageOptions = [
   {
@@ -376,7 +376,7 @@ export default function SavingsDebtsScreen() {
             badge="Puedes elegir “Prefiero no responder” si algún dato te incomoda."
             image={financialFoundation}
             imageStyle={styles.heroImage}
-            text="Puedes usar rangos aproximados o ingresar una cifra exacta de tus ahorros si ya la tienes clara. Con eso podemos entender si conviene priorizar ahorro, deudas o inversión."
+            text="Puedes usar rangos aproximados o ingresar una cifra de tus ahorros si ya la tienes clara. Con eso podemos entender si conviene priorizar ahorro, deudas o inversión."
             title={"Tu punto de partida\nfinanciero"}
           />
 
@@ -406,8 +406,7 @@ export default function SavingsDebtsScreen() {
             </View>
             {usesExactSavings ? (
               <ExactAmountField
-                helper="Incluye únicamente dinero disponible como respaldo general, no lo reservado para una meta."
-                label="Ahorro disponible actualmente"
+                accessibilityLabel="Ahorro disponible actualmente"
                 onChangeText={handleExactSavingsChange}
                 value={exactSavingsInput}
               />

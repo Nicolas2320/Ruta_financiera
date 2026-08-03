@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   calculateFinancialSnapshot,
+  getSmallExpensesMonthlySummary,
   getSuggestedContributionRate,
   getPlanPrecisionStatus,
   parseCOPRange,
@@ -50,6 +51,16 @@ describe("financial calculation primitives", () => {
         smallExpenses: 0
       })
     ).toMatchObject({ exactValuesCount: 2, status: "improved" });
+  });
+
+  it("shows the entered small-expense amount instead of its derived range", () => {
+    expect(
+      getSmallExpensesMonthlySummary({
+        amount: 100_000,
+        range: "$100.000 – $250.000",
+        source: "exact"
+      })
+    ).toBe("Monto mensual ingresado: $100.000.");
   });
 });
 
