@@ -19,7 +19,10 @@ import Svg, {
 } from "react-native-svg";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
-import type { FinancialScenarioTimeline } from "../utils/financialTimeline";
+import {
+  getFinancialTimelineDisplayMonths,
+  type FinancialScenarioTimeline
+} from "../utils/financialTimeline";
 import { formatCOP } from "../utils/financialRanges";
 import { formatTargetMonth } from "../utils/monthYear";
 
@@ -216,6 +219,10 @@ export function FinancialTimelineChart({
   const [layoutWidth, setLayoutWidth] = useState(0);
   const [range, setRange] = useState<"all" | "near">("near");
   const [selectedIndexState, setSelectedIndex] = useState(0);
+  const displayMonths = useMemo(
+    () => getFinancialTimelineDisplayMonths(timeline),
+    [timeline]
+  );
   const goalRelevantMonthCount = useMemo(() => {
     if (focus !== "goal") {
       return NEAR_MONTH_COUNT;
@@ -226,28 +233,28 @@ export function FinancialTimelineChart({
       timeline.trackedGoal?.targetMonth
     ]
       .filter((month): month is string => Boolean(month))
-      .map((month) => timeline.months.findIndex((item) => item.month === month))
+      .map((month) => displayMonths.findIndex((item) => item.month === month))
       .filter((index) => index >= 0);
     const lastRelevantIndex = Math.max(0, ...relevantIndexes);
 
     return Math.min(
-      timeline.months.length,
+      displayMonths.length,
       Math.max(3, lastRelevantIndex + 1)
     );
-  }, [focus, timeline.goalCompletionMonth, timeline.months, timeline.trackedGoal]);
+  }, [displayMonths, focus, timeline.goalCompletionMonth, timeline.trackedGoal]);
   const canChangeRange =
-    focus !== "goal" && timeline.months.length > NEAR_MONTH_COUNT;
+    focus !== "goal" && displayMonths.length > NEAR_MONTH_COUNT + 1;
   const months = useMemo(
     () => {
       if (focus === "goal") {
-        return timeline.months.slice(0, goalRelevantMonthCount);
+        return displayMonths.slice(0, goalRelevantMonthCount);
       }
 
       return range === "near"
-        ? timeline.months.slice(0, NEAR_MONTH_COUNT)
-        : timeline.months;
+        ? displayMonths.slice(0, NEAR_MONTH_COUNT + 1)
+        : displayMonths;
     },
-    [focus, goalRelevantMonthCount, range, timeline.months]
+    [displayMonths, focus, goalRelevantMonthCount, range]
   );
   const selectedIndex = Math.min(
     Number.isFinite(selectedIndexState) ? Math.max(0, selectedIndexState) : 0,
