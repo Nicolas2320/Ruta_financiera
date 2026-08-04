@@ -181,15 +181,16 @@ const customGoalIconOptions: VisualOption[] = [
 ];
 
 const goalPriorities = ["Baja", "Media", "Alta", "Muy alta"] as const;
-const manualAmountOptionTitle = "Ingresar cifra";
+const manualAmountOptionTitle = "Escribir monto";
+const unknownGoalAmountOption = "Aún no lo sé";
 
-const goalAmountRanges = [
-  "Menos de $1.000.000",
-  "$1.000.000 – $5.000.000",
-  "$5.000.000 – $20.000.000",
-  "$20.000.000 – $50.000.000",
-  "Más de $50.000.000",
-  manualAmountOptionTitle
+const goalAmountOptions = [
+  { label: "Menos de $1 millón", value: "Menos de $1.000.000" },
+  { label: "De $1 a $5 millones", value: "$1.000.000 – $5.000.000" },
+  { label: "De $5 a $20 millones", value: "$5.000.000 – $20.000.000" },
+  { label: "De $20 a $50 millones", value: "$20.000.000 – $50.000.000" },
+  { label: "Más de $50 millones", value: "Más de $50.000.000" },
+  { label: unknownGoalAmountOption, value: unknownGoalAmountOption }
 ] as const;
 
 function getInitialGoalSelection(goal: FinancialGoal | null) {
@@ -211,7 +212,11 @@ function getInitialAmountSelection(goal: FinancialGoal | null) {
     return manualAmountOptionTitle;
   }
 
-  return goal?.amountRange ?? null;
+  if (goal?.amountRange) {
+    return goal.amountRange;
+  }
+
+  return goal ? unknownGoalAmountOption : null;
 }
 
 export default function GoalsScreen() {
@@ -297,10 +302,17 @@ export default function GoalsScreen() {
 
   const handleAmountSelect = (range: string) => {
     setSelectedAmountRange(range);
+    setTargetAmountInput("");
+  };
 
-    if (range !== manualAmountOptionTitle) {
-      setTargetAmountInput("");
+  const handleAmountModeChange = (mode: "range" | "manual") => {
+    if (mode === "manual") {
+      setSelectedAmountRange(manualAmountOptionTitle);
+      return;
     }
+
+    setSelectedAmountRange(null);
+    setTargetAmountInput("");
   };
 
   const handleTargetAmountChange = (value: string) => {
@@ -314,7 +326,10 @@ export default function GoalsScreen() {
     }
 
     const nextGoal = createFinancialGoal({
-      amountRange: isManualAmount ? null : selectedAmountRange,
+      amountRange:
+        isManualAmount || selectedAmountRange === unknownGoalAmountOption
+          ? null
+          : selectedAmountRange,
       iconKey: finalIconKey,
       isPrimary: !isAddMode,
       priority: selectedPriority,
@@ -503,17 +518,46 @@ export default function GoalsScreen() {
               <Text style={styles.questionTitle}>¿Cuánto quieres reunir?</Text>
               <OptionalTag />
             </View>
-            <View style={styles.amountGrid}>
-              {goalAmountRanges.map((range) => (
-                <SelectableCard
-                  key={range}
-                  onPress={() => handleAmountSelect(range)}
-                  selected={selectedAmountRange === range}
-                  style={[styles.amountOption, isSmallPhone && styles.optionSmallPhone]}
-                  title={range}
-                  titleStyle={styles.amountTitle}
-                />
-              ))}
+
+            <View style={styles.amountModeSwitch}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: !isManualAmount }}
+                onPress={() => handleAmountModeChange("range")}
+                style={({ pressed }) => [
+                  styles.amountModeOption,
+                  !isManualAmount && styles.amountModeOptionSelected,
+                  pressed && styles.pressed
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.amountModeText,
+                    !isManualAmount && styles.amountModeTextSelected
+                  ]}
+                >
+                  Elegir un rango
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: isManualAmount }}
+                onPress={() => handleAmountModeChange("manual")}
+                style={({ pressed }) => [
+                  styles.amountModeOption,
+                  isManualAmount && styles.amountModeOptionSelected,
+                  pressed && styles.pressed
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.amountModeText,
+                    isManualAmount && styles.amountModeTextSelected
+                  ]}
+                >
+                  {manualAmountOptionTitle}
+                </Text>
+              </Pressable>
             </View>
 
             {isManualAmount ? (
@@ -522,7 +566,20 @@ export default function GoalsScreen() {
                 onChangeText={handleTargetAmountChange}
                 value={targetAmountInput}
               />
-            ) : null}
+            ) : (
+              <View style={styles.amountGrid}>
+                {goalAmountOptions.map((option) => (
+                  <SelectableCard
+                    key={option.value}
+                    onPress={() => handleAmountSelect(option.value)}
+                    selected={selectedAmountRange === option.value}
+                    style={[styles.amountOption, isSmallPhone && styles.optionSmallPhone]}
+                    title={option.label}
+                    titleStyle={styles.amountTitle}
+                  />
+                ))}
+              </View>
+            )}
           </View>
 
           <View style={styles.actions}>
@@ -792,14 +849,47 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm
   },
+  amountModeSwitch: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: "#D7E7FF",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    padding: spacing.xs
+  },
+  amountModeOption: {
+    alignItems: "center",
+    borderColor: "transparent",
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: spacing.sm
+  },
+  amountModeOptionSelected: {
+    backgroundColor: colors.surface,
+    borderColor: colors.primary
+  },
+  amountModeText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption,
+    textAlign: "center"
+  },
+  amountModeTextSelected: {
+    color: colors.primary
+  },
   amountOption: {
     flexBasis: "47%",
     flexGrow: 1,
-    minHeight: 64
+    minHeight: 76
   },
   amountTitle: {
-    fontSize: typography.badge,
-    lineHeight: typography.lineHeight.badge
+    fontSize: typography.option,
+    lineHeight: typography.lineHeight.option
   },
   actions: {
     gap: spacing.sm,

@@ -56,6 +56,30 @@ export type DebtRecord = {
   updatedAt?: string;
 };
 
+export const simulationPlanStrategies = [
+  "diagnosis_recommended",
+  "prioritize_goal"
+] as const;
+
+export type SimulationPlanStrategy = (typeof simulationPlanStrategies)[number];
+
+export const simulationProtectedMarginModes = [
+  "automatic",
+  "use_all",
+  "custom"
+] as const;
+
+export type SimulationProtectedMarginMode =
+  (typeof simulationProtectedMarginModes)[number];
+
+export type SimulationPlanPreference = {
+  strategy: SimulationPlanStrategy;
+  goalId: string | null;
+  protectedMarginMode: SimulationProtectedMarginMode;
+  customProtectedMargin: number | null;
+  selectedAt: string;
+};
+
 export type OnboardingData = {
   firstName: string;
   lastName: string;
@@ -84,6 +108,7 @@ export type OnboardingData = {
   goalPriority: string | null;
   goalAmountRange: string | null;
   goalMonthlyBudget: number | null;
+  simulationPlanPreference: SimulationPlanPreference | null;
   goals: FinancialGoal[];
 };
 
@@ -281,6 +306,7 @@ export const initialOnboarding: OnboardingData = {
   goalPriority: null,
   goalAmountRange: null,
   goalMonthlyBudget: null,
+  simulationPlanPreference: null,
   goals: []
 };
 
@@ -303,6 +329,51 @@ function normalizeGoalAmount(value: unknown) {
 
 export function normalizeGoalMonthlyBudget(value: unknown) {
   return normalizeGoalAmount(value);
+}
+
+export function normalizeSimulationPlanPreference(
+  value: unknown
+): SimulationPlanPreference | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const preference = value as Partial<SimulationPlanPreference>;
+
+  if (!simulationPlanStrategies.includes(preference.strategy as SimulationPlanStrategy)) {
+    return null;
+  }
+
+  const requestedProtectedMarginMode = simulationProtectedMarginModes.includes(
+    preference.protectedMarginMode as SimulationProtectedMarginMode
+  )
+    ? (preference.protectedMarginMode as SimulationProtectedMarginMode)
+    : "automatic";
+  const requestedCustomProtectedMargin = normalizeGoalAmount(
+    preference.customProtectedMargin
+  );
+  const protectedMarginMode =
+    requestedProtectedMarginMode === "custom" &&
+    requestedCustomProtectedMargin === null
+      ? "automatic"
+      : requestedProtectedMarginMode;
+  const customProtectedMargin =
+    protectedMarginMode === "custom" ? requestedCustomProtectedMargin : null;
+  const selectedAtDate =
+    typeof preference.selectedAt === "string"
+      ? new Date(preference.selectedAt)
+      : null;
+
+  return {
+    strategy: preference.strategy as SimulationPlanStrategy,
+    goalId: normalizeGoalString(preference.goalId)?.trim() ?? null,
+    protectedMarginMode,
+    customProtectedMargin,
+    selectedAt:
+      selectedAtDate && !Number.isNaN(selectedAtDate.getTime())
+        ? selectedAtDate.toISOString()
+        : new Date(0).toISOString()
+  };
 }
 
 function normalizeDebtPaymentStatus(value: unknown): DebtPaymentStatus {

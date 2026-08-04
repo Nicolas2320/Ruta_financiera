@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -20,6 +20,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNavigation } from "../components/BottomNavigation";
 import { DistributionComparisonSummary } from "../components/DistributionComparisonSummary";
 import { DistributionScenarioCard } from "../components/DistributionScenarioCard";
+import { PreliminarySimulationComparison } from "../components/PreliminarySimulationComparison";
 import { PrimaryButton } from "../components/PrimaryButton";
 import {
   ProtectedMarginControl,
@@ -29,8 +30,10 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import type { SimulationPlanStrategy } from "../types/financial";
 import {
   buildDistributionScenarios,
+  calculateProtectedMargin,
   type ProtectedMarginPreference
 } from "../utils/financialDistribution";
 import { presentDistributionScenarios } from "../utils/financialDistributionPresentation";
@@ -38,6 +41,10 @@ import { buildFinancialProjectionInput } from "../utils/financialProjectionInput
 import { calculateFinancialSnapshot } from "../utils/financialCalculations";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
 import { formatTargetMonth } from "../utils/monthYear";
+import {
+  buildSimulationExperience,
+  type SimulationAmountRange
+} from "../utils/simulationExperience";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
 type Tone = "primary" | "support" | "warning" | "purple" | "neutral";
@@ -107,6 +114,27 @@ function getToneColors(tone: Tone) {
     text: colors.primary
   };
 }
+
+function formatSimulationAmountRange(range: SimulationAmountRange) {
+  if (range.minimum === null && range.maximum === null) {
+    return "Por estimar";
+  }
+
+  if (range.minimum !== null && range.maximum === null) {
+    return `Más de ${formatCOP(range.minimum)}`;
+  }
+
+  if (range.minimum === null && range.maximum !== null) {
+    return `Hasta ${formatCOP(range.maximum)}`;
+  }
+
+  if (range.minimum === range.maximum) {
+    return formatCOP(range.minimum ?? 0);
+  }
+
+  return `${formatCOP(range.minimum ?? 0)} – ${formatCOP(range.maximum ?? 0)}`;
+}
+
 function getInvestmentEducationMessage(onboarding: OnboardingSnapshot) {
   if (hasLowEmergencyCoverage(onboarding.emergencyCoverage)) {
     return "Primero conviene fortalecer una base para imprevistos.";
@@ -247,10 +275,12 @@ export default function SimulationScreen() {
   const isFlowMode = source === "flow";
   const navigate = (route: Route) => router.push(route);
   const { session } = useAuth();
-  const { exactValues, onboarding } = useOnboarding();
+  const { exactValues, onboarding, updateOnboarding } = useOnboarding();
   const [protectedMarginMode, setProtectedMarginMode] =
     useState<ProtectedMarginMode>("automatic");
   const [customProtectedMarginInput, setCustomProtectedMarginInput] = useState("");
+  const [selectedPlanStrategy, setSelectedPlanStrategy] =
+    useState<SimulationPlanStrategy>("diagnosis_recommended");
   const [expandedDistributionId, setExpandedDistributionId] =
     useState<string>("current_reference");
   const [splitDebtPercent, setSplitDebtPercent] = useState(50);
@@ -259,8 +289,16 @@ export default function SimulationScreen() {
     () => buildFinancialProjectionInput({ exactValues, onboarding }),
     [exactValues, onboarding]
   );
+  const simulationExperience = useMemo(
+    () => buildSimulationExperience({ exactValues, onboarding }),
+    [exactValues, onboarding]
+  );
+  const isDetailedDebtMode = simulationExperience.mode === "detailed_debt";
+  const protectedMarginBase = isDetailedDebtMode
+    ? projectionInput.cashflow.availableAfterRequiredPayments
+    : simulationExperience.planningMonthlyMargin;
   const automaticProtectedMargin = Math.round(
-    Math.max(0, projectionInput.cashflow.availableAfterRequiredPayments ?? 0) * 0.1
+    Math.max(0, protectedMarginBase ?? 0) * 0.1
   );
   const customProtectedMargin = parseCOPInput(customProtectedMarginInput) ?? 0;
   const protectedMarginPreference: ProtectedMarginPreference =
@@ -291,22 +329,42 @@ export default function SimulationScreen() {
     [distributionScenarioSet, projectionInput]
   );
   const strategyBaseScenario = distributionScenarioSet.reduceInterest;
-  const hasDistributionBase = strategyBaseScenario.surplusBeforeProtection !== null;
-  const surplusBeforeProtection = hasDistributionBase
-    ? Math.max(0, strategyBaseScenario.surplusBeforeProtection ?? 0)
-    : null;
-  const protectedAmount = hasDistributionBase
-    ? strategyBaseScenario.protectedMargin.amount
-    : null;
-  const distributableAmount = hasDistributionBase
-    ? strategyBaseScenario.distributableAmount
-    : null;
-  const monthlyOperatingCosts =
-    projectionInput.cashflow.baselineMonthlyExpenses !== null &&
-    projectionInput.cashflow.smallMonthlyExpenses !== null
-      ? projectionInput.cashflow.baselineMonthlyExpenses +
-        projectionInput.cashflow.smallMonthlyExpenses
+  const preliminaryProtectedMargin =
+    !isDetailedDebtMode && simulationExperience.planningMonthlyMargin !== null
+      ? calculateProtectedMargin({
+          preference: protectedMarginPreference,
+          surplusBeforeProtection: Math.max(0, simulationExperience.planningMonthlyMargin)
+        }).result
       : null;
+  const hasDistributionBase = isDetailedDebtMode
+    ? strategyBaseScenario.surplusBeforeProtection !== null
+    : simulationExperience.planningMonthlyMargin !== null;
+  const surplusBeforeProtection = isDetailedDebtMode
+    ? hasDistributionBase
+      ? Math.max(0, strategyBaseScenario.surplusBeforeProtection ?? 0)
+      : null
+    : simulationExperience.planningMonthlyMargin === null
+      ? null
+      : Math.max(0, simulationExperience.planningMonthlyMargin);
+  const protectedAmount = isDetailedDebtMode
+    ? hasDistributionBase
+      ? strategyBaseScenario.protectedMargin.amount
+      : null
+    : preliminaryProtectedMargin?.amount ?? null;
+  const distributableAmount = isDetailedDebtMode
+    ? hasDistributionBase
+      ? strategyBaseScenario.distributableAmount
+      : null
+    : surplusBeforeProtection === null || protectedAmount === null
+      ? null
+      : Math.max(0, surplusBeforeProtection - protectedAmount);
+  const canSelectPreliminaryGoal = Boolean(
+    selectedProjectionGoal &&
+      distributableAmount !== null &&
+      distributableAmount > 0 &&
+      simulationExperience.planningMonthlyMargin !== null
+  );
+  const monthlyOperatingCosts = simulationExperience.monthlyOperatingCosts;
   const cashflowIssueRoute =
     projectionInput.issues.find(
       (issue) => issue.code === "missing_income" || issue.code === "missing_expenses"
@@ -318,6 +376,54 @@ export default function SimulationScreen() {
     }
 
     setProtectedMarginMode(mode);
+  };
+
+  useEffect(() => {
+    const preference = onboarding.simulationPlanPreference;
+
+    if (!preference) {
+      return;
+    }
+
+    setProtectedMarginMode(preference.protectedMarginMode);
+    setCustomProtectedMarginInput(
+      preference.customProtectedMargin === null
+        ? ""
+        : formatCOP(preference.customProtectedMargin)
+    );
+    setSelectedPlanStrategy(
+      preference.strategy === "prioritize_goal" && preference.goalId !== selectedGoalId
+        ? "diagnosis_recommended"
+        : preference.strategy
+    );
+  }, [onboarding.simulationPlanPreference?.selectedAt, selectedGoalId]);
+
+  useEffect(() => {
+    if (selectedPlanStrategy === "prioritize_goal" && !canSelectPreliminaryGoal) {
+      setSelectedPlanStrategy("diagnosis_recommended");
+    }
+  }, [canSelectPreliminaryGoal, selectedPlanStrategy]);
+
+  const handleContinue = () => {
+    if (!isDetailedDebtMode) {
+      const strategy =
+        selectedPlanStrategy === "prioritize_goal" && canSelectPreliminaryGoal
+          ? "prioritize_goal"
+          : "diagnosis_recommended";
+
+      updateOnboarding({
+        simulationPlanPreference: {
+          strategy,
+          goalId: strategy === "prioritize_goal" ? selectedGoalId : null,
+          protectedMarginMode,
+          customProtectedMargin:
+            protectedMarginMode === "custom" ? customProtectedMargin : null,
+          selectedAt: new Date().toISOString()
+        }
+      });
+    }
+
+    session ? router.push("/action-plan") : router.push("/plan-preview");
   };
 
   const handleCustomProtectedMarginChange = (value: string) => {
@@ -343,6 +449,30 @@ export default function SimulationScreen() {
     () => calculateFinancialSnapshot({ onboarding, exactValues }),
     [exactValues, onboarding]
   );
+  const debtMetricLabel = isDetailedDebtMode
+    ? "Cuotas requeridas"
+    : simulationExperience.mode === "reported_debt"
+      ? "Pagos de deuda estimados"
+      : "Pagos de deuda";
+  const debtMetricValue = isDetailedDebtMode
+    ? formatCOP(projectionInput.cashflow.knownRequiredDebtPaymentsTotal)
+    : formatSimulationAmountRange(simulationExperience.debtPaymentRange);
+  const debtMetricHelper = isDetailedDebtMode
+    ? projectionInput.cashflow.hasCompleteRequiredDebtPayments
+      ? "Pagos mínimos o acordados"
+      : "Falta confirmar una o más cuotas"
+    : simulationExperience.mode === "goal_only"
+      ? "Indicaste que no pagas deudas"
+      : simulationExperience.debtDataSource === "category"
+        ? "Referencia registrada dentro de gastos"
+        : onboarding.debtPaymentShare
+          ? `Según tu respuesta: ${onboarding.debtPaymentShare}`
+          : "Sin inventar una cuota exacta";
+  const heroSubtitle = isDetailedDebtMode
+    ? "Compara distintas formas de repartir el mismo dinero mensual. Ninguna alternativa cambia tu plan hasta que tú lo decidas."
+    : simulationExperience.mode === "reported_debt"
+      ? "Explora tu capacidad mensual sin registrar cada deuda. Trabajamos con el rango que compartiste y evitamos inventar saldos o intereses."
+      : "Explora cuánto podrías dirigir a tu meta y cómo cambia el resultado al proteger una parte del margen.";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -359,10 +489,7 @@ export default function SimulationScreen() {
             </View>
             <View style={styles.heroTextGroup}>
               <Text style={[styles.title, isPhone && styles.titlePhone]}>Simulación</Text>
-              <Text style={styles.subtitle}>
-                Compara distintas formas de repartir el mismo dinero mensual. Ninguna
-                alternativa cambia tu plan hasta que tú lo decidas.
-              </Text>
+              <Text style={styles.subtitle}>{heroSubtitle}</Text>
             </View>
           </View>
 
@@ -393,18 +520,20 @@ export default function SimulationScreen() {
               }
             />
             <SummaryMetric
-              helper={
-                projectionInput.cashflow.hasCompleteRequiredDebtPayments
-                  ? "Pagos mínimos o acordados"
-                  : "Falta confirmar una o más cuotas"
-              }
+              helper={debtMetricHelper}
               icon={<ClipboardCheck color="#B45309" size={22} strokeWidth={2.4} />}
-              label="Cuotas requeridas"
+              label={debtMetricLabel}
               tone="warning"
-              value={formatCOP(projectionInput.cashflow.knownRequiredDebtPaymentsTotal)}
+              value={debtMetricValue}
             />
             <SummaryMetric
-              helper="Margen libre y decisiones voluntarias, después de proteger"
+              helper={
+                isDetailedDebtMode
+                  ? "Margen libre y decisiones voluntarias, después de proteger"
+                  : simulationExperience.planningMonthlyMargin === null
+                    ? "No lo calculamos sin una referencia prudente"
+                    : "Calculado desde la referencia prudente, después de proteger"
+              }
               icon={<TrendingUp color={colors.primary} size={22} strokeWidth={2.4} />}
               label="Para repartir"
               value={
@@ -426,7 +555,7 @@ export default function SimulationScreen() {
               mode={protectedMarginMode}
               onCustomAmountChange={handleCustomProtectedMarginChange}
               onModeChange={handleProtectedMarginModeChange}
-              poolBreakdown={strategyBaseScenario.poolBreakdown}
+              poolBreakdown={isDetailedDebtMode ? strategyBaseScenario.poolBreakdown : null}
               protectedAmount={protectedAmount}
               surplusBeforeProtection={surplusBeforeProtection}
             />
@@ -435,7 +564,7 @@ export default function SimulationScreen() {
           <SectionCard
             compact={isPhone}
             icon={<Target color={colors.primary} size={22} strokeWidth={2.4} />}
-            title="Meta usada en la comparación"
+            title="Meta"
           >
             {selectedProjectionGoal ? (
               <View style={styles.valueGrid}>
@@ -470,51 +599,72 @@ export default function SimulationScreen() {
             )}
           </SectionCard>
 
-          <SectionCard
-            compact={isPhone}
-            icon={<TrendingUp color={colors.primary} size={22} strokeWidth={2.4} />}
-            title="Resumen comparativo"
-          >
-            <DistributionComparisonSummary
-              compact={isPhone}
-              scenarios={distributionScenarios}
-            />
-          </SectionCard>
-
-          <SectionCard
-            compact={isPhone}
-            icon={<ClipboardCheck color={colors.primary} size={22} strokeWidth={2.4} />}
-            title="Estrategias para el mismo dinero"
-          >
-            <Text style={styles.sectionDescription}>
-              Todas conservan primero tus gastos y cuotas requeridas. Lo único que cambia
-              es el destino del dinero que queda disponible.
-            </Text>
-            <View style={styles.scenariosList}>
-              {distributionScenarios.map((scenario) => (
-                <DistributionScenarioCard
-                  expanded={expandedDistributionId === scenario.id}
-                  key={scenario.id}
-                  onResolve={
-                    scenario.status === "ready"
-                      ? undefined
-                      : () => router.push(getResolutionRoute(scenario.issueCodes))
-                  }
-                  onSplitDebtPercentChange={setSplitDebtPercent}
-                  onToggle={() =>
-                    setExpandedDistributionId((current) =>
-                      current === scenario.id ? "" : scenario.id
-                    )
-                  }
-                  scenario={scenario}
+          {isDetailedDebtMode ? (
+            <>
+              <SectionCard
+                compact={isPhone}
+                icon={<TrendingUp color={colors.primary} size={22} strokeWidth={2.4} />}
+                title="Resumen comparativo"
+              >
+                <DistributionComparisonSummary
+                  compact={isPhone}
+                  scenarios={distributionScenarios}
                 />
-              ))}
-            </View>
-            <Text style={styles.disclaimerText}>
-              Estos escenarios son comparaciones educativas. No registran pagos, no separan
-              dinero y no crean una deuda nueva.
-            </Text>
-          </SectionCard>
+              </SectionCard>
+
+              <SectionCard
+                compact={isPhone}
+                icon={<ClipboardCheck color={colors.primary} size={22} strokeWidth={2.4} />}
+                title="Estrategias para el mismo dinero"
+              >
+                <Text style={styles.sectionDescription}>
+                  Todas conservan primero tus gastos y cuotas requeridas. Lo único que cambia
+                  es el destino del dinero que queda disponible.
+                </Text>
+                <View style={styles.scenariosList}>
+                  {distributionScenarios.map((scenario) => (
+                    <DistributionScenarioCard
+                      expanded={expandedDistributionId === scenario.id}
+                      key={scenario.id}
+                      onResolve={
+                        scenario.status === "ready"
+                          ? undefined
+                          : () => router.push(getResolutionRoute(scenario.issueCodes))
+                      }
+                      onSplitDebtPercentChange={setSplitDebtPercent}
+                      onToggle={() =>
+                        setExpandedDistributionId((current) =>
+                          current === scenario.id ? "" : scenario.id
+                        )
+                      }
+                      scenario={scenario}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.disclaimerText}>
+                  Estos escenarios son comparaciones educativas. No registran pagos, no separan
+                  dinero y no crean una deuda nueva.
+                </Text>
+              </SectionCard>
+            </>
+          ) : (
+            <SectionCard
+              compact={isPhone}
+              icon={<TrendingUp color={colors.primary} size={22} strokeWidth={2.4} />}
+              title="Posibles escenarios"
+            >
+              <PreliminarySimulationComparison
+                asOfDate={projectionInput.asOfDate}
+                distributableAmount={distributableAmount}
+                emergencyCoverageMonths={snapshot.emergencyFund.coverageMonths}
+                experience={simulationExperience}
+                goal={selectedProjectionGoal}
+                onSelect={setSelectedPlanStrategy}
+                priority={snapshot.priority}
+                selectedStrategy={selectedPlanStrategy}
+              />
+            </SectionCard>
+          )}
 
           <View style={styles.insightsGrid}>
             <View style={[styles.insightCard, isPhone && styles.cardPhone]}>
@@ -544,12 +694,20 @@ export default function SimulationScreen() {
                 session ? "Ir al plan mensual" : "Ver vista previa de mi plan mensual"
               }
               iconPosition="right"
-              onPress={() =>
-                session
-                  ? router.push("/action-plan")
-                  : router.push("/plan-preview")
+              onPress={handleContinue}
+              title={
+                isDetailedDebtMode
+                  ? session
+                    ? "Plan mensual"
+                    : "Ver cómo sería mi plan"
+                  : session
+                    ? selectedPlanStrategy === "prioritize_goal"
+                      ? "Continuar"
+                      : "Continuar"
+                    : selectedPlanStrategy === "prioritize_goal"
+                      ? "Ver plan"
+                      : "Ver vista previa del plan"
               }
-              title={session ? "Plan mensual" : "Ver cómo sería mi plan"}
             />
             <PrimaryButton
               accessibilityLabel="Volver a la pantalla anterior"

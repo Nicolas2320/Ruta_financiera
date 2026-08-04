@@ -69,7 +69,7 @@ describe("financial distribution presentation", () => {
       targetDebtTitles: ["Nubank TC"]
     });
     expect(presentations[3]).toMatchObject({
-      badge: "50% deuda · 50% meta",
+      badge: "Reparto ajustable",
       debtSharePercent: 50
     });
   });

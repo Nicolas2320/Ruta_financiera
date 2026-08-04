@@ -52,6 +52,10 @@ import {
   getMonthlyPlanProgressKey,
   type MonthlyGoalContext
 } from "../utils/monthlyPlan";
+import {
+  getPlanPreferenceGoalBudget,
+  resolvePlanPreference
+} from "../utils/planPreference";
 
 type IconProps = {
   color?: string;
@@ -657,11 +661,34 @@ export default function DashboardScreen() {
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const snapshot = metrics.snapshot;
   const periodKey = getMonthlyPlanPeriodKey();
+  const planPreference = useMemo(
+    () => resolvePlanPreference({ exactValues, onboarding }),
+    [exactValues, onboarding]
+  );
+  const preferredGoalId =
+    planPreference.hasExplicitPreference &&
+    planPreference.isApplicable &&
+    planPreference.strategy === "prioritize_goal"
+      ? planPreference.goalId
+      : null;
+  const preferredPlanPriorityKey =
+    planPreference.hasExplicitPreference && planPreference.isApplicable
+      ? planPreference.priorityKey
+      : null;
   const goalPlan = useMemo(
-    () => getGoalPlanFromOnboarding(onboarding, snapshot.cashflow.suggestedMonthlyContribution, exactValues),
-    [exactValues, onboarding, snapshot.cashflow.suggestedMonthlyContribution]
+    () => getGoalPlanFromOnboarding(
+      onboarding,
+      getPlanPreferenceGoalBudget({
+        fallbackMonthlyBudget: snapshot.cashflow.suggestedMonthlyContribution,
+        preference: planPreference
+      }),
+      exactValues,
+      { preferredGoalId }
+    ),
+    [exactValues, onboarding, planPreference, preferredGoalId, snapshot.cashflow.suggestedMonthlyContribution]
   );
   const primaryGoalAllocation =
+    goalPlan.allocations.find((allocation) => allocation.goal.id === preferredGoalId) ??
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
     null;
@@ -680,12 +707,12 @@ export default function DashboardScreen() {
     ]
   );
   const suggestedActions = useMemo(
-    () => getMonthlyActions(data, metrics, undefined, monthlyGoalContext),
-    [data, metrics, monthlyGoalContext]
+    () => getMonthlyActions(data, metrics, preferredPlanPriorityKey ?? undefined, monthlyGoalContext),
+    [data, metrics, monthlyGoalContext, preferredPlanPriorityKey]
   );
   const suggestedPlanProgressKey = useMemo(
-    () => getMonthlyPlanProgressKey(metrics, suggestedActions),
-    [metrics, suggestedActions]
+    () => getMonthlyPlanProgressKey(metrics, suggestedActions, preferredPlanPriorityKey ?? undefined),
+    [metrics, preferredPlanPriorityKey, suggestedActions]
   );
   const completedActionsForPlanSelection = useMemo(
     () => removeStoredGoalContributionActionsForPeriod(completedActions, periodKey),
@@ -695,7 +722,8 @@ export default function DashboardScreen() {
     () => getActiveMonthlyPlanProgressKey(completedActionsForPlanSelection, suggestedPlanProgressKey),
     [completedActionsForPlanSelection, suggestedPlanProgressKey]
   );
-  const activePlanPriorityKey = getMonthlyPlanPriorityKey(activePlanProgressKey);
+  const activePlanPriorityKey =
+    preferredPlanPriorityKey ?? getMonthlyPlanPriorityKey(activePlanProgressKey);
   const actions = useMemo(
     () => getMonthlyActions(data, metrics, activePlanPriorityKey ?? undefined, monthlyGoalContext),
     [activePlanPriorityKey, data, metrics, monthlyGoalContext]

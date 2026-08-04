@@ -341,13 +341,15 @@ export function getGoalAllocationPlan({
   exactValues = {},
   goals,
   monthlyGoalBudget,
-  monthlyGoalBudgetMode = "recommended"
+  monthlyGoalBudgetMode = "recommended",
+  preferredGoalId = null
 }: {
   asOfDate?: Date;
   exactValues?: ExactFinancialValues;
   goals: FinancialGoal[];
   monthlyGoalBudget: number;
   monthlyGoalBudgetMode?: GoalAllocationPlan["monthlyGoalBudgetMode"];
+  preferredGoalId?: string | null;
 }): GoalAllocationPlan {
   const safeBudget = Math.max(0, Math.floor(monthlyGoalBudget));
   const normalizedGoals = goals;
@@ -389,15 +391,25 @@ export function getGoalAllocationPlan({
       targetAmount
     };
   });
-  const recommendedContributions = distributeRecommendedContributions(
-    goalMetrics
-      .filter((goalMetric) => goalMetric.score > 0)
-      .map((goalMetric) => ({
-        goalId: goalMetric.goal.id,
-        score: goalMetric.score
-      })),
-    safeBudget
-  );
+  const preferredGoal = preferredGoalId
+    ? goalMetrics.find(
+        (goalMetric) =>
+          goalMetric.goal.id === preferredGoalId &&
+          goalMetric.goal.status !== "completed" &&
+          goalMetric.goal.status !== "paused"
+      ) ?? null
+    : null;
+  const recommendedContributions = preferredGoal
+    ? new Map([[preferredGoal.goal.id, safeBudget]])
+    : distributeRecommendedContributions(
+        goalMetrics
+          .filter((goalMetric) => goalMetric.score > 0)
+          .map((goalMetric) => ({
+            goalId: goalMetric.goal.id,
+            score: goalMetric.score
+          })),
+        safeBudget
+      );
   const allocations = goalMetrics.map((goalMetric) => {
     const goalIsInactive =
       goalMetric.goal.status === "completed" || goalMetric.goal.status === "paused";
@@ -464,7 +476,8 @@ export function getGoalAllocationPlan({
 export function getGoalPlanFromOnboarding(
   onboarding: OnboardingData,
   monthlyGoalBudget: number,
-  exactValues: ExactFinancialValues = {}
+  exactValues: ExactFinancialValues = {},
+  options: { preferredGoalId?: string | null } = {}
 ) {
   const manualGoalBudget = safeNonNegative(onboarding.goalMonthlyBudget);
 
@@ -472,7 +485,8 @@ export function getGoalPlanFromOnboarding(
     exactValues,
     goals: getOnboardingGoals(onboarding),
     monthlyGoalBudget: manualGoalBudget ?? monthlyGoalBudget,
-    monthlyGoalBudgetMode: manualGoalBudget !== null ? "manual" : "recommended"
+    monthlyGoalBudgetMode: manualGoalBudget !== null ? "manual" : "recommended",
+    preferredGoalId: options.preferredGoalId
   });
 }
 

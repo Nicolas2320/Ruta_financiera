@@ -160,10 +160,7 @@ export function presentDistributionScenario({
     scenario.debtShare === null ? null : Math.round(scenario.debtShare * 100);
 
   return {
-    badge:
-      debtSharePercent === null
-        ? copy.badge
-        : `${debtSharePercent}% deuda · ${100 - debtSharePercent}% meta`,
+    badge: copy.badge,
     baseDebtPayments: sumBaseDebtPayments(scenario),
     description: copy.description,
     debtSharePercent,

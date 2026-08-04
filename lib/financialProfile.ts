@@ -10,6 +10,7 @@ import {
   normalizeFinancialGuidanceMode,
   normalizeFinancialGoals,
   normalizeGoalMonthlyBudget,
+  normalizeSimulationPlanPreference,
   type CompletedActionsState,
   type ExactFinancialValues,
   type OnboardingData
@@ -73,6 +74,9 @@ export function normalizeOnboardingData(
       ? onboarding.smallExpenseCategories
       : [],
     goalMonthlyBudget: normalizeGoalMonthlyBudget(onboarding?.goalMonthlyBudget),
+    simulationPlanPreference: normalizeSimulationPlanPreference(
+      onboarding?.simulationPlanPreference
+    ),
     goals: normalizeFinancialGoals(onboarding?.goals, referenceDate)
   };
 

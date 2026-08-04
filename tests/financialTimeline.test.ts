@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { buildDistributionScenarios } from "../utils/financialDistribution";
 import { buildFinancialProjectionInput } from "../utils/financialProjectionInput";
-import { buildFinancialScenarioTimeline } from "../utils/financialTimeline";
+import {
+  buildFinancialScenarioTimeline,
+  getFinancialTimelineDisplayMonths
+} from "../utils/financialTimeline";
 import { makeDebt, makeGoal, makeOnboarding } from "./fixtures/financial";
 
 function makeTimelineInput() {
@@ -59,6 +62,29 @@ describe("month-by-month financial timeline", () => {
       month: "2026-10",
       trackedGoalAmount: 3_800_000
     });
+  });
+
+  it("adds the current month as a chart baseline without applying a payment", () => {
+    const input = makeTimelineInput();
+    const scenario = buildDistributionScenarios({
+      input,
+      protectedMarginPreference: { mode: "use_all" }
+    }).accelerateGoal;
+    const timeline = buildFinancialScenarioTimeline({ input, scenario });
+    const displayMonths = getFinancialTimelineDisplayMonths(timeline);
+
+    expect(timeline.asOfMonth).toBe("2026-08");
+    expect(timeline.months[0].month).toBe("2026-09");
+    expect(displayMonths[0]).toMatchObject({
+      baseDebtPayments: 0,
+      endingKnownDebtBalance: 200_000,
+      extraDebtPayments: 0,
+      goalContributionTotal: 0,
+      index: 0,
+      month: "2026-08",
+      trackedGoalAmount: 0
+    });
+    expect(displayMonths[1]).toBe(timeline.months[0]);
   });
 
   it("finishes the goal sooner after the debt payment is released", () => {

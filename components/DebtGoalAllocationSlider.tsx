@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { RotateCcw } from "lucide-react-native";
 import {
   PanResponder,
   Pressable,
@@ -13,6 +14,7 @@ import { colors, radius, spacing, typography } from "../constants/theme";
 const MIN_DEBT_PERCENT = 10;
 const MAX_DEBT_PERCENT = 90;
 const STEP = 5;
+const GOAL_COLOR = "#7C3AED";
 
 function normalizeDebtPercent(value: number) {
   const steppedValue = Math.round(value / STEP) * STEP;
@@ -66,87 +68,63 @@ export function DebtGoalAllocationSlider({
         </View>
       </View>
 
-      <View style={styles.sliderRow}>
-        <Pressable
-          accessibilityLabel="Dar cinco por ciento más a la meta"
-          accessibilityRole="button"
-          disabled={normalizedDebtPercent <= MIN_DEBT_PERCENT}
-          onPress={() => onChange(normalizeDebtPercent(normalizedDebtPercent - STEP))}
-          style={({ pressed }) => [
-            styles.stepButton,
-            normalizedDebtPercent <= MIN_DEBT_PERCENT && styles.stepButtonDisabled,
-            pressed && styles.pressed
-          ]}
-        >
-          <Text style={styles.stepButtonText}>−</Text>
-        </Pressable>
+      <View
+        accessibilityActions={[
+          { name: "increment", label: "Dar más a deuda" },
+          { name: "decrement", label: "Dar más a meta" }
+        ]}
+        accessibilityHint="Arrastra el separador para cambiar el reparto"
+        accessibilityLabel="Reparto entre deuda y meta"
+        accessibilityRole="adjustable"
+        accessibilityValue={{
+          max: MAX_DEBT_PERCENT,
+          min: MIN_DEBT_PERCENT,
+          now: normalizedDebtPercent,
+          text: `${normalizedDebtPercent}% para deuda y ${goalPercent}% para meta`
+        }}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === "increment") {
+            onChange(normalizeDebtPercent(normalizedDebtPercent + STEP));
+          }
 
-        <View
-          accessibilityActions={[
-            { name: "increment", label: "Dar más a deuda" },
-            { name: "decrement", label: "Dar más a meta" }
-          ]}
-          accessibilityLabel="Reparto entre deuda y meta"
-          accessibilityRole="adjustable"
-          accessibilityValue={{
-            max: MAX_DEBT_PERCENT,
-            min: MIN_DEBT_PERCENT,
-            now: normalizedDebtPercent,
-            text: `${normalizedDebtPercent}% para deuda y ${goalPercent}% para meta`
-          }}
-          onAccessibilityAction={(event) => {
-            if (event.nativeEvent.actionName === "increment") {
-              onChange(normalizeDebtPercent(normalizedDebtPercent + STEP));
-            }
-
-            if (event.nativeEvent.actionName === "decrement") {
-              onChange(normalizeDebtPercent(normalizedDebtPercent - STEP));
-            }
-          }}
-          onLayout={handleTrackLayout}
-          style={styles.track}
-          {...panResponder.panHandlers}
-        >
+          if (event.nativeEvent.actionName === "decrement") {
+            onChange(normalizeDebtPercent(normalizedDebtPercent - STEP));
+          }
+        }}
+        onLayout={handleTrackLayout}
+        style={styles.track}
+        {...panResponder.panHandlers}
+      >
+        <View style={styles.trackSegments}>
           <View
             style={[
-              styles.debtFill,
+              styles.debtSegment,
               { width: `${normalizedDebtPercent}%` as `${number}%` }
             ]}
           />
-          <View
-            style={[
-              styles.thumb,
-              { left: `${normalizedDebtPercent}%` as `${number}%` }
-            ]}
-          />
+          <View style={[styles.goalSegment, { width: `${goalPercent}%` as `${number}%` }]} />
         </View>
-
-        <Pressable
-          accessibilityLabel="Dar cinco por ciento más a la deuda"
-          accessibilityRole="button"
-          disabled={normalizedDebtPercent >= MAX_DEBT_PERCENT}
-          onPress={() => onChange(normalizeDebtPercent(normalizedDebtPercent + STEP))}
-          style={({ pressed }) => [
-            styles.stepButton,
-            normalizedDebtPercent >= MAX_DEBT_PERCENT && styles.stepButtonDisabled,
-            pressed && styles.pressed
+        <View
+          pointerEvents="none"
+          style={[
+            styles.thumb,
+            { left: `${normalizedDebtPercent}%` as `${number}%` }
           ]}
-        >
-          <Text style={styles.stepButtonText}>+</Text>
-        </Pressable>
+        />
       </View>
 
       <View style={styles.footer}>
         <Text style={styles.helper}>
-          Ajusta en pasos de 5%. Las cuotas requeridas y el margen protegido no cambian.
+          Desliza para repartir el 100% en pasos de 5%. El margen protegido no cambia.
         </Text>
         {normalizedDebtPercent !== 50 ? (
           <Pressable
+            accessibilityLabel="Restablecer reparto a 50% deuda y 50% meta"
             accessibilityRole="button"
             onPress={() => onChange(50)}
             style={({ pressed }) => [styles.resetButton, pressed && styles.pressed]}
           >
-            <Text style={styles.resetButtonText}>Volver a 50 / 50</Text>
+            <RotateCcw color={colors.primary} size={17} strokeWidth={2.5} />
           </Pressable>
         ) : null}
       </View>
@@ -156,95 +134,82 @@ export function DebtGoalAllocationSlider({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#F8FBFF",
-    borderColor: colors.primaryBorder,
-    borderRadius: radius.md,
-    borderWidth: 1,
     gap: spacing.sm,
-    padding: spacing.md
+    paddingVertical: spacing.xs
   },
   headingRow: {
+    alignItems: "flex-end",
     flexDirection: "row",
     justifyContent: "space-between"
   },
   headingSide: {
     alignItems: "flex-start",
-    flexDirection: "row",
-    gap: spacing.xs
+    gap: 1
   },
   headingSideRight: {
+    alignItems: "flex-end",
     justifyContent: "flex-end"
   },
   debtLabel: {
     color: colors.primary,
     fontSize: typography.caption,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.caption
   },
   debtValue: {
     color: colors.primary,
-    fontSize: typography.caption,
+    fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
+    lineHeight: typography.lineHeight.sectionTitle
   },
   goalLabel: {
-    color: "#6D28D9",
+    color: GOAL_COLOR,
     fontSize: typography.caption,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.caption
   },
   goalValue: {
-    color: "#6D28D9",
-    fontSize: typography.caption,
+    color: GOAL_COLOR,
+    fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  sliderRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: spacing.sm
+    lineHeight: typography.lineHeight.sectionTitle
   },
   track: {
-    backgroundColor: "#E9DDFF",
+    alignSelf: "stretch",
     borderRadius: radius.pill,
-    flex: 1,
-    height: 16,
+    height: 28,
     justifyContent: "center",
     minWidth: 120
   },
-  debtFill: {
-    backgroundColor: colors.primary,
+  trackSegments: {
     borderRadius: radius.pill,
+    flexDirection: "row",
+    height: 14,
+    overflow: "hidden",
+    width: "100%"
+  },
+  debtSegment: {
+    backgroundColor: colors.primary,
+    height: "100%"
+  },
+  goalSegment: {
+    backgroundColor: GOAL_COLOR,
     height: "100%"
   },
   thumb: {
     backgroundColor: colors.surface,
-    borderColor: colors.primary,
+    borderColor: colors.surface,
     borderRadius: radius.pill,
     borderWidth: 3,
-    height: 28,
-    marginLeft: -14,
+    elevation: 2,
+    height: 22,
+    marginLeft: -11,
     position: "absolute",
-    width: 28
-  },
-  stepButton: {
-    alignItems: "center",
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.primaryBorder,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    height: 34,
-    justifyContent: "center",
-    width: 34
-  },
-  stepButtonDisabled: {
-    opacity: 0.4
-  },
-  stepButtonText: {
-    color: colors.primary,
-    fontSize: typography.sectionTitle,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.sectionTitle
+    shadowColor: "#0F172A",
+    shadowOffset: { height: 1, width: 0 },
+    shadowOpacity: 0.16,
+    shadowRadius: 2,
+    width: 22
   },
   footer: {
     alignItems: "center",
@@ -254,21 +219,21 @@ const styles = StyleSheet.create({
     justifyContent: "space-between"
   },
   helper: {
-    color: colors.textMuted,
+    color: colors.textSubtle,
     flex: 1,
     fontSize: typography.small,
     lineHeight: typography.lineHeight.small,
     minWidth: 180
   },
   resetButton: {
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs
-  },
-  resetButtonText: {
-    color: colors.primary,
-    fontSize: typography.small,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.small
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 32,
+    justifyContent: "center",
+    width: 32
   },
   pressed: {
     opacity: 0.8

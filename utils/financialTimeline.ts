@@ -61,6 +61,7 @@ export type TimelineTrackedGoal = {
 export type FinancialScenarioTimeline = {
   allDebtBalancesKnown: boolean;
   allKnownDebtsPaidMonth: string | null;
+  asOfMonth: string;
   goalCompletionMonth: string | null;
   hasUnknownInterestRates: boolean;
   months: FinancialTimelineMonth[];
@@ -68,6 +69,49 @@ export type FinancialScenarioTimeline = {
   totalInterestCharged: number;
   trackedGoal: TimelineTrackedGoal | null;
 };
+
+export function getFinancialTimelineDisplayMonths(
+  timeline: FinancialScenarioTimeline
+): FinancialTimelineMonth[] {
+  const firstProjectedMonth = timeline.months[0];
+
+  if (!firstProjectedMonth) {
+    return [];
+  }
+
+  const startingDebtPayments = firstProjectedMonth.debtPayments.map((payment) => ({
+    ...payment,
+    basePayment: 0,
+    endingBalance: payment.startingBalance,
+    extraPayment: 0,
+    interestCharged: payment.startingBalance === null ? null : 0,
+    paidOff: false,
+    totalPayment: 0
+  }));
+  const startingKnownDebtBalance = startingDebtPayments.reduce(
+    (total, payment) => total + (payment.startingBalance ?? 0),
+    0
+  );
+  const startingMonth: FinancialTimelineMonth = {
+    baseDebtPayments: 0,
+    debtPayments: startingDebtPayments,
+    endingKnownDebtBalance: startingKnownDebtBalance,
+    extraDebtPayments: 0,
+    goalContributions: [],
+    goalContributionTotal: 0,
+    index: 0,
+    interestCharged: 0,
+    month: timeline.asOfMonth,
+    monthlyBalance: 0,
+    newlyPaidDebtIds: [],
+    protectedMargin: 0,
+    releasedPaymentNextMonth: 0,
+    trackedGoalAmount: timeline.trackedGoal?.currentAmount ?? null,
+    unassignedAmount: 0
+  };
+
+  return [startingMonth, ...timeline.months];
+}
 
 type TimelineDebtState = {
   balance: number | null;
@@ -243,6 +287,7 @@ export function buildFinancialScenarioTimeline({
   scenario: DistributionScenario;
 }): FinancialScenarioTimeline {
   const monthlyIncome = safeNonNegative(input.cashflow.monthlyIncome);
+  const asOfMonth = getProjectionMonth(input.asOfDate, 0);
   const operatingCosts = getOperatingCosts(input);
   const allDebtBalancesKnown = input.debts.every((debt) => debt.remainingAmount !== null);
   const hasUnknownInterestRates = input.debts.some(
@@ -263,6 +308,7 @@ export function buildFinancialScenarioTimeline({
     return {
       allDebtBalancesKnown,
       allKnownDebtsPaidMonth: null,
+      asOfMonth,
       goalCompletionMonth: null,
       hasUnknownInterestRates,
       months: [],
@@ -535,6 +581,7 @@ export function buildFinancialScenarioTimeline({
   return {
     allDebtBalancesKnown,
     allKnownDebtsPaidMonth,
+    asOfMonth,
     goalCompletionMonth,
     hasUnknownInterestRates,
     months,

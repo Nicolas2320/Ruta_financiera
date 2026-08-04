@@ -48,7 +48,14 @@ describe("guest financial draft", () => {
         ...initialOnboarding,
         firstName: "Andrea",
         expenseCategories: ["Vivienda"],
-        expenseCategoryAmounts: { Vivienda: 900000 }
+        expenseCategoryAmounts: { Vivienda: 900000 },
+        simulationPlanPreference: {
+          strategy: "prioritize_goal",
+          goalId: "goal-1",
+          protectedMarginMode: "automatic",
+          customProtectedMargin: null,
+          selectedAt: "2026-08-04T12:00:00.000Z"
+        }
       },
       {
         monthlyIncome: 3500000
@@ -64,7 +71,11 @@ describe("guest financial draft", () => {
       onboarding: {
         firstName: "Andrea",
         expenseCategories: ["Vivienda"],
-        expenseCategoryAmounts: { Vivienda: 900000 }
+        expenseCategoryAmounts: { Vivienda: 900000 },
+        simulationPlanPreference: {
+          strategy: "prioritize_goal",
+          goalId: "goal-1"
+        }
       }
     });
   });
