@@ -101,7 +101,7 @@ export default function PlanPreviewScreen() {
                       {preview.contributionLabel}
                     </Text>
                     <Text style={styles.conclusionText}>
-                      para avanzar hacia {goalTitle}.
+                      {preview.contributionPurpose}
                     </Text>
                   </>
                 ) : (
@@ -176,12 +176,14 @@ export default function PlanPreviewScreen() {
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel={
-                session ? "Ver mi plan mensual" : "Guardar y ver mi plan"
+                session ? "Ver mi plan mensual" : "Registrarme para ver mi plan completo"
               }
               iconPosition="right"
               onPress={handleContinue}
               style={styles.primaryButton}
-              title={session ? "Ver mi plan mensual" : "Guardar y ver mi plan"}
+              title={
+                session ? "Ver mi plan mensual" : "Registrarme para ver mi plan completo"
+              }
             />
             <PrimaryButton
               accessibilityLabel="Seguir revisando mi simulación"

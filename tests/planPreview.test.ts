@@ -7,6 +7,8 @@ describe("getPlanPreviewData", () => {
   it("builds a personalized preview from the diagnosis", () => {
     const preview = getPlanPreviewData(
       makeOnboarding({
+        debtPaymentShare: "No pago deudas",
+        debtSituation: "No tengo deudas",
         financialGoal: "Fondo de emergencia",
         goals: [makeGoal()]
       }),
@@ -22,6 +24,7 @@ describe("getPlanPreviewData", () => {
     expect(preview.marginLabel).toBe("$1.800.000 aprox.");
     expect(preview.marginTone).toBe("support");
     expect(preview.contributionLabel).not.toBe("Por definir");
+    expect(preview.contributionPurpose.length).toBeGreaterThan(0);
     expect(preview.routeEstimateLabel).toContain("meses");
     expect(preview.firstActionTitle.length).toBeGreaterThan(0);
     expect(preview.actionCount).toBeGreaterThan(0);
@@ -43,6 +46,43 @@ describe("getPlanPreviewData", () => {
 
     expect(preview.marginLabel).toBe("-$500.000 aprox.");
     expect(preview.marginTone).toBe("warning");
+    expect(preview.contributionLabel).toBe("Por definir");
+  });
+
+  it("does not overstate the plan when debt was only reported as a range", () => {
+    const preview = getPlanPreviewData(
+      makeOnboarding({
+        debtPaymentShare: "10% – 20%",
+        debtSituation: "Tengo deudas, pero las pago sin problema",
+        goals: [makeGoal({ title: "Viaje" })]
+      }),
+      {
+        currentSavings: 0,
+        monthlyExpenses: 2_500_000,
+        monthlyIncome: 4_000_000,
+        smallExpenses: 100_000
+      }
+    );
+
+    expect(preview.contributionLabel).not.toBe("Por definir");
+    expect(preview.contributionPurpose).not.toContain("avanzar hacia Viaje");
+  });
+
+  it("avoids inventing a contribution when the reported debt range is open-ended", () => {
+    const preview = getPlanPreviewData(
+      makeOnboarding({
+        debtPaymentShare: "Más del 40%",
+        debtSituation: "Son una preocupación importante",
+        goals: [makeGoal()]
+      }),
+      {
+        currentSavings: 0,
+        monthlyExpenses: 2_500_000,
+        monthlyIncome: 4_000_000,
+        smallExpenses: 100_000
+      }
+    );
+
     expect(preview.contributionLabel).toBe("Por definir");
   });
 });

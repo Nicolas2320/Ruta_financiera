@@ -8,10 +8,12 @@ import {
   getMonthlyPlanData,
   getMonthlyPlanMetrics
 } from "./monthlyPlan";
+import { buildSimulationExperience } from "./simulationExperience";
 
 export type PlanPreviewData = {
   actionCount: number;
   contributionLabel: string;
+  contributionPurpose: string;
   firstActionDescription: string;
   firstActionTitle: string;
   focusText: string;
@@ -30,9 +32,10 @@ export function getPlanPreviewData(
 ): PlanPreviewData {
   const data = getMonthlyPlanData(onboarding);
   const metrics = getMonthlyPlanMetrics(data, exactValues);
+  const simulationExperience = buildSimulationExperience({ exactValues, onboarding });
   const goalPlan = getGoalPlanFromOnboarding(
     onboarding,
-    metrics.snapshot.cashflow.suggestedMonthlyContribution,
+    simulationExperience.recommendedMonthlyContribution,
     exactValues
   );
   const primaryGoalAllocation =
@@ -61,6 +64,10 @@ export function getPlanPreviewData(
     actionCount: actions.length,
     contributionLabel:
       suggestedContribution > 0 ? `${formatCOP(suggestedContribution)} aprox.` : "Por definir",
+    contributionPurpose:
+      metrics.snapshot.priority.key === "advance_goal"
+        ? `para avanzar hacia ${goalTitle ?? "tu meta financiera"}.`
+        : `como referencia inicial para ${focus.title.toLocaleLowerCase("es-CO")}.`,
     firstActionDescription:
       firstAction?.description ??
       "Tu primera acción aparecerá cuando terminemos de preparar tu plan.",

@@ -657,6 +657,11 @@ export default function DiagnosisScreen() {
     expenseBarWidth,
     100
   );
+  const otherExpensesPercentage = Math.max(
+    0,
+    expenseBarWidth - (metrics.smallExpensePercentage ?? 0)
+  );
+  const marginPercentage = 100 - expenseBarWidth;
   const expensesAreHigh = metrics.expensePercentage !== null && metrics.expensePercentage >= 85;
   const hasPositiveMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin > 0;
   const hasNoMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0;
@@ -710,7 +715,7 @@ export default function DiagnosisScreen() {
       detail: metrics.currentSavingsDisplay.helper
     },
     {
-      label: "Gastos hormiga",
+      label: "Pequeños gastos",
       value: metrics.smallExpensesMetricLabel,
       detail: metrics.smallExpensesDetail
     },
@@ -954,15 +959,17 @@ export default function DiagnosisScreen() {
                 <View style={styles.legendRow}>
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, styles.legendDotExpenses]} />
-                    <Text style={styles.legendText}>Gastos</Text>
+                    <Text style={styles.legendText}>Gastos ({otherExpensesPercentage}%)</Text>
                   </View>
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, styles.legendDotSmallExpenses]} />
-                    <Text style={styles.legendText}>Gastos hormiga</Text>
+                    <Text style={styles.legendText}>
+                      Pequeños gastos ({metrics.smallExpensePercentage ?? 0}%)
+                    </Text>
                   </View>
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, styles.legendDotMargin]} />
-                    <Text style={styles.legendText}>Margen disponible</Text>
+                    <Text style={styles.legendText}>Margen ({marginPercentage}%)</Text>
                   </View>
                 </View>
               </>
@@ -1033,7 +1040,7 @@ export default function DiagnosisScreen() {
 
           <InfoCard
             icon={<ClipboardCheck color={colors.primary} size={18} strokeWidth={2.4} />}
-            title="Gastos hormiga"
+            title="Pequeños gastos"
           >
             {smallExpensesMessages.map((message) => (
               <Text key={message} style={styles.text}>
@@ -1361,13 +1368,15 @@ const styles = StyleSheet.create({
   },
   legendRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md
+    gap: spacing.xs,
+    justifyContent: "space-between"
   },
   legendItem: {
     alignItems: "center",
+    flex: 1,
     flexDirection: "row",
-    gap: spacing.xs
+    gap: spacing.xs,
+    minWidth: 0
   },
   legendDot: {
     borderRadius: radius.pill,
@@ -1385,9 +1394,10 @@ const styles = StyleSheet.create({
   },
   legendText: {
     color: colors.textMuted,
-    fontSize: typography.caption,
+    flexShrink: 1,
+    fontSize: typography.small,
     fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.caption
+    lineHeight: typography.lineHeight.small
   },
   subsection: {
     gap: spacing.xs
