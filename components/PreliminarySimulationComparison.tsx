@@ -1,7 +1,8 @@
-import { ShieldCheck, Target, TrendingUp } from "lucide-react-native";
-import { StyleSheet, Text, View } from "react-native";
+import { Check, ShieldCheck, Target, TrendingUp } from "lucide-react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
+import type { SimulationPlanStrategy } from "../types/financial";
 import type { FinancialSnapshot } from "../utils/financialCalculations";
 import type { ProjectionGoalInput } from "../utils/financialProjectionInput";
 import { formatCOP, formatSignedCOP } from "../utils/financialRanges";
@@ -102,14 +103,20 @@ export function PreliminarySimulationComparison({
   asOfDate,
   distributableAmount,
   experience,
+  emergencyCoverageMonths,
   goal,
-  priority
+  onSelect,
+  priority,
+  selectedStrategy
 }: {
   asOfDate: string;
   distributableAmount: number | null;
+  emergencyCoverageMonths: number | null;
   experience: SimulationExperience;
   goal: ProjectionGoalInput | null;
+  onSelect: (strategy: SimulationPlanStrategy) => void;
   priority: FinancialSnapshot["priority"];
+  selectedStrategy: SimulationPlanStrategy;
 }) {
   const goalProjection = getGoalProjection({
     asOfDate,
@@ -117,6 +124,24 @@ export function PreliminarySimulationComparison({
     monthlyContribution: distributableAmount
   });
   const canEstimate = experience.planningMonthlyMargin !== null;
+  const canSelectGoal = Boolean(
+    goal && canEstimate && distributableAmount !== null && distributableAmount > 0
+  );
+  const goalIsAlreadyRecommended = priority.key === "advance_goal";
+  const prudentMonthlyMargin =
+    experience.planningMonthlyMargin === null
+      ? null
+      : Math.max(0, experience.planningMonthlyMargin);
+  const recommendedUnassignedAmount =
+    prudentMonthlyMargin === null
+      ? null
+      : Math.max(0, prudentMonthlyMargin - experience.recommendedMonthlyContribution);
+  const explorationProtectedAmount =
+    prudentMonthlyMargin === null || distributableAmount === null
+      ? null
+      : Math.max(0, prudentMonthlyMargin - distributableAmount);
+  const recommendedSelected = selectedStrategy === "diagnosis_recommended";
+  const goalSelected = selectedStrategy === "prioritize_goal" && canSelectGoal;
 
   return (
     <View style={styles.container}>
@@ -161,24 +186,74 @@ export function PreliminarySimulationComparison({
       </View>
 
       <Text style={styles.comparisonIntro}>
-        Con la información actual podemos explorar estas dos posibilidades sin calcular
-        intereses ni fechas de salida de deudas.
+        {goalIsAlreadyRecommended
+          ? "Tu diagnóstico ya prioriza la meta. Aquí eliges el ritmo: un aporte gradual o uno acelerado usando más del margen disponible."
+          : "Elige qué referencia quieres usar en la vista previa de tu plan. Podrás cambiarla después sin registrar pagos ni mover dinero."}
       </Text>
 
+      {goalIsAlreadyRecommended && emergencyCoverageMonths !== null ? (
+        <View style={styles.priorityExplanation}>
+          <Text style={styles.priorityExplanationTitle}>
+            ¿Por qué el diagnóstico ahora recomienda la meta?
+          </Text>
+          <Text style={styles.priorityExplanationText}>
+            Tus ahorros equivalen aproximadamente a {new Intl.NumberFormat("es-CO", {
+              maximumFractionDigits: 1
+            }).format(emergencyCoverageMonths)} meses de gastos principales. Por eso el fondo
+            de emergencia ya no aparece como primera prioridad. Ese ahorro general no se suma
+            automáticamente a la meta: allí solo cuenta el dinero que registraste como ya
+            separado para ella.
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.options}>
-        <View style={[styles.option, styles.optionRecommended]}>
+        <Pressable
+          accessibilityLabel={`Usar la recomendación: ${priority.title}`}
+          accessibilityRole="radio"
+          accessibilityState={{ selected: recommendedSelected }}
+          onPress={() => onSelect("diagnosis_recommended")}
+          style={({ pressed }) => [
+            styles.option,
+            styles.optionRecommended,
+            recommendedSelected && styles.optionSelectedSupport,
+            pressed && styles.optionPressed
+          ]}
+        >
           <View style={styles.optionHeader}>
             <View style={[styles.optionIcon, styles.optionIconSupport]}>
               <ShieldCheck color={colors.support} size={22} strokeWidth={2.5} />
             </View>
             <View style={styles.optionHeaderCopy}>
               <Text style={[styles.optionTag, styles.optionTagSupport]}>RECOMENDADO</Text>
-              <Text style={styles.optionTitle}>{priority.title}</Text>
+              <Text style={styles.optionTitle}>
+                {goalIsAlreadyRecommended && goal
+                  ? `Aporte gradual para ${goal.title}`
+                  : priority.title}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.selectionIndicator,
+                recommendedSelected && styles.selectionIndicatorSupport
+              ]}
+            >
+              {recommendedSelected ? (
+                <Check color={colors.surface} size={15} strokeWidth={3} />
+              ) : null}
             </View>
           </View>
-          <Text style={styles.optionDescription}>{priority.description}</Text>
+          <Text style={styles.optionDescription}>
+            {goalIsAlreadyRecommended
+              ? "Avanza hacia la meta sin asignar todo el margen prudente, para conservar espacio ante gastos variables o imprevistos."
+              : priority.description}
+          </Text>
           <View style={styles.optionResult}>
-            <Text style={styles.optionResultLabel}>Referencia mensual del diagnóstico</Text>
+            <Text style={styles.optionResultLabel}>
+              {goalIsAlreadyRecommended
+                ? "Aporte mensual gradual"
+                : "Referencia mensual del diagnóstico"}
+            </Text>
             <Text style={[styles.optionResultValue, styles.optionResultValueSupport]}>
               {experience.recommendedMonthlyContribution > 0
                 ? formatCOP(experience.recommendedMonthlyContribution)
@@ -186,11 +261,27 @@ export function PreliminarySimulationComparison({
             </Text>
           </View>
           <Text style={styles.optionFootnote}>
-            Esta es la referencia que continuará hacia la vista previa de tu plan.
+            {recommendedUnassignedAmount === null
+              ? "Mantiene la prioridad detectada en tu diagnóstico."
+              : `Conserva al menos ${formatCOP(recommendedUnassignedAmount)} del margen prudente sin asignar.`}
           </Text>
-        </View>
+        </Pressable>
 
-        <View style={styles.option}>
+        <Pressable
+          accessibilityLabel={
+            goal ? `Usar la referencia para priorizar ${goal.title}` : "Priorizar una meta"
+          }
+          accessibilityRole="radio"
+          accessibilityState={{ disabled: !canSelectGoal, selected: goalSelected }}
+          disabled={!canSelectGoal}
+          onPress={() => onSelect("prioritize_goal")}
+          style={({ pressed }) => [
+            styles.option,
+            goalSelected && styles.optionSelectedPrimary,
+            !canSelectGoal && styles.optionDisabled,
+            pressed && canSelectGoal && styles.optionPressed
+          ]}
+        >
           <View style={styles.optionHeader}>
             <View style={styles.optionIcon}>
               <Target color={colors.primary} size={22} strokeWidth={2.5} />
@@ -198,13 +289,28 @@ export function PreliminarySimulationComparison({
             <View style={styles.optionHeaderCopy}>
               <Text style={styles.optionTag}>EXPLORACIÓN</Text>
               <Text style={styles.optionTitle}>
-                {goal ? `Si priorizaras ${goal.title}` : "Si priorizaras una meta"}
+                {goal
+                  ? goalIsAlreadyRecommended
+                    ? `Acelerar ${goal.title}`
+                    : `Si priorizaras ${goal.title}`
+                  : "Si priorizaras una meta"}
               </Text>
+            </View>
+            <View
+              style={[
+                styles.selectionIndicator,
+                goalSelected && styles.selectionIndicatorPrimary
+              ]}
+            >
+              {goalSelected ? (
+                <Check color={colors.surface} size={15} strokeWidth={3} />
+              ) : null}
             </View>
           </View>
           <Text style={styles.optionDescription}>
-            Muestra qué pasaría si dirigieras a la meta todo lo disponible después de
-            proteger el margen elegido.
+            {goalIsAlreadyRecommended
+              ? "Usa para la meta todo lo disponible después del margen protegido. Avanza más rápido, pero deja menos dinero sin asignar."
+              : "Muestra qué pasaría si dirigieras a la meta todo lo disponible después de proteger el margen elegido."}
           </Text>
           <View style={styles.optionResult}>
             <Text style={styles.optionResultLabel}>Aporte mensual explorado</Text>
@@ -221,12 +327,17 @@ export function PreliminarySimulationComparison({
                   ? `Con este ritmo la completarías aproximadamente en ${goalProjection}.`
                   : "Define el valor de la meta para estimar cuándo podrías completarla."}
           </Text>
-        </View>
+          {explorationProtectedAmount !== null ? (
+            <Text style={styles.optionBalance}>
+              Conserva {formatCOP(explorationProtectedAmount)} como margen protegido.
+            </Text>
+          ) : null}
+        </Pressable>
       </View>
 
       <Text style={styles.disclaimer}>
-        Esta exploración no cambia tu plan ni supone que ya separaste el dinero. Cuando
-        registres tus deudas, aparecerá la comparación completa.
+        La selección se guardará cuando continúes. No supone que ya separaste el dinero;
+        cuando registres tus deudas, aparecerá la comparación completa.
       </Text>
     </View>
   );
@@ -314,6 +425,25 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     lineHeight: typography.lineHeight.body
   },
+  priorityExplanation: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.md
+  },
+  priorityExplanationTitle: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  priorityExplanationText: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    lineHeight: typography.lineHeight.small
+  },
   options: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -332,6 +462,21 @@ const styles = StyleSheet.create({
   optionRecommended: {
     backgroundColor: "#F5FCF8",
     borderColor: colors.supportBorder
+  },
+  optionSelectedSupport: {
+    borderColor: colors.support,
+    borderWidth: 2
+  },
+  optionSelectedPrimary: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
+    borderWidth: 2
+  },
+  optionDisabled: {
+    opacity: 0.58
+  },
+  optionPressed: {
+    opacity: 0.82
   },
   optionHeader: {
     alignItems: "center",
@@ -352,6 +497,23 @@ const styles = StyleSheet.create({
   optionHeaderCopy: {
     flex: 1,
     gap: 2
+  },
+  selectionIndicator: {
+    alignItems: "center",
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    height: 24,
+    justifyContent: "center",
+    width: 24
+  },
+  selectionIndicatorSupport: {
+    backgroundColor: colors.support,
+    borderColor: colors.support
+  },
+  selectionIndicatorPrimary: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary
   },
   optionTag: {
     color: colors.primary,
@@ -399,6 +561,12 @@ const styles = StyleSheet.create({
   optionFootnote: {
     color: colors.textSubtle,
     fontSize: typography.small,
+    lineHeight: typography.lineHeight.small
+  },
+  optionBalance: {
+    color: colors.primary,
+    fontSize: typography.small,
+    fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.small
   },
   disclaimer: {

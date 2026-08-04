@@ -63,6 +63,32 @@ export default function PlanPreviewScreen() {
               Convertimos tu diagnóstico en {preview.actionCount} acciones concretas para
               comenzar este mes.
             </Text>
+            {preview.selectedReferenceLabel ? (
+              <View
+                style={[
+                  styles.selectedReference,
+                  preview.selectedStrategy === "prioritize_goal" &&
+                    styles.selectedReferenceGoal,
+                  !preview.selectedReferenceIsApplicable &&
+                    styles.selectedReferenceUnavailable
+                ]}
+              >
+                <Text style={styles.selectedReferenceLabel}>
+                  {preview.selectedReferenceIsApplicable
+                    ? "REFERENCIA ELEGIDA"
+                    : "REFERENCIA ANTERIOR"}
+                </Text>
+                <Text style={styles.selectedReferenceText}>
+                  {preview.selectedReferenceLabel}
+                </Text>
+                {!preview.selectedReferenceIsApplicable ? (
+                  <Text style={styles.selectedReferenceNotice}>
+                    Ya no puede aplicarse con tus datos actuales; esta vista usa la
+                    recomendación automática.
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.planCard}>
@@ -253,6 +279,42 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.body,
     lineHeight: typography.lineHeight.body
+  },
+  selectedReference: {
+    alignSelf: "stretch",
+    backgroundColor: colors.surface,
+    borderColor: colors.supportBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: 2,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  selectedReferenceGoal: {
+    borderColor: colors.primaryBorder
+  },
+  selectedReferenceUnavailable: {
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA"
+  },
+  selectedReferenceLabel: {
+    color: colors.textSubtle,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    letterSpacing: 0.5,
+    lineHeight: typography.lineHeight.small
+  },
+  selectedReferenceText: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  selectedReferenceNotice: {
+    color: "#92400E",
+    fontSize: typography.small,
+    lineHeight: typography.lineHeight.small
   },
   planCard: {
     ...shadows.card,

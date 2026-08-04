@@ -63,6 +63,40 @@ describe("onboarding completion", () => {
   });
 });
 
+describe("simulation plan preference normalization", () => {
+  it("preserves a valid strategy inside the onboarding JSON", () => {
+    const normalized = normalizeOnboardingData({
+      ...makeOnboarding(),
+      simulationPlanPreference: {
+        strategy: "prioritize_goal",
+        goalId: " goal-1 ",
+        protectedMarginMode: "custom",
+        customProtectedMargin: 320_000,
+        selectedAt: "2026-08-04T12:00:00.000Z"
+      }
+    });
+
+    expect(normalized.simulationPlanPreference).toEqual({
+      strategy: "prioritize_goal",
+      goalId: "goal-1",
+      protectedMarginMode: "custom",
+      customProtectedMargin: 320_000,
+      selectedAt: "2026-08-04T12:00:00.000Z"
+    });
+  });
+
+  it("discards malformed strategies instead of applying an unknown plan", () => {
+    const normalized = normalizeOnboardingData({
+      ...makeOnboarding(),
+      simulationPlanPreference: {
+        strategy: "invented_strategy"
+      } as never
+    });
+
+    expect(normalized.simulationPlanPreference).toBeNull();
+  });
+});
+
 describe("debt normalization", () => {
   it("preserves a valid annual interest rate and rejects invalid percentages", () => {
     const normalized = normalizeDebtRecords([

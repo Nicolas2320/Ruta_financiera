@@ -85,4 +85,33 @@ describe("getPlanPreviewData", () => {
 
     expect(preview.contributionLabel).toBe("Por definir");
   });
+
+  it("uses the reference explicitly selected in simulation", () => {
+    const preview = getPlanPreviewData(
+      makeOnboarding({
+        debtPaymentShare: "No pago deudas",
+        debtSituation: "No tengo deudas",
+        goals: [makeGoal({ title: "Especialización" })],
+        simulationPlanPreference: {
+          strategy: "prioritize_goal",
+          goalId: "goal-1",
+          protectedMarginMode: "automatic",
+          customProtectedMargin: null,
+          selectedAt: "2026-08-04T12:00:00.000Z"
+        }
+      }),
+      {
+        currentSavings: 0,
+        monthlyExpenses: 2_000_000,
+        monthlyIncome: 4_000_000,
+        smallExpenses: 200_000
+      }
+    );
+
+    expect(preview.selectedStrategy).toBe("prioritize_goal");
+    expect(preview.selectedReferenceLabel).toBe("Priorizar Especialización");
+    expect(preview.focusTitle).toBe("Meta del mes: Especialización");
+    expect(preview.contributionLabel).toBe("$1.620.000 aprox.");
+    expect(preview.contributionPurpose).toContain("Especialización");
+  });
 });

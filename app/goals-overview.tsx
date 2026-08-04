@@ -87,6 +87,10 @@ import {
   getMonthlyPlanProgressKey,
   type MonthlyGoalContext
 } from "../utils/monthlyPlan";
+import {
+  getPlanPreferenceGoalBudget,
+  resolvePlanPreference
+} from "../utils/planPreference";
 
 type Tone = "primary" | "support" | "warning" | "danger" | "neutral" | "purple";
 
@@ -1508,14 +1512,37 @@ export default function GoalsOverviewScreen() {
   const [budgetInput, setBudgetInput] = useState(
     getCurrencyInputValue(onboarding.goalMonthlyBudget)
   );
+  const planPreference = useMemo(
+    () => resolvePlanPreference({ exactValues, onboarding }),
+    [exactValues, onboarding]
+  );
+  const preferredGoalId =
+    planPreference.hasExplicitPreference &&
+    planPreference.isApplicable &&
+    planPreference.strategy === "prioritize_goal"
+      ? planPreference.goalId
+      : null;
+  const preferredPlanPriorityKey =
+    planPreference.hasExplicitPreference && planPreference.isApplicable
+      ? planPreference.priorityKey
+      : null;
   const goalPlan = useMemo(
-    () => getGoalPlanFromOnboarding(onboarding, metrics.snapshot.cashflow.suggestedMonthlyContribution, exactValues),
-    [exactValues, metrics.snapshot.cashflow.suggestedMonthlyContribution, onboarding]
+    () => getGoalPlanFromOnboarding(
+      onboarding,
+      getPlanPreferenceGoalBudget({
+        fallbackMonthlyBudget: metrics.snapshot.cashflow.suggestedMonthlyContribution,
+        preference: planPreference
+      }),
+      exactValues,
+      { preferredGoalId }
+    ),
+    [exactValues, metrics.snapshot.cashflow.suggestedMonthlyContribution, onboarding, planPreference, preferredGoalId]
   );
   const hasManualAdjustments = goalPlan.allocations.some(
     (allocation) => allocation.contributionMode === "manual"
   );
   const primaryGoalAllocation =
+    goalPlan.allocations.find((allocation) => allocation.goal.id === preferredGoalId) ??
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
     null;
@@ -1533,18 +1560,19 @@ export default function GoalsOverviewScreen() {
     ]
   );
   const suggestedActions = useMemo(
-    () => getMonthlyActions(data, metrics, undefined, monthlyGoalContext),
-    [data, metrics, monthlyGoalContext]
+    () => getMonthlyActions(data, metrics, preferredPlanPriorityKey ?? undefined, monthlyGoalContext),
+    [data, metrics, monthlyGoalContext, preferredPlanPriorityKey]
   );
   const suggestedPlanProgressKey = useMemo(
-    () => getMonthlyPlanProgressKey(metrics, suggestedActions),
-    [metrics, suggestedActions]
+    () => getMonthlyPlanProgressKey(metrics, suggestedActions, preferredPlanPriorityKey ?? undefined),
+    [metrics, preferredPlanPriorityKey, suggestedActions]
   );
   const activePlanProgressKey = useMemo(
     () => getActiveMonthlyPlanProgressKey(completedActions, suggestedPlanProgressKey),
     [completedActions, suggestedPlanProgressKey]
   );
-  const activePlanPriorityKey = getMonthlyPlanPriorityKey(activePlanProgressKey);
+  const activePlanPriorityKey =
+    preferredPlanPriorityKey ?? getMonthlyPlanPriorityKey(activePlanProgressKey);
   const monthlyActions = useMemo(
     () => getMonthlyActions(data, metrics, activePlanPriorityKey ?? undefined, monthlyGoalContext),
     [activePlanPriorityKey, data, metrics, monthlyGoalContext]
@@ -1601,17 +1629,21 @@ export default function GoalsOverviewScreen() {
     totalInvestedInGoals > 0 ? formatCOP(totalInvestedInGoals) : "$0";
   const monthlyMargin = metrics.snapshot.cashflow.monthlyMargin;
   const currentSavingsForEmergency = metrics.snapshot.values.currentSavings;
+  const selectedReferenceMonthlyBudget = getPlanPreferenceGoalBudget({
+    fallbackMonthlyBudget: metrics.snapshot.cashflow.suggestedMonthlyContribution,
+    preference: planPreference
+  });
   const budgetLabel =
     goalPlan.monthlyGoalBudget > 0
       ? `${formatCOP(goalPlan.monthlyGoalBudget)} aprox.`
       : "Por definir";
   const budgetMarginLabel = getBudgetMarginShortLabel(goalPlan.monthlyGoalBudget, monthlyMargin);
   const recommendedBudgetLabel =
-    metrics.snapshot.cashflow.suggestedMonthlyContribution > 0
-      ? `${formatCOP(metrics.snapshot.cashflow.suggestedMonthlyContribution)} aprox.`
+    selectedReferenceMonthlyBudget > 0
+      ? `${formatCOP(selectedReferenceMonthlyBudget)} aprox.`
       : "Por definir";
   const recommendedBudgetMarginLabel = getBudgetMarginShortLabel(
-    metrics.snapshot.cashflow.suggestedMonthlyContribution,
+    selectedReferenceMonthlyBudget,
     monthlyMargin
   );
   const recommendedBudgetDetailLabel = recommendedBudgetMarginLabel
@@ -1631,6 +1663,12 @@ export default function GoalsOverviewScreen() {
     : goalPlan.remainingBudget > 0
       ? `${formatCOP(goalPlan.remainingBudget)} libres`
       : "Total asignado";
+  const planReferenceOverrideNote =
+    goalPlan.monthlyGoalBudgetMode === "manual"
+      ? `Tu bolsa manual de ${formatCOP(goalPlan.monthlyGoalBudget)} tiene prioridad sobre esta referencia.`
+      : hasManualAdjustments
+        ? "Los aportes manuales definidos dentro de tus metas tienen prioridad sobre esta referencia."
+        : null;
 
   useEffect(() => {
     setBudgetInput(getCurrencyInputValue(onboarding.goalMonthlyBudget));
@@ -1913,6 +1951,35 @@ export default function GoalsOverviewScreen() {
             </View>
           ) : null}
 
+          {planPreference.hasExplicitPreference ? (
+            <View
+              style={[
+                styles.planReferenceCard,
+                !planPreference.isApplicable && styles.planReferenceCardWarning
+              ]}
+            >
+              <View style={styles.planReferenceIcon}>
+                <Sparkles color={colors.primary} size={20} strokeWidth={2.5} />
+              </View>
+              <View style={styles.planReferenceCopy}>
+                <Text style={styles.planReferenceKicker}>
+                  REFERENCIA ELEGIDA EN SIMULACIÓN
+                </Text>
+                <Text style={styles.planReferenceTitle}>{planPreference.label}</Text>
+                <Text style={styles.planReferenceText}>
+                  {planPreference.isApplicable
+                    ? `${formatCOP(planPreference.monthlyReference)} al mes como referencia recalculada.`
+                    : "Esta elección ya no puede aplicarse con los datos actuales; usamos la recomendación automática."}
+                </Text>
+                {planReferenceOverrideNote ? (
+                  <Text style={styles.planReferenceOverride}>
+                    {planReferenceOverrideNote}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+
           <View
             style={[
               styles.budgetCard,
@@ -1955,11 +2022,13 @@ export default function GoalsOverviewScreen() {
                       }
                     ]}
                     calculationTitle="Cómo se reparte tu bolsa"
-                    definition="La bolsa para metas es el presupuesto mensual que puedes distribuir entre una o varias metas. Sale de tu margen mensual recomendado o del monto manual que definas."
+                    definition="La bolsa para metas es el presupuesto mensual que puedes distribuir entre una o varias metas. Sale de la referencia activa de tu plan o del monto manual que definas."
                     estimateLabel={
                       goalPlan.monthlyGoalBudgetMode === "manual"
                         ? "Bolsa definida por ti"
-                        : "Bolsa recomendada desde tu margen"
+                        : planPreference.hasExplicitPreference && planPreference.isApplicable
+                          ? "Referencia elegida en simulación"
+                          : "Bolsa recomendada desde tu margen"
                     }
                     guidanceMode={guidanceMode}
                     plainLanguage={
@@ -2037,7 +2106,9 @@ export default function GoalsOverviewScreen() {
                 <Text style={[styles.helperText, goalPlan.isOverBudget && styles.warningText]}>
                   {goalPlan.isOverBudget
                     ? "Tus aportes manuales superan la bolsa sugerida. Puedes reducir alguna meta o volver a la recomendacion."
-                    : "La bolsa se calcula desde tu margen mensual sugerido. Puedes ajustar aportes sin cambiar tus respuestas financieras."}
+                    : planPreference.hasExplicitPreference && planPreference.isApplicable
+                      ? "La bolsa parte de la referencia que elegiste en Simulación. Puedes ajustar aportes sin cambiar tus respuestas financieras."
+                      : "La bolsa se calcula desde tu margen mensual sugerido. Puedes ajustar aportes sin cambiar tus respuestas financieras."}
                 </Text>
               </View>
               <Pressable
@@ -2383,6 +2454,58 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
+  },
+  planReferenceCard: {
+    alignItems: "flex-start",
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  planReferenceCardWarning: {
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA"
+  },
+  planReferenceIcon: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    height: 42,
+    justifyContent: "center",
+    width: 42
+  },
+  planReferenceCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0
+  },
+  planReferenceKicker: {
+    color: colors.primary,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    letterSpacing: 0.5,
+    lineHeight: typography.lineHeight.small
+  },
+  planReferenceTitle: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  planReferenceText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
+  },
+  planReferenceOverride: {
+    color: "#B45309",
+    fontSize: typography.small,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.small,
+    marginTop: spacing.xs
   },
   goalOptionSlider: {
     gap: spacing.sm,

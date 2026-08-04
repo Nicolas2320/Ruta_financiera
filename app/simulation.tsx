@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -30,6 +30,7 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import type { SimulationPlanStrategy } from "../types/financial";
 import {
   buildDistributionScenarios,
   calculateProtectedMargin,
@@ -274,10 +275,12 @@ export default function SimulationScreen() {
   const isFlowMode = source === "flow";
   const navigate = (route: Route) => router.push(route);
   const { session } = useAuth();
-  const { exactValues, onboarding } = useOnboarding();
+  const { exactValues, onboarding, updateOnboarding } = useOnboarding();
   const [protectedMarginMode, setProtectedMarginMode] =
     useState<ProtectedMarginMode>("automatic");
   const [customProtectedMarginInput, setCustomProtectedMarginInput] = useState("");
+  const [selectedPlanStrategy, setSelectedPlanStrategy] =
+    useState<SimulationPlanStrategy>("diagnosis_recommended");
   const [expandedDistributionId, setExpandedDistributionId] =
     useState<string>("current_reference");
   const [splitDebtPercent, setSplitDebtPercent] = useState(50);
@@ -355,6 +358,12 @@ export default function SimulationScreen() {
     : surplusBeforeProtection === null || protectedAmount === null
       ? null
       : Math.max(0, surplusBeforeProtection - protectedAmount);
+  const canSelectPreliminaryGoal = Boolean(
+    selectedProjectionGoal &&
+      distributableAmount !== null &&
+      distributableAmount > 0 &&
+      simulationExperience.planningMonthlyMargin !== null
+  );
   const monthlyOperatingCosts = simulationExperience.monthlyOperatingCosts;
   const cashflowIssueRoute =
     projectionInput.issues.find(
@@ -367,6 +376,54 @@ export default function SimulationScreen() {
     }
 
     setProtectedMarginMode(mode);
+  };
+
+  useEffect(() => {
+    const preference = onboarding.simulationPlanPreference;
+
+    if (!preference) {
+      return;
+    }
+
+    setProtectedMarginMode(preference.protectedMarginMode);
+    setCustomProtectedMarginInput(
+      preference.customProtectedMargin === null
+        ? ""
+        : formatCOP(preference.customProtectedMargin)
+    );
+    setSelectedPlanStrategy(
+      preference.strategy === "prioritize_goal" && preference.goalId !== selectedGoalId
+        ? "diagnosis_recommended"
+        : preference.strategy
+    );
+  }, [onboarding.simulationPlanPreference?.selectedAt, selectedGoalId]);
+
+  useEffect(() => {
+    if (selectedPlanStrategy === "prioritize_goal" && !canSelectPreliminaryGoal) {
+      setSelectedPlanStrategy("diagnosis_recommended");
+    }
+  }, [canSelectPreliminaryGoal, selectedPlanStrategy]);
+
+  const handleContinue = () => {
+    if (!isDetailedDebtMode) {
+      const strategy =
+        selectedPlanStrategy === "prioritize_goal" && canSelectPreliminaryGoal
+          ? "prioritize_goal"
+          : "diagnosis_recommended";
+
+      updateOnboarding({
+        simulationPlanPreference: {
+          strategy,
+          goalId: strategy === "prioritize_goal" ? selectedGoalId : null,
+          protectedMarginMode,
+          customProtectedMargin:
+            protectedMarginMode === "custom" ? customProtectedMargin : null,
+          selectedAt: new Date().toISOString()
+        }
+      });
+    }
+
+    session ? router.push("/action-plan") : router.push("/plan-preview");
   };
 
   const handleCustomProtectedMarginChange = (value: string) => {
@@ -599,9 +656,12 @@ export default function SimulationScreen() {
               <PreliminarySimulationComparison
                 asOfDate={projectionInput.asOfDate}
                 distributableAmount={distributableAmount}
+                emergencyCoverageMonths={snapshot.emergencyFund.coverageMonths}
                 experience={simulationExperience}
                 goal={selectedProjectionGoal}
+                onSelect={setSelectedPlanStrategy}
                 priority={snapshot.priority}
+                selectedStrategy={selectedPlanStrategy}
               />
             </SectionCard>
           )}
@@ -634,19 +694,19 @@ export default function SimulationScreen() {
                 session ? "Ir al plan mensual" : "Ver vista previa de mi plan mensual"
               }
               iconPosition="right"
-              onPress={() =>
-                session
-                  ? router.push("/action-plan")
-                  : router.push("/plan-preview")
-              }
+              onPress={handleContinue}
               title={
                 isDetailedDebtMode
                   ? session
                     ? "Plan mensual"
                     : "Ver cómo sería mi plan"
                   : session
-                    ? "Ver plan recomendado"
-                    : "Ver vista previa del plan recomendado"
+                    ? selectedPlanStrategy === "prioritize_goal"
+                      ? "Continuar priorizando mi meta"
+                      : "Continuar con la recomendación"
+                    : selectedPlanStrategy === "prioritize_goal"
+                      ? "Ver plan priorizando mi meta"
+                      : "Ver vista previa del plan recomendado"
               }
             />
             <PrimaryButton

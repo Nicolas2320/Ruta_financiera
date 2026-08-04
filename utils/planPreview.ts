@@ -8,7 +8,7 @@ import {
   getMonthlyPlanData,
   getMonthlyPlanMetrics
 } from "./monthlyPlan";
-import { buildSimulationExperience } from "./simulationExperience";
+import { resolvePlanPreference } from "./planPreference";
 
 export type PlanPreviewData = {
   actionCount: number;
@@ -24,6 +24,9 @@ export type PlanPreviewData = {
   marginLabel: string;
   marginTone: "support" | "warning" | "neutral";
   routeEstimateLabel: string;
+  selectedReferenceIsApplicable: boolean;
+  selectedReferenceLabel: string | null;
+  selectedStrategy: "diagnosis_recommended" | "prioritize_goal";
 };
 
 export function getPlanPreviewData(
@@ -32,13 +35,22 @@ export function getPlanPreviewData(
 ): PlanPreviewData {
   const data = getMonthlyPlanData(onboarding);
   const metrics = getMonthlyPlanMetrics(data, exactValues);
-  const simulationExperience = buildSimulationExperience({ exactValues, onboarding });
+  const planPreference = resolvePlanPreference({ exactValues, onboarding });
+  const preferredGoalId =
+    planPreference.isApplicable && planPreference.strategy === "prioritize_goal"
+      ? planPreference.goalId
+      : null;
+  const planPriorityKey = planPreference.isApplicable
+    ? planPreference.priorityKey
+    : metrics.snapshot.priority.key;
   const goalPlan = getGoalPlanFromOnboarding(
     onboarding,
-    simulationExperience.recommendedMonthlyContribution,
-    exactValues
+    planPreference.monthlyReference,
+    exactValues,
+    { preferredGoalId }
   );
   const primaryGoalAllocation =
+    goalPlan.allocations.find((allocation) => allocation.goal.id === preferredGoalId) ??
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
     null;
@@ -49,8 +61,8 @@ export function getPlanPreviewData(
     monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
     estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null
   };
-  const focus = getMonthlyFocus(data, metrics, undefined, monthlyGoalContext);
-  const actions = getMonthlyActions(data, metrics, undefined, monthlyGoalContext);
+  const focus = getMonthlyFocus(data, metrics, planPriorityKey, monthlyGoalContext);
+  const actions = getMonthlyActions(data, metrics, planPriorityKey, monthlyGoalContext);
   const firstAction = actions[0];
   const monthlyMargin = metrics.estimatedMargin;
   const suggestedContribution =
@@ -65,7 +77,7 @@ export function getPlanPreviewData(
     contributionLabel:
       suggestedContribution > 0 ? `${formatCOP(suggestedContribution)} aprox.` : "Por definir",
     contributionPurpose:
-      metrics.snapshot.priority.key === "advance_goal"
+      planPriorityKey === "advance_goal"
         ? `para avanzar hacia ${goalTitle ?? "tu meta financiera"}.`
         : `como referencia inicial para ${focus.title.toLocaleLowerCase("es-CO")}.`,
     firstActionDescription:
@@ -88,6 +100,13 @@ export function getPlanPreviewData(
         ? `${estimatedMonths} meses aprox.`
         : primaryGoalAllocation?.goal.targetMonth
           ? formatTargetMonth(primaryGoalAllocation.goal.targetMonth)
-          : "Por definir"
+          : "Por definir",
+    selectedReferenceIsApplicable: planPreference.isApplicable,
+    selectedReferenceLabel: planPreference.hasExplicitPreference
+      ? planPreference.label
+      : null,
+    selectedStrategy: planPreference.isApplicable
+      ? planPreference.strategy
+      : "diagnosis_recommended"
   };
 }
