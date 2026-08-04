@@ -5,29 +5,19 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   Baby,
-  Banknote,
   BriefcaseBusiness,
-  Calendar,
   Car,
   ChartColumnIncreasing,
-  CircleQuestionMark,
-  Clock,
   CreditCard,
-  Crown,
   Dumbbell,
   Gift,
   GraduationCap,
   HeartPulse,
-  Hourglass,
   House,
-  Landmark,
-  Layers,
-  PenLine,
   PiggyBank,
   Plane,
   Sparkles,
   Store,
-  Ticket,
   UserRound,
   Wallet
 } from "lucide-react-native";
@@ -36,7 +26,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
 import { ContextHeader } from "../components/ui/ContextHeader";
+import { ExactAmountField } from "../components/ui/ExactAmountField";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
+import { MonthYearPickerField } from "../components/ui/MonthYearPickerField";
+import { OptionalTag } from "../components/ui/OptionalTag";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
@@ -187,86 +180,18 @@ const customGoalIconOptions: VisualOption[] = [
   }
 ];
 
-const goalHorizons: VisualOption[] = [
-  {
-    title: "Menos de 6 meses",
-    icon: Clock,
-    color: colors.support,
-    backgroundColor: colors.supportSoft
-  },
-  {
-    title: "6 – 12 meses",
-    icon: Calendar,
-    color: colors.support,
-    backgroundColor: colors.supportSoft
-  },
-  {
-    title: "1 – 3 años",
-    icon: Calendar,
-    color: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  {
-    title: "3 – 5 años",
-    icon: Calendar,
-    color: "#7C3AED",
-    backgroundColor: "#F1E8FF"
-  },
-  {
-    title: "Más de 5 años",
-    icon: Hourglass,
-    color: "#F97316",
-    backgroundColor: "#FFF1E7"
-  },
-  {
-    title: "No estoy seguro",
-    icon: CircleQuestionMark,
-    color: "#94A3B8",
-    backgroundColor: "#EEF2F7"
-  }
-];
-
 const goalPriorities = ["Baja", "Media", "Alta", "Muy alta"] as const;
-const manualAmountOptionTitle = "Ingresar cifra";
+const manualAmountOptionTitle = "Escribir monto";
+const unknownGoalAmountOption = "Aún no lo sé";
 
-const goalAmountRanges: VisualOption[] = [
-  {
-    title: "Menos de $1.000.000",
-    icon: Banknote,
-    color: colors.support,
-    backgroundColor: colors.supportSoft
-  },
-  {
-    title: "$1.000.000 – $5.000.000",
-    icon: Ticket,
-    color: "#0E7490",
-    backgroundColor: "#E6F7FB"
-  },
-  {
-    title: "$5.000.000 – $20.000.000",
-    icon: Layers,
-    color: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  {
-    title: "$20.000.000 – $50.000.000",
-    icon: Landmark,
-    color: "#7C3AED",
-    backgroundColor: "#F1E8FF"
-  },
-  {
-    title: "Más de $50.000.000",
-    icon: Crown,
-    color: "#DB2777",
-    backgroundColor: "#FCE7F3"
-  },
-  {
-    title: manualAmountOptionTitle,
-    icon: PenLine,
-    color: colors.primary,
-    backgroundColor: colors.primarySoft
-  }
-];
+const goalAmountOptions = [
+  { label: "Menos de $1 millón", value: "Menos de $1.000.000" },
+  { label: "De $1 a $5 millones", value: "$1.000.000 – $5.000.000" },
+  { label: "De $5 a $20 millones", value: "$5.000.000 – $20.000.000" },
+  { label: "De $20 a $50 millones", value: "$20.000.000 – $50.000.000" },
+  { label: "Más de $50 millones", value: "Más de $50.000.000" },
+  { label: unknownGoalAmountOption, value: unknownGoalAmountOption }
+] as const;
 
 function getInitialGoalSelection(goal: FinancialGoal | null) {
   if (!goal) {
@@ -287,7 +212,11 @@ function getInitialAmountSelection(goal: FinancialGoal | null) {
     return manualAmountOptionTitle;
   }
 
-  return goal?.amountRange ?? null;
+  if (goal?.amountRange) {
+    return goal.amountRange;
+  }
+
+  return goal ? unknownGoalAmountOption : null;
 }
 
 export default function GoalsScreen() {
@@ -308,7 +237,6 @@ export default function GoalsScreen() {
   const [selectedIconKey, setSelectedIconKey] = useState<string | null>(
     initialGoal?.iconKey ?? null
   );
-  const [selectedHorizon, setSelectedHorizon] = useState<string | null>(initialGoal?.horizon ?? null);
   const [selectedPriority, setSelectedPriority] = useState<string | null>(
     initialGoal?.priority ?? null
   );
@@ -318,6 +246,7 @@ export default function GoalsScreen() {
   const [targetAmountInput, setTargetAmountInput] = useState(
     getCurrencyInputValue(initialGoal?.targetAmount)
   );
+  const [targetMonth, setTargetMonth] = useState<string | null>(initialGoal?.targetMonth ?? null);
   const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
 
   useEffect(() => {
@@ -334,10 +263,10 @@ export default function GoalsScreen() {
       storedGoal && storedGoalSelection === customGoalOption.title ? storedGoal.title : ""
     );
     setSelectedIconKey(storedGoal?.iconKey ?? null);
-    setSelectedHorizon(storedGoal?.horizon ?? null);
     setSelectedPriority(storedGoal?.priority ?? null);
     setSelectedAmountRange(getInitialAmountSelection(storedGoal));
     setTargetAmountInput(getCurrencyInputValue(storedGoal?.targetAmount));
+    setTargetMonth(storedGoal?.targetMonth ?? null);
   }, [isAddMode, onboarding, onboardingSyncStatus]);
 
   const isCustomGoal = selectedGoal === customGoalOption.title;
@@ -351,7 +280,7 @@ export default function GoalsScreen() {
     "other";
   const canContinue = Boolean(
     finalGoalTitle &&
-      selectedHorizon &&
+      targetMonth &&
       selectedPriority &&
       (!isManualAmount || (parsedTargetAmount !== null && parsedTargetAmount > 0))
   );
@@ -360,6 +289,7 @@ export default function GoalsScreen() {
     if (goal.title !== selectedGoal) {
       setSelectedAmountRange(null);
       setTargetAmountInput("");
+      setTargetMonth(null);
     }
 
     setSelectedGoal(goal.title);
@@ -370,12 +300,19 @@ export default function GoalsScreen() {
     );
   };
 
-  const handleAmountSelect = (range: VisualOption) => {
-    setSelectedAmountRange(range.title);
+  const handleAmountSelect = (range: string) => {
+    setSelectedAmountRange(range);
+    setTargetAmountInput("");
+  };
 
-    if (range.title !== manualAmountOptionTitle) {
-      setTargetAmountInput("");
+  const handleAmountModeChange = (mode: "range" | "manual") => {
+    if (mode === "manual") {
+      setSelectedAmountRange(manualAmountOptionTitle);
+      return;
     }
+
+    setSelectedAmountRange(null);
+    setTargetAmountInput("");
   };
 
   const handleTargetAmountChange = (value: string) => {
@@ -384,16 +321,19 @@ export default function GoalsScreen() {
   };
 
   const handleContinue = () => {
-    if (!canContinue || !finalGoalTitle || !selectedHorizon || !selectedPriority) {
+    if (!canContinue || !finalGoalTitle || !targetMonth || !selectedPriority) {
       return;
     }
 
     const nextGoal = createFinancialGoal({
-      amountRange: isManualAmount ? null : selectedAmountRange,
-      horizon: selectedHorizon,
+      amountRange:
+        isManualAmount || selectedAmountRange === unknownGoalAmountOption
+          ? null
+          : selectedAmountRange,
       iconKey: finalIconKey,
       isPrimary: !isAddMode,
       priority: selectedPriority,
+      targetMonth,
       targetAmount: parsedTargetAmount,
       title: finalGoalTitle
     });
@@ -550,28 +490,12 @@ export default function GoalsScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.questionTitle}>
-              ¿En cuánto tiempo te gustaría lograr o avanzar en esta meta?
-            </Text>
-            <View style={styles.horizonGrid}>
-              {goalHorizons.map((horizon) => (
-                <VisualSelectable
-                  key={horizon.title}
-                  icon={horizon.icon}
-                  iconBackground={horizon.backgroundColor}
-                  iconColor={horizon.color}
-                  onPress={() => setSelectedHorizon(horizon.title)}
-                  selected={selectedHorizon === horizon.title}
-                  style={[
-                    styles.horizonOption,
-                    isPhone && styles.goalOptionPhone,
-                    isSmallPhone && styles.optionSmallPhone
-                  ]}
-                  title={horizon.title}
-                  titleStyle={styles.compactTitle}
-                />
-              ))}
-            </View>
+            <MonthYearPickerField
+              helper="Con mes y año es suficiente para calcular cuánto tiempo tienes."
+              label="¿Para qué mes quieres alcanzar esta meta?"
+              onChange={setTargetMonth}
+              value={targetMonth}
+            />
           </View>
 
           <View style={styles.card}>
@@ -591,48 +515,71 @@ export default function GoalsScreen() {
 
           <View style={styles.card}>
             <View style={styles.questionRow}>
-              <Text style={styles.questionTitle}>¿Tienes una cifra aproximada en mente?</Text>
-              <Text style={styles.optionalText}>Opcional</Text>
+              <Text style={styles.questionTitle}>¿Cuánto quieres reunir?</Text>
+              <OptionalTag />
             </View>
-            <View style={styles.amountGrid}>
-              {goalAmountRanges.map((range) => (
-                <VisualSelectable
-                  key={range.title}
-                  icon={range.icon}
-                  iconBackground={range.backgroundColor}
-                  iconColor={range.color}
-                  onPress={() => handleAmountSelect(range)}
-                  selected={selectedAmountRange === range.title}
+
+            <View style={styles.amountModeSwitch}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: !isManualAmount }}
+                onPress={() => handleAmountModeChange("range")}
+                style={({ pressed }) => [
+                  styles.amountModeOption,
+                  !isManualAmount && styles.amountModeOptionSelected,
+                  pressed && styles.pressed
+                ]}
+              >
+                <Text
                   style={[
-                    range.title === manualAmountOptionTitle
-                      ? styles.amountOptionFeatured
-                      : styles.amountOption,
-                    isSmallPhone && styles.optionSmallPhone
+                    styles.amountModeText,
+                    !isManualAmount && styles.amountModeTextSelected
                   ]}
-                  title={range.title}
-                  titleStyle={styles.amountTitle}
-                />
-              ))}
+                >
+                  Elegir un rango
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: isManualAmount }}
+                onPress={() => handleAmountModeChange("manual")}
+                style={({ pressed }) => [
+                  styles.amountModeOption,
+                  isManualAmount && styles.amountModeOptionSelected,
+                  pressed && styles.pressed
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.amountModeText,
+                    isManualAmount && styles.amountModeTextSelected
+                  ]}
+                >
+                  {manualAmountOptionTitle}
+                </Text>
+              </Pressable>
             </View>
 
             {isManualAmount ? (
-              <View style={styles.manualAmountBox}>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Monto objetivo</Text>
-                  <TextInput
-                    accessibilityLabel="Monto objetivo de la meta"
-                    inputMode="numeric"
-                    keyboardType="numeric"
-                    onChangeText={handleTargetAmountChange}
-                    placeholder="$0"
-                    placeholderTextColor={colors.textSubtle}
-                    returnKeyType="done"
-                    style={styles.input}
-                    value={targetAmountInput}
+              <ExactAmountField
+                accessibilityLabel="Monto que quieres reunir para la meta"
+                onChangeText={handleTargetAmountChange}
+                value={targetAmountInput}
+              />
+            ) : (
+              <View style={styles.amountGrid}>
+                {goalAmountOptions.map((option) => (
+                  <SelectableCard
+                    key={option.value}
+                    onPress={() => handleAmountSelect(option.value)}
+                    selected={selectedAmountRange === option.value}
+                    style={[styles.amountOption, isSmallPhone && styles.optionSmallPhone]}
+                    title={option.label}
+                    titleStyle={styles.amountTitle}
                   />
-                </View>
+                ))}
               </View>
-            ) : null}
+            )}
           </View>
 
           <View style={styles.actions}>
@@ -828,6 +775,18 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
   },
+  helperText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  inputErrorText: {
+    color: colors.danger,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption
+  },
   input: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -869,21 +828,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 42
   },
-  horizonGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  horizonOption: {
-    flexBasis: "30%",
-    flexGrow: 1,
-    minHeight: 98,
-    paddingHorizontal: spacing.xs
-  },
-  compactTitle: {
-    fontSize: typography.small,
-    lineHeight: typography.lineHeight.small
-  },
   priorityGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -900,41 +844,52 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm
   },
-  optionalText: {
-    color: colors.primaryDark,
-    fontSize: typography.small,
-    fontWeight: typography.weight.black,
-    letterSpacing: 0,
-    lineHeight: typography.lineHeight.small,
-    textTransform: "uppercase"
-  },
   amountGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
   },
+  amountModeSwitch: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: "#D7E7FF",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    padding: spacing.xs
+  },
+  amountModeOption: {
+    alignItems: "center",
+    borderColor: "transparent",
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: spacing.sm
+  },
+  amountModeOptionSelected: {
+    backgroundColor: colors.surface,
+    borderColor: colors.primary
+  },
+  amountModeText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption,
+    textAlign: "center"
+  },
+  amountModeTextSelected: {
+    color: colors.primary
+  },
   amountOption: {
     flexBasis: "47%",
     flexGrow: 1,
-    minHeight: 104,
-    paddingHorizontal: spacing.xs
-  },
-  amountOptionFeatured: {
-    flexBasis: "47%",
-    flexGrow: 1,
-    minHeight: 104,
-    paddingHorizontal: spacing.xs
+    minHeight: 76
   },
   amountTitle: {
-    fontSize: typography.badge,
-    lineHeight: typography.lineHeight.badge
-  },
-  manualAmountBox: {
-    backgroundColor: "#F8FAFC",
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: spacing.md
+    fontSize: typography.option,
+    lineHeight: typography.lineHeight.option
   },
   actions: {
     gap: spacing.sm,

@@ -7,7 +7,6 @@ import {
   getDebtRemainingTotal,
   getReportedDebtPaymentRatio,
   getRegisteredDebtSummary,
-  hasDebtMonthlyExpenseMismatch,
   syncDebtExpenseCategory
 } from "../utils/debtCalculations";
 import { makeDebt } from "./fixtures/financial";
@@ -83,23 +82,6 @@ describe("registered debt calculations", () => {
         Deudas: 300_000
       }
     });
-  });
-
-  it("flags registered installments that exceed an exact monthly expense total", () => {
-    expect(
-      hasDebtMonthlyExpenseMismatch({
-        isExactMonthlyExpense: true,
-        monthlyExpenses: 600_000,
-        monthlyPaymentTotal: 800_000
-      })
-    ).toBe(true);
-    expect(
-      hasDebtMonthlyExpenseMismatch({
-        isExactMonthlyExpense: false,
-        monthlyExpenses: 600_000,
-        monthlyPaymentTotal: 800_000
-      })
-    ).toBe(false);
   });
 
   it("sanitizes invalid amounts when totaling debts", () => {

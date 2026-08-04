@@ -51,6 +51,10 @@ import {
   type MonthlyGoalContext,
   type MonthlyAction
 } from "../utils/monthlyPlan";
+import {
+  getPlanPreferenceGoalBudget,
+  resolvePlanPreference
+} from "../utils/planPreference";
 
 type AssistantMessage = AssistantChatMessage & {
   id: string;
@@ -379,7 +383,9 @@ function buildAssistantFinancialContext({
     cashflow: {
       monthlyIncome: snapshot.cashflow.monthlyIncome,
       monthlyExpenses: snapshot.cashflow.monthlyExpenses,
+      monthlyDebtPayments: snapshot.cashflow.monthlyDebtPayments,
       monthlyMargin: snapshot.cashflow.monthlyMargin,
+      totalMonthlyOutflow: snapshot.cashflow.totalMonthlyOutflow,
       expensesToIncomeRatio: snapshot.cashflow.expensesToIncomeRatio,
       suggestedMonthlyContribution: snapshot.cashflow.suggestedMonthlyContribution,
       suggestedMonthlyContributionMeaning:
@@ -410,13 +416,13 @@ function buildAssistantFinancialContext({
     goal: {
       estimatedMonthsToGoal:
         primaryGoalAllocation?.estimatedMonthsToGoal ?? snapshot.goal.estimatedMonthsToGoal,
-      horizon: primaryGoalAllocation?.goal.horizon ?? onboarding.goalHorizon,
       name: primaryGoalAllocation?.goal.title ?? snapshot.goal.name,
       priority: primaryGoalAllocation?.goal.priority ?? onboarding.goalPriority,
       progressPercentage:
         primaryGoalAllocation?.progressPercentage ?? snapshot.goal.progressPercentage,
       remainingAmount: primaryGoalAllocation?.remainingAmount ?? snapshot.goal.remainingAmount,
-      targetAmount: primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount
+      targetAmount: primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount,
+      targetMonth: primaryGoalAllocation?.goal.targetMonth ?? null
     },
     goalsPlan: {
       activeGoals: goalPlan.allocations.filter(
@@ -526,12 +532,28 @@ export default function AssistantScreen() {
   const runtimeContext = useMemo<AssistantRuntimeContext>(() => {
     const data = getMonthlyPlanData(onboarding);
     const metrics = getMonthlyPlanMetrics(data, exactValues);
+    const planPreference = resolvePlanPreference({ exactValues, onboarding });
+    const preferredGoalId =
+      planPreference.hasExplicitPreference &&
+      planPreference.isApplicable &&
+      planPreference.strategy === "prioritize_goal"
+        ? planPreference.goalId
+        : null;
+    const preferredPlanPriorityKey =
+      planPreference.hasExplicitPreference && planPreference.isApplicable
+        ? planPreference.priorityKey
+        : null;
     const goalPlan = getGoalPlanFromOnboarding(
       onboarding,
-      metrics.snapshot.cashflow.suggestedMonthlyContribution,
-      exactValues
+      getPlanPreferenceGoalBudget({
+        fallbackMonthlyBudget: metrics.snapshot.cashflow.suggestedMonthlyContribution,
+        preference: planPreference
+      }),
+      exactValues,
+      { preferredGoalId }
     );
     const primaryGoalAllocation =
+      goalPlan.allocations.find((allocation) => allocation.goal.id === preferredGoalId) ??
       goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
       goalPlan.allocations[0] ??
       null;
@@ -541,8 +563,17 @@ export default function AssistantScreen() {
       estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null
     };
     const periodKey = getMonthlyPlanPeriodKey();
-    const suggestedActions = getMonthlyActions(data, metrics, undefined, monthlyGoalContext);
-    const suggestedProgressKey = getMonthlyPlanProgressKey(metrics, suggestedActions);
+    const suggestedActions = getMonthlyActions(
+      data,
+      metrics,
+      preferredPlanPriorityKey ?? undefined,
+      monthlyGoalContext
+    );
+    const suggestedProgressKey = getMonthlyPlanProgressKey(
+      metrics,
+      suggestedActions,
+      preferredPlanPriorityKey ?? undefined
+    );
     const completedActionsForPlanSelection = removeStoredGoalContributionActionsForPeriod(
       completedActions,
       periodKey
@@ -551,7 +582,8 @@ export default function AssistantScreen() {
       completedActionsForPlanSelection,
       suggestedProgressKey
     );
-    const activePlanPriorityKey = getMonthlyPlanPriorityKey(planProgressKey);
+    const activePlanPriorityKey =
+      preferredPlanPriorityKey ?? getMonthlyPlanPriorityKey(planProgressKey);
     const actions = getMonthlyActions(
       data,
       metrics,
@@ -590,7 +622,10 @@ export default function AssistantScreen() {
       planProgressKey: activePlanProgressKey,
       progressPercentage,
       realContributionThisMonth: monthlyPlanProgress.impactSummary.realContributionTotal,
-      referenceMonthlyContribution: metrics.balancedScenarioAmount,
+      referenceMonthlyContribution:
+        activePlanPriorityKey === "advance_goal"
+          ? primaryGoalAllocation?.monthlyContribution ?? 0
+          : metrics.balancedScenarioAmount,
       snapshot: metrics.snapshot
     });
 

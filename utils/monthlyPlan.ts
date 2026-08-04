@@ -37,7 +37,6 @@ export type MonthlyPlanData = {
   debts: DebtRecord[];
   investmentSituation: string | null;
   financialGoal: string | null;
-  goalHorizon: string | null;
   goalPriority: string | null;
   goalAmountRange: string | null;
 };
@@ -339,7 +338,6 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
     debts = [],
     investmentSituation = null,
     financialGoal = null,
-    goalHorizon = null,
     goalPriority = null,
     goalAmountRange = null
   } = data;
@@ -366,7 +364,6 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
     debts: Array.isArray(debts) ? debts : [],
     investmentSituation,
     financialGoal,
-    goalHorizon,
     goalPriority,
     goalAmountRange
   };

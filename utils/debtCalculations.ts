@@ -10,6 +10,12 @@ export type DebtLevel = "none" | "low" | "medium" | "high" | "unknown";
 export type DebtDataSource = "registered" | "category" | "reported" | "none";
 export type NewDebtViability = "possible" | "tight" | "risky" | "missing";
 
+export type ReportedDebtPaymentRatioRange = {
+  kind: "bounded" | "minimum_only" | "none" | "unknown";
+  maximum: number | null;
+  minimum: number | null;
+};
+
 export const DEBT_EXPENSE_CATEGORY = "Deudas";
 export const RENT_EXPENSE_CATEGORY = "Arriendo";
 
@@ -140,6 +146,42 @@ export function getReportedDebtPaymentRatio(debtPaymentShare: string | null | un
   return null;
 }
 
+export function getReportedDebtPaymentRatioRange(
+  debtPaymentShare: string | null | undefined
+): ReportedDebtPaymentRatioRange {
+  const normalizedShare = normalizeText(debtPaymentShare ?? "");
+
+  if (
+    !normalizedShare ||
+    normalizedShare.includes("no estoy seguro") ||
+    normalizedShare.includes("prefiero")
+  ) {
+    return { kind: "unknown", maximum: null, minimum: null };
+  }
+
+  if (normalizedShare.includes("no pago")) {
+    return { kind: "none", maximum: 0, minimum: 0 };
+  }
+
+  if (normalizedShare.includes("menos") && normalizedShare.includes("10")) {
+    return { kind: "bounded", maximum: 0.1, minimum: 0 };
+  }
+
+  if (normalizedShare.includes("10") && normalizedShare.includes("20")) {
+    return { kind: "bounded", maximum: 0.2, minimum: 0.1 };
+  }
+
+  if (normalizedShare.includes("20") && normalizedShare.includes("40")) {
+    return { kind: "bounded", maximum: 0.4, minimum: 0.2 };
+  }
+
+  if (normalizedShare.includes("mas") && normalizedShare.includes("40")) {
+    return { kind: "minimum_only", maximum: null, minimum: 0.4 };
+  }
+
+  return { kind: "unknown", maximum: null, minimum: null };
+}
+
 function getStatusLevel(debts: DebtRecord[]): DebtLevel {
   if (debts.some((debt) => debt.status === "overdue")) {
     return "high";
@@ -193,26 +235,6 @@ export function getDebtToIncomeRatio(
   }
 
   return monthlyPaymentTotal / monthlyIncome;
-}
-
-export function hasDebtMonthlyExpenseMismatch({
-  isExactMonthlyExpense,
-  monthlyExpenses,
-  monthlyPaymentTotal
-}: {
-  isExactMonthlyExpense: boolean;
-  monthlyExpenses: number | null | undefined;
-  monthlyPaymentTotal: number;
-}) {
-  const normalizedMonthlyExpenses = safeNumber(monthlyExpenses);
-  const normalizedMonthlyPaymentTotal = safeNumber(monthlyPaymentTotal);
-
-  return Boolean(
-    isExactMonthlyExpense &&
-      normalizedMonthlyExpenses !== null &&
-      normalizedMonthlyPaymentTotal !== null &&
-      normalizedMonthlyPaymentTotal > normalizedMonthlyExpenses
-  );
 }
 
 export function getDebtCategoryMonthlyPaymentTotal(
@@ -428,7 +450,7 @@ export function evaluateNewDebt({
       viability: "missing",
       label: "Faltan ingresos y gastos",
       message:
-        "Completa ingreso y gasto mensual para calcular el margen que quedaría después de esta cuota.",
+        "Completa ingreso y gastos principales para calcular el margen que quedaría después de esta cuota.",
       marginAfterNewPayment,
       totalDebtPayment,
       totalDebtToIncomeRatio

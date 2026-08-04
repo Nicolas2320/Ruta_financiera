@@ -36,6 +36,7 @@ import { getNextPlanAdjustmentHint } from "../utils/actionProgressImpact";
 import { getDebtRatioLabel } from "../utils/debtCalculations";
 import { formatCOP, formatSignedCOP } from "../utils/financialRanges";
 import { getGoalPlanFromOnboarding, type GoalAllocation } from "../utils/goalPlanning";
+import { formatTargetMonth } from "../utils/monthYear";
 import {
   getEffectiveMonthlyPlanProgress,
   removeStoredGoalContributionActionsForPeriod
@@ -51,6 +52,10 @@ import {
   getMonthlyPlanProgressKey,
   type MonthlyGoalContext
 } from "../utils/monthlyPlan";
+import {
+  getPlanPreferenceGoalBudget,
+  resolvePlanPreference
+} from "../utils/planPreference";
 
 type IconProps = {
   color?: string;
@@ -656,11 +661,34 @@ export default function DashboardScreen() {
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const snapshot = metrics.snapshot;
   const periodKey = getMonthlyPlanPeriodKey();
+  const planPreference = useMemo(
+    () => resolvePlanPreference({ exactValues, onboarding }),
+    [exactValues, onboarding]
+  );
+  const preferredGoalId =
+    planPreference.hasExplicitPreference &&
+    planPreference.isApplicable &&
+    planPreference.strategy === "prioritize_goal"
+      ? planPreference.goalId
+      : null;
+  const preferredPlanPriorityKey =
+    planPreference.hasExplicitPreference && planPreference.isApplicable
+      ? planPreference.priorityKey
+      : null;
   const goalPlan = useMemo(
-    () => getGoalPlanFromOnboarding(onboarding, snapshot.cashflow.suggestedMonthlyContribution, exactValues),
-    [exactValues, onboarding, snapshot.cashflow.suggestedMonthlyContribution]
+    () => getGoalPlanFromOnboarding(
+      onboarding,
+      getPlanPreferenceGoalBudget({
+        fallbackMonthlyBudget: snapshot.cashflow.suggestedMonthlyContribution,
+        preference: planPreference
+      }),
+      exactValues,
+      { preferredGoalId }
+    ),
+    [exactValues, onboarding, planPreference, preferredGoalId, snapshot.cashflow.suggestedMonthlyContribution]
   );
   const primaryGoalAllocation =
+    goalPlan.allocations.find((allocation) => allocation.goal.id === preferredGoalId) ??
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
     null;
@@ -679,12 +707,12 @@ export default function DashboardScreen() {
     ]
   );
   const suggestedActions = useMemo(
-    () => getMonthlyActions(data, metrics, undefined, monthlyGoalContext),
-    [data, metrics, monthlyGoalContext]
+    () => getMonthlyActions(data, metrics, preferredPlanPriorityKey ?? undefined, monthlyGoalContext),
+    [data, metrics, monthlyGoalContext, preferredPlanPriorityKey]
   );
   const suggestedPlanProgressKey = useMemo(
-    () => getMonthlyPlanProgressKey(metrics, suggestedActions),
-    [metrics, suggestedActions]
+    () => getMonthlyPlanProgressKey(metrics, suggestedActions, preferredPlanPriorityKey ?? undefined),
+    [metrics, preferredPlanPriorityKey, suggestedActions]
   );
   const completedActionsForPlanSelection = useMemo(
     () => removeStoredGoalContributionActionsForPeriod(completedActions, periodKey),
@@ -694,7 +722,8 @@ export default function DashboardScreen() {
     () => getActiveMonthlyPlanProgressKey(completedActionsForPlanSelection, suggestedPlanProgressKey),
     [completedActionsForPlanSelection, suggestedPlanProgressKey]
   );
-  const activePlanPriorityKey = getMonthlyPlanPriorityKey(activePlanProgressKey);
+  const activePlanPriorityKey =
+    preferredPlanPriorityKey ?? getMonthlyPlanPriorityKey(activePlanProgressKey);
   const actions = useMemo(
     () => getMonthlyActions(data, metrics, activePlanPriorityKey ?? undefined, monthlyGoalContext),
     [activePlanPriorityKey, data, metrics, monthlyGoalContext]
@@ -730,15 +759,18 @@ export default function DashboardScreen() {
   const exactMonthlyExpenses =
     snapshot.sourceMap.monthlyExpenses === "exact" ? snapshot.cashflow.monthlyExpenses : null;
   const currentSavingsIsExact = snapshot.sourceMap.currentSavings === "exact";
-  const hasExactMonthlyAmounts =
+  const hasExactCashflowAmounts =
     snapshot.sourceMap.monthlyIncome === "exact" &&
-    snapshot.sourceMap.monthlyExpenses === "exact";
+    snapshot.sourceMap.monthlyExpenses === "exact" &&
+    (snapshot.sourceMap.smallExpenses === "exact" ||
+      snapshot.sourceMap.smallExpenses === "reported_none") &&
+    snapshot.debt.source !== "reported";
   const emergencyTone = getEmergencyTone(snapshot.emergencyFund.status);
   const emergencyStatus = {
     state: snapshot.emergencyFund.label,
     text:
       snapshot.emergencyFund.coverageMonths !== null
-        ? `Con estos datos, tu ahorro cubre cerca de ${getRoundedMonthsLabel(snapshot.emergencyFund.coverageMonths)} meses de gasto mensual.`
+        ? `Con estos datos, tu ahorro cubre cerca de ${getRoundedMonthsLabel(snapshot.emergencyFund.coverageMonths)} meses de gastos principales.`
         : snapshot.emergencyFund.label,
     tone: emergencyTone
   };
@@ -765,6 +797,9 @@ export default function DashboardScreen() {
     metrics.expensePercentage !== null && metrics.expensePercentage > 100;
   const categoryLabels = data.smallExpenseCategories.slice(0, 4);
   const primaryGoalTargetAmount = primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount;
+  const primaryGoalTargetMonth = primaryGoalAllocation?.goal.targetMonth
+    ? formatTargetMonth(primaryGoalAllocation.goal.targetMonth)
+    : "No definido";
   const goalDetailText =
     primaryGoalAllocation && isCompletedGoalAllocation(primaryGoalAllocation)
       ? primaryGoalTargetAmount !== null
@@ -773,8 +808,8 @@ export default function DashboardScreen() {
       : primaryGoalTargetAmount !== null
       ? primaryGoalProgressPercentage !== null
         ? `Objetivo: ${formatCOP(primaryGoalTargetAmount)}. Base actual frente a tu objetivo: ${primaryGoalProgressPercentage}% aprox.`
-        : `Objetivo: ${formatCOP(primaryGoalTargetAmount)}. Horizonte: ${getDefinedLabel(data.goalHorizon)}.`
-      : `Horizonte: ${getDefinedLabel(data.goalHorizon)}. Cifra aproximada: ${getDefinedLabel(data.goalAmountRange, "No definida")}.`;
+        : `Objetivo: ${formatCOP(primaryGoalTargetAmount)}. Mes objetivo: ${primaryGoalTargetMonth}.`
+      : `Mes objetivo: ${primaryGoalTargetMonth}. Cifra aproximada: ${getDefinedLabel(data.goalAmountRange, "No definida")}.`;
   const activeGoalsLabel = `${activeGoalsCount} ${activeGoalsCount === 1 ? "activa" : "activas"}`;
   const completedGoalsLabel = `${completedGoalsCount} ${completedGoalsCount === 1 ? "completada" : "completadas"}`;
   const goalsValue =
@@ -901,7 +936,7 @@ export default function DashboardScreen() {
                 />
                 <MetricCard
                   icon={<ArrowDownCircle color="#C2410C" size={23} strokeWidth={2.4} />}
-                  label="Gasto mensual"
+                  label="Gastos principales"
                   tone="danger"
                   value={getAmountLabel(metrics.expenseMidpoint, exactMonthlyExpenses !== null)}
                 />
@@ -909,21 +944,33 @@ export default function DashboardScreen() {
                   icon={<TrendingUp color={colors.support} size={23} strokeWidth={2.4} />}
                   label="Margen mensual"
                   tone={metrics.estimatedMargin !== null && metrics.estimatedMargin > 0 ? "support" : "warning"}
-                  value={getMarginLabel(metrics.estimatedMargin, hasExactMonthlyAmounts)}
+                  value={getMarginLabel(metrics.estimatedMargin, hasExactCashflowAmounts)}
                 />
                 <MetricCard
-                  icon={<PieChart color={colors.primary} size={23} strokeWidth={2.4} />}
-                  label="Gastos / ingresos"
-                  tone={metrics.expensePercentage !== null && metrics.expensePercentage >= 85 ? "warning" : "primary"}
-                  value={getExpensePercentageLabel(metrics.expensePercentage, hasExactMonthlyAmounts)}
+                  icon={
+                    <CreditCard
+                      color={getToneColors(dashboardDebtTone).text}
+                      size={23}
+                      strokeWidth={2.4}
+                    />
+                  }
+                  label="Cuotas de deuda"
+                  tone={dashboardDebtTone}
+                  value={
+                    snapshot.cashflow.monthlyDebtPayments > 0
+                      ? `${formatCOP(snapshot.cashflow.monthlyDebtPayments)}${
+                          snapshot.debt.source === "reported" ? " aprox." : ""
+                        }`
+                      : "$0"
+                  }
                 />
               </View>
 
               <View style={styles.comparisonBox}>
                 <View style={styles.comparisonHeader}>
-                  <Text style={styles.comparisonTitle}>Comparación gastos vs ingresos</Text>
+                  <Text style={styles.comparisonTitle}>Salidas mensuales vs ingresos</Text>
                   <Text style={styles.comparisonValue}>
-                    {getExpensePercentageLabel(metrics.expensePercentage, hasExactMonthlyAmounts)}
+                    {getExpensePercentageLabel(metrics.expensePercentage, hasExactCashflowAmounts)}
                   </Text>
                 </View>
                 <View style={styles.progressTrack}>

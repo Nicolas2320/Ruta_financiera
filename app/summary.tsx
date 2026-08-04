@@ -37,6 +37,7 @@ import {
   getMonthlyIncomeDisplay,
   getSmallExpensesDisplay
 } from "../utils/financialRanges";
+import { formatTargetMonth } from "../utils/monthYear";
 
 type SummaryField = {
   label: string;
@@ -205,6 +206,7 @@ export default function SummaryScreen() {
   const isEditMode = mode === "edit";
   const financialProfile = { onboarding, exactValues };
   const goals = getOnboardingGoals(onboarding);
+  const primaryGoal = goals.find((goal) => goal.isPrimary) ?? goals[0] ?? null;
   const incomeDisplay = getMonthlyIncomeDisplay(financialProfile);
   const expensesDisplay = getMonthlyExpensesDisplay(financialProfile);
   const savingsDisplay = getCurrentSavingsDisplay(financialProfile);
@@ -385,7 +387,12 @@ export default function SummaryScreen() {
                   value: goals.length > 0 ? goals.length.toString() : null,
                   optional: true
                 },
-                { label: "Horizonte", value: onboarding.goalHorizon },
+                {
+                  label: "Mes objetivo",
+                  value: primaryGoal?.targetMonth
+                    ? formatTargetMonth(primaryGoal.targetMonth)
+                    : null
+                },
                 { label: "Importancia", value: onboarding.goalPriority },
                 {
                   label:

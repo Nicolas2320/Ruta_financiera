@@ -30,7 +30,9 @@ export type AssistantFinancialContext = {
   cashflow: {
     monthlyIncome: number | null;
     monthlyExpenses: number | null;
+    monthlyDebtPayments: number;
     monthlyMargin: number | null;
+    totalMonthlyOutflow: number | null;
     expensesToIncomeRatio: number | null;
     suggestedMonthlyContribution: number;
     suggestedMonthlyContributionMeaning?: string;
@@ -59,12 +61,12 @@ export type AssistantFinancialContext = {
   };
   goal: {
     estimatedMonthsToGoal: number | null;
-    horizon: string | null;
     name: string | null;
     priority: string | null;
     progressPercentage: number | null;
     remainingAmount: number | null;
     targetAmount: number | null;
+    targetMonth: string | null;
   };
   goalsPlan?: {
     activeGoals: number;

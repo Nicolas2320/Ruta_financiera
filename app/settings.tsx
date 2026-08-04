@@ -169,7 +169,7 @@ export default function SettingsScreen() {
             <View style={styles.settingsLinkBody}>
               <Text style={styles.settingsLinkTitle}>Mejorar mi plan financiero</Text>
               <Text style={styles.settingsLinkText}>
-                Edita ingreso, gasto mensual, ahorro general y gastos pequeños para mejorar tus cálculos.
+                Edita ingreso, gastos principales, ahorro general y gastos pequeños para mejorar tus cálculos.
               </Text>
             </View>
             <ChevronRight color={colors.primary} size={22} strokeWidth={2.5} />

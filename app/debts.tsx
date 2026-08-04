@@ -46,12 +46,15 @@ import {
   AppModalAction,
   AppModalActions
 } from "../components/ui/AppModal";
+import { OptionalTag } from "../components/ui/OptionalTag";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   normalizeFinancialGuidanceMode,
+  type DebtMonthlyPaymentType,
   type DebtPaymentRecord,
+  type DebtPaymentFlexibility,
   type DebtPaymentStatus,
   type DebtRecord
 } from "../types/financial";
@@ -61,7 +64,6 @@ import {
   getDebtRatioLabel,
   getDebtTotalLabel,
   getRegisteredDebtSummary,
-  hasDebtMonthlyExpenseMismatch,
   syncDebtExpenseCategory,
   type DebtLevel,
   type NewDebtViability
@@ -84,6 +86,8 @@ type IconProps = {
 };
 
 type Tone = "primary" | "support" | "warning" | "purple" | "neutral" | "danger";
+type SelectableDebtPaymentType = Exclude<DebtMonthlyPaymentType, "unknown">;
+type SelectableDebtPaymentFlexibility = Exclude<DebtPaymentFlexibility, "unknown">;
 
 type DebtTypeOption = {
   icon: ComponentType<IconProps>;
@@ -96,8 +100,10 @@ type DebtFormState = {
   annualInterestRate: string;
   lender: string;
   monthlyPayment: string;
+  monthlyPaymentType: SelectableDebtPaymentType | null;
   name: string;
   paymentDay: string;
+  paymentFlexibility: SelectableDebtPaymentFlexibility | null;
   remainingAmount: string;
   status: DebtPaymentStatus;
   type: string;
@@ -203,12 +209,60 @@ const debtStatusOptions: Array<{
   }
 ];
 
+const monthlyPaymentTypeOptions: Array<{
+  helper: string;
+  label: string;
+  tone: Tone;
+  type: SelectableDebtPaymentType;
+}> = [
+  {
+    helper: "Es la cuota mínima o pactada que exige la entidad.",
+    label: "Cuota obligatoria",
+    tone: "primary",
+    type: "minimum_required"
+  },
+  {
+    helper: "Es el valor acordado con una persona o entidad.",
+    label: "Pago acordado",
+    tone: "support",
+    type: "agreed"
+  },
+  {
+    helper: "No existe una cuota fija; este es el valor que decidiste destinar.",
+    label: "Lo decidí yo",
+    tone: "purple",
+    type: "self_selected"
+  }
+];
+
+const paymentFlexibilityOptions: Array<{
+  flexibility: SelectableDebtPaymentFlexibility;
+  helper: string;
+  label: string;
+  tone: Tone;
+}> = [
+  {
+    flexibility: "negotiable",
+    helper: "Podrías acordar otro monto o plazo.",
+    label: "Sí, se puede ajustar",
+    tone: "support"
+  },
+  {
+    flexibility: "fixed",
+    helper: "El valor acordado debe mantenerse.",
+    label: "No, es fijo",
+    tone: "primary"
+  }
+];
+
 const emptyDebtForm: DebtFormState = {
   annualInterestRate: "",
   lender: "",
   monthlyPayment: "",
+  monthlyPaymentType: null,
   name: "",
   paymentDay: "",
+  paymentFlexibility: null,
   remainingAmount: "",
   status: "on_track",
   type: debtTypeOptions[0].label
@@ -554,6 +608,23 @@ function getPaymentDayLabel(value: number | null | undefined) {
   return value ? `Día ${value}` : "Sin fecha";
 }
 
+function getMonthlyPaymentLabel(debt: DebtRecord) {
+  if (isDebtPaid(debt)) {
+    return "Último pago";
+  }
+
+  switch (debt.monthlyPaymentType) {
+    case "minimum_required":
+      return "Cuota obligatoria";
+    case "agreed":
+      return "Pago acordado";
+    case "self_selected":
+      return "Pago planeado";
+    default:
+      return "Pago mensual";
+  }
+}
+
 function getDebtInsight({
   count,
   level,
@@ -801,11 +872,7 @@ function InputLabel({ label, optional }: { label: string; optional?: boolean }) 
   return (
     <View style={styles.inputLabelRow}>
       <Text style={styles.inputLabel}>{label}</Text>
-      {optional ? (
-        <View style={styles.optionalBadge}>
-          <Text style={styles.optionalBadgeText}>Opcional</Text>
-        </View>
-      ) : null}
+      {optional ? <OptionalTag /> : null}
     </View>
   );
 }
@@ -877,6 +944,67 @@ function StatusButton({
       <Text style={[styles.statusLabel, selected && { color: toneColors.text }]}>{label}</Text>
       <Text style={styles.statusHelper}>{helper}</Text>
     </Pressable>
+  );
+}
+
+function SegmentedQuestion<T extends string>({
+  helper,
+  label,
+  onChange,
+  options,
+  value
+}: {
+  helper: string;
+  label: string;
+  onChange: (value: T) => void;
+  options: Array<{ helper: string; label: string; tone: Tone; value: T }>;
+  value: T | null;
+}) {
+  const selectedOption = options.find((option) => option.value === value) ?? null;
+
+  return (
+    <View style={styles.segmentedQuestion}>
+      <View style={styles.segmentedQuestionCopy}>
+        <InputLabel label={label} />
+        <Text style={styles.inputHelper}>{helper}</Text>
+      </View>
+      <View style={styles.segmentedQuestionControl}>
+        <View style={styles.segmentedControl}>
+          {options.map((option) => {
+            const selected = option.value === value;
+            const toneColors = getToneColors(option.tone);
+
+            return (
+              <Pressable
+                accessibilityLabel={`${option.label}. ${option.helper}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                key={option.value}
+                onPress={() => onChange(option.value)}
+                style={({ pressed }) => [
+                  styles.segmentedOption,
+                  selected && {
+                    backgroundColor: toneColors.background,
+                    borderColor: toneColors.border
+                  },
+                  pressed && styles.pressed
+                ]}
+              >
+                <Text
+                  numberOfLines={2}
+                  style={[styles.segmentedOptionText, selected && { color: toneColors.text }]}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.segmentedSelectionHelper}>
+          {selectedOption?.helper ?? "Elige una opción para continuar."}
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -1219,7 +1347,7 @@ function DebtCard({
       <View style={styles.debtCardMetrics}>
         <SummaryMetric
           compact
-          label={paid ? "Última cuota" : "Cuota mensual"}
+          label={getMonthlyPaymentLabel(debt)}
           tone="primary"
           value={formatCOP(debt.monthlyPayment)}
         />
@@ -1411,7 +1539,7 @@ function DebtPaymentsModal({
               <Text style={styles.balanceToggleText}>
                 {form.updatesBalance ? "No actualizar el saldo" : "Actualizar saldo pendiente"}
               </Text>
-              {!form.updatesBalance ? <Text style={styles.optionalText}>Opcional</Text> : null}
+              {!form.updatesBalance ? <OptionalTag /> : null}
             </Pressable>
 
             {form.updatesBalance ? (
@@ -1518,7 +1646,7 @@ function DebtFormContent({
           value={debtForm.remainingAmount}
         />
         <CurrencyInput
-          label="Cuánto pagas al mes"
+          label="Cuánto planeas pagar al mes"
           onChangeText={(value) => onUpdate({ monthlyPayment: value })}
           value={debtForm.monthlyPayment}
         />
@@ -1546,17 +1674,65 @@ function DebtFormContent({
         </View>
       </View>
 
-      <View style={styles.statusGrid}>
-        {debtStatusOptions.map((option) => (
-          <StatusButton
-            helper={option.helper}
-            key={option.status}
-            label={debtPaymentStatusLabels[option.status]}
-            onPress={() => onUpdate({ status: option.status })}
-            selected={debtForm.status === option.status}
-            tone={option.tone}
-          />
-        ))}
+      <SegmentedQuestion
+        helper="Define qué parte del pago debe respetar la simulación antes de repartir el resto."
+        label="¿Qué representa ese pago mensual?"
+        onChange={(type) =>
+          onUpdate({
+            monthlyPaymentType: type,
+            paymentFlexibility:
+              type === "minimum_required"
+                ? "fixed"
+                : type === "self_selected"
+                  ? "negotiable"
+                  : debtForm.monthlyPaymentType === "agreed"
+                    ? debtForm.paymentFlexibility
+                    : null
+          })
+        }
+        options={monthlyPaymentTypeOptions.map((option) => ({
+          helper: option.helper,
+          label: option.label,
+          tone: option.tone,
+          value: option.type
+        }))}
+        value={debtForm.monthlyPaymentType}
+      />
+
+      {debtForm.monthlyPaymentType === "agreed" ? (
+        <SegmentedQuestion
+          helper="La simulación no reducirá este pago por sí sola; esta respuesta indica si puedes renegociarlo."
+          label="¿Ese acuerdo se puede ajustar?"
+          onChange={(paymentFlexibility) => onUpdate({ paymentFlexibility })}
+          options={paymentFlexibilityOptions.map((option) => ({
+            helper: option.helper,
+            label: option.label,
+            tone: option.tone,
+            value: option.flexibility
+          }))}
+          value={debtForm.paymentFlexibility}
+        />
+      ) : null}
+
+      <View style={styles.formQuestionSection}>
+        <View style={styles.formQuestionCopy}>
+          <InputLabel label="¿Cómo va actualmente el pago de esta deuda?" />
+          <Text style={styles.inputHelper}>
+            Esto describe tu situación actual; no cambia si la cuota es obligatoria o voluntaria.
+          </Text>
+        </View>
+        <View style={styles.statusGrid}>
+          {debtStatusOptions.map((option) => (
+            <StatusButton
+              helper={option.helper}
+              key={option.status}
+              label={debtPaymentStatusLabels[option.status]}
+              onPress={() => onUpdate({ status: option.status })}
+              selected={debtForm.status === option.status}
+              tone={option.tone}
+            />
+          ))}
+        </View>
       </View>
     </>
   );
@@ -1629,12 +1805,17 @@ export default function DebtsScreen() {
   const hasOnlyPaidDebts = debts.length > 0 && debts.every(isDebtPaid);
   const debtFormRemainingAmount = parseCOPInput(debtForm.remainingAmount);
   const debtFormMonthlyPayment = parseCOPInput(debtForm.monthlyPayment);
+  const hasCompleteDebtClassification = Boolean(
+    debtForm.monthlyPaymentType &&
+      (debtForm.monthlyPaymentType !== "agreed" || debtForm.paymentFlexibility)
+  );
   const canSaveDebt = Boolean(
     debtForm.name.trim() &&
       debtFormRemainingAmount !== null &&
       (editingDebtId ? debtFormRemainingAmount >= 0 : debtFormRemainingAmount > 0) &&
       debtFormMonthlyPayment !== null &&
-      debtFormMonthlyPayment > 0
+      debtFormMonthlyPayment > 0 &&
+      hasCompleteDebtClassification
   );
   const paymentDebt = debts.find((debt) => debt.id === paymentDebtId) ?? null;
   const paymentAmount = parseCOPInput(paymentForm.amount);
@@ -1649,13 +1830,6 @@ export default function DebtsScreen() {
       paymentDate &&
       (!paymentForm.updatesBalance || paymentRemainingAmount !== null)
   );
-  const hasMonthlyExpenseMismatch = hasDebtMonthlyExpenseMismatch({
-    isExactMonthlyExpense:
-      debtSummary.source === "registered" && snapshot.sourceMap.monthlyExpenses === "exact",
-    monthlyExpenses: snapshot.cashflow.monthlyExpenses,
-    monthlyPaymentTotal: debtSummary.monthlyPaymentTotal
-  });
-
   const updateDebtForm = (patch: Partial<DebtFormState>) => {
     setDebtForm((current) => ({
       ...current,
@@ -1689,8 +1863,16 @@ export default function DebtsScreen() {
           : "",
       lender: debt.lender ?? "",
       monthlyPayment: formatCOP(debt.monthlyPayment),
+      monthlyPaymentType:
+        debt.monthlyPaymentType && debt.monthlyPaymentType !== "unknown"
+          ? debt.monthlyPaymentType
+          : null,
       name: debt.name ?? "",
       paymentDay: debt.paymentDay ? `${debt.paymentDay}` : "",
+      paymentFlexibility:
+        debt.paymentFlexibility && debt.paymentFlexibility !== "unknown"
+          ? debt.paymentFlexibility
+          : null,
       remainingAmount:
         debt.remainingAmount !== null && debt.remainingAmount !== undefined
           ? formatCOP(debt.remainingAmount)
@@ -1717,7 +1899,9 @@ export default function DebtsScreen() {
       remainingAmount === null ||
       (editingDebtId ? remainingAmount < 0 : remainingAmount <= 0) ||
       monthlyPayment === null ||
-      monthlyPayment <= 0
+      monthlyPayment <= 0 ||
+      !hasCompleteDebtClassification ||
+      debtForm.monthlyPaymentType === null
     ) {
       return;
     }
@@ -1734,6 +1918,21 @@ export default function DebtsScreen() {
       lender: debtForm.lender.trim() || null,
       remainingAmount,
       monthlyPayment,
+      monthlyPaymentType: debtForm.monthlyPaymentType,
+      minimumMonthlyPayment:
+        debtForm.monthlyPaymentType === "minimum_required"
+          ? monthlyPayment
+          : debtForm.monthlyPaymentType === "self_selected"
+            ? 0
+            : null,
+      paymentFlexibility:
+        debtForm.monthlyPaymentType === "minimum_required"
+          ? "fixed"
+          : debtForm.monthlyPaymentType === "self_selected"
+            ? "negotiable"
+            : debtForm.monthlyPaymentType === "agreed"
+              ? (debtForm.paymentFlexibility ?? "fixed")
+              : "fixed",
       annualInterestRate: parseInterestRateInput(debtForm.annualInterestRate),
       status: debtForm.status,
       paymentDay: normalizedPaymentDay,
@@ -1921,15 +2120,6 @@ export default function DebtsScreen() {
               }
             />
           </View>
-
-          {hasMonthlyExpenseMismatch ? (
-            <View style={styles.expenseMismatchNote}>
-              <AlertCircle color="#B45309" size={20} strokeWidth={2.4} />
-              <Text style={styles.expenseMismatchText}>
-                Tus cuotas registradas superan tu gasto mensual. Revisa el total en Gastos.
-              </Text>
-            </View>
-          ) : null}
 
           <SectionCard
             compact={isPhone}
@@ -2159,7 +2349,7 @@ export default function DebtsScreen() {
         onClose={cancelDebtForm}
         scrollable
         size="wide"
-        subtitle="El nombre, el saldo pendiente y la cuota mensual son obligatorios."
+        subtitle="El nombre, el saldo pendiente y el pago mensual planeado son obligatorios."
         title={editingDebtId ? "Editar deuda" : "Agregar una deuda"}
         visible={showDebtForm}
       >
@@ -2368,23 +2558,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
-  },
-  expenseMismatchNote: {
-    alignItems: "flex-start",
-    backgroundColor: colors.warningSoft,
-    borderColor: "#FED7AA",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.sm,
-    padding: spacing.md
-  },
-  expenseMismatchText: {
-    color: "#B45309",
-    flex: 1,
-    fontSize: typography.body,
-    fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.body
   },
   summaryMetric: {
     borderRadius: radius.md,
@@ -2620,6 +2793,73 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     gap: spacing.xs
   },
+  formQuestionSection: {
+    borderColor: colors.border,
+    borderTopWidth: 1,
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingTop: spacing.lg,
+    width: "100%"
+  },
+  formQuestionCopy: {
+    gap: spacing.xs
+  },
+  segmentedQuestion: {
+    alignItems: "flex-start",
+    borderColor: colors.border,
+    borderTopWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    paddingTop: spacing.md,
+    width: "100%"
+  },
+  segmentedQuestionCopy: {
+    flexBasis: 230,
+    flexGrow: 1,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  segmentedQuestionControl: {
+    flexBasis: 360,
+    flexGrow: 2,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  segmentedControl: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    overflow: "hidden",
+    padding: 3
+  },
+  segmentedOption: {
+    alignItems: "center",
+    borderColor: "transparent",
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 42,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs
+  },
+  segmentedOptionText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption,
+    textAlign: "center"
+  },
+  segmentedSelectionHelper: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.small,
+    paddingHorizontal: spacing.xs
+  },
   stackedInputGroup: {
     flexBasis: "auto",
     flexGrow: 0
@@ -2635,20 +2875,6 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
-  },
-  optionalBadge: {
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.primaryBorder,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2
-  },
-  optionalBadgeText: {
-    color: colors.primary,
-    fontSize: typography.small,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.small
   },
   textInput: {
     backgroundColor: colors.surface,
@@ -2684,6 +2910,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  inputErrorText: {
+    color: colors.danger,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.caption
   },
   statusGrid: {
@@ -3089,12 +3321,6 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
-  },
-  optionalText: {
-    color: colors.textSubtle,
-    fontSize: typography.small,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.small
   },
   balanceUpdateArea: {
     backgroundColor: colors.surfaceMuted,

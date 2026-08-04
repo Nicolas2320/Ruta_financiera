@@ -46,6 +46,8 @@ import {
   AppModalAction,
   AppModalActions
 } from "../components/ui/AppModal";
+import { MonthYearPickerField } from "../components/ui/MonthYearPickerField";
+import { OptionalTag } from "../components/ui/OptionalTag";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
@@ -59,6 +61,7 @@ import {
   type FinancialGoal
 } from "../types/financial";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
+import { formatTargetMonth } from "../utils/monthYear";
 import { applyGoalContribution, getGoalContributionPeriodSummary } from "../utils/goalContributions";
 import {
   formatGoalContribution,
@@ -84,6 +87,10 @@ import {
   getMonthlyPlanProgressKey,
   type MonthlyGoalContext
 } from "../utils/monthlyPlan";
+import {
+  getPlanPreferenceGoalBudget,
+  resolvePlanPreference
+} from "../utils/planPreference";
 
 type Tone = "primary" | "support" | "warning" | "danger" | "neutral" | "purple";
 
@@ -232,14 +239,6 @@ const customGoalIconOptions: GoalVisualOption[] = [
   }
 ];
 const allGoalVisualOptions = [...goalVisualOptions, ...customGoalIconOptions];
-const goalHorizons = [
-  "Menos de 6 meses",
-  "6 - 12 meses",
-  "1 - 3 años",
-  "3 - 5 años",
-  "Más de 5 años",
-  "No estoy seguro"
-];
 const goalPriorities = ["Baja", "Media", "Alta", "Muy alta"];
 
 function toPercentWidth(value: number): `${number}%` {
@@ -322,7 +321,7 @@ function getBudgetMarginFeedback({
 }) {
   if (monthlyMargin === null || !Number.isFinite(monthlyMargin) || monthlyMargin <= 0) {
     return {
-      label: "Necesitamos ingresos y gastos para calcular que porcentaje representa.",
+      label: "Necesitamos ingresos y salidas mensuales para calcular qué porcentaje representa.",
       percentage: null
     };
   }
@@ -699,19 +698,27 @@ function GoalIconChoice({
 }
 
 function CurrencyInputField({
+  helper,
   label,
   onChangeText,
+  optional = false,
   placeholder = "$0",
   value
 }: {
+  helper?: string;
   label: string;
   onChangeText: (value: string) => void;
+  optional?: boolean;
   placeholder?: string;
   value: string;
 }) {
   return (
     <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
+      <View style={styles.inputLabelRow}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        {optional ? <OptionalTag /> : null}
+      </View>
+      {helper ? <Text style={styles.inputHelperText}>{helper}</Text> : null}
       <TextInput
         accessibilityLabel={label}
         inputMode="numeric"
@@ -771,6 +778,9 @@ function GoalCard({
   const [targetInput, setTargetInput] = useState(
     getCurrencyInputValue(allocation.goal.targetAmount ?? allocation.targetAmount)
   );
+  const [targetMonth, setTargetMonth] = useState<string | null>(
+    allocation.goal.targetMonth ?? null
+  );
   const [currentInput, setCurrentInput] = useState(
     getCurrencyInputValue(allocation.currentAmount)
   );
@@ -781,7 +791,6 @@ function GoalCard({
     remainingAmount: number;
   } | null>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [selectedHorizon, setSelectedHorizon] = useState(allocation.goal.horizon ?? "");
   const [selectedPriority, setSelectedPriority] = useState(allocation.goal.priority ?? "");
   const viabilityTone = getViabilityTone(allocation.viability);
   const goalVisual = getGoalVisual(allocation.goal);
@@ -829,6 +838,8 @@ function GoalCard({
     !isCompletedGoal &&
     !isPausedGoal &&
     Boolean(onAssignCurrentSavings);
+  const parsedEditorTargetAmount = getParsedCurrencyInput(targetInput);
+  const hasValidEditorTargetMonth = targetMonth !== null;
 
   const resetEditorFields = () => {
     const nextGoalOptionKey = getGoalOptionKey(allocation.goal);
@@ -840,8 +851,8 @@ function GoalCard({
     setTargetInput(
       getCurrencyInputValue(allocation.goal.targetAmount ?? allocation.targetAmount)
     );
+    setTargetMonth(allocation.goal.targetMonth ?? null);
     setCurrentInput(getCurrencyInputValue(allocation.currentAmount));
-    setSelectedHorizon(allocation.goal.horizon ?? "");
     setSelectedPriority(allocation.goal.priority ?? "");
   };
 
@@ -850,9 +861,9 @@ function GoalCard({
     setContributionInput("");
   }, [
     allocation.currentAmount,
-    allocation.goal.horizon,
     allocation.goal.iconKey,
     allocation.goal.priority,
+    allocation.goal.targetMonth,
     allocation.goal.targetAmount,
     allocation.goal.title,
     allocation.targetAmount
@@ -898,6 +909,10 @@ function GoalCard({
   };
 
   const handleSaveDetails = () => {
+    if (!hasValidEditorTargetMonth) {
+      return;
+    }
+
     const selectedOption =
       goalVisualOptions.find((option) => option.iconKey === selectedGoalOptionKey) ??
       goalVisualOptions[goalVisualOptions.length - 1];
@@ -921,9 +936,9 @@ function GoalCard({
       title: cleanTitle,
       iconKey: nextIconKey,
       type: getGoalTypeFromTitle(cleanTitle),
-      horizon: selectedHorizon || null,
       priority: selectedPriority || null,
       targetAmount,
+      targetMonth,
       currentAmount,
       ...(currentAmount <= 0 ? { contributions: [] } : {}),
       status: nextStatus
@@ -1150,8 +1165,12 @@ function GoalCard({
               <Text style={styles.metaValue}>{targetLabel}</Text>
             </View>
             <View style={styles.metaBox}>
-              <Text style={styles.metaLabel}>Tiempo deseado</Text>
-              <Text style={styles.metaValue}>{allocation.goal.horizon ?? "No definido"}</Text>
+              <Text style={styles.metaLabel}>Fecha objetivo</Text>
+              <Text style={styles.metaValue}>
+                {allocation.goal.targetMonth
+                  ? formatTargetMonth(allocation.goal.targetMonth)
+                  : "No definida"}
+              </Text>
             </View>
             <View style={styles.metaBox}>
               <Text style={styles.metaLabel}>Aporte necesario</Text>
@@ -1302,6 +1321,7 @@ function GoalCard({
               variant="secondary"
             />
             <AppModalAction
+              disabled={!hasValidEditorTargetMonth}
               icon={<CheckCircle2 color={colors.surface} size={19} strokeWidth={2.4} />}
               label="Guardar cambios"
               onPress={handleSaveDetails}
@@ -1377,7 +1397,7 @@ function GoalCard({
 
               <View style={styles.inputGrid}>
                 <CurrencyInputField
-                  label="¿Cuánto quieres reunir en total?"
+                  label="¿Cuánto quieres reunir?"
                   onChangeText={(value) => handleCurrencyInputChange(value, setTargetInput)}
                   value={targetInput}
                 />
@@ -1387,25 +1407,20 @@ function GoalCard({
                   value={currentInput}
                 />
               </View>
+              <View style={styles.editGroup}>
+                <MonthYearPickerField
+                  helper="Puedes cambiar el mes sin modificar el dinero ya registrado."
+                  label="¿Cuándo quieres alcanzarla?"
+                  onChange={setTargetMonth}
+                  value={targetMonth}
+                />
+              </View>
               {reactivationMessage ? (
                 <View style={styles.editNotice}>
                   <AlertCircle color="#B45309" size={17} strokeWidth={2.4} />
                   <Text style={styles.editNoticeText}>{reactivationMessage}</Text>
                 </View>
               ) : null}
-              <View style={styles.editGroup}>
-                <Text style={styles.inputLabel}>¿Cuándo quieres alcanzarla?</Text>
-                <View style={styles.choiceRow}>
-                  {goalHorizons.map((horizon) => (
-                    <ChoicePill
-                      key={horizon}
-                      label={horizon}
-                      onPress={() => setSelectedHorizon(horizon)}
-                      selected={selectedHorizon === horizon}
-                    />
-                  ))}
-                </View>
-              </View>
               <View style={styles.editGroup}>
                 <Text style={styles.inputLabel}>Prioridad frente a tus otras metas</Text>
                 <View style={styles.choiceRow}>
@@ -1497,14 +1512,37 @@ export default function GoalsOverviewScreen() {
   const [budgetInput, setBudgetInput] = useState(
     getCurrencyInputValue(onboarding.goalMonthlyBudget)
   );
+  const planPreference = useMemo(
+    () => resolvePlanPreference({ exactValues, onboarding }),
+    [exactValues, onboarding]
+  );
+  const preferredGoalId =
+    planPreference.hasExplicitPreference &&
+    planPreference.isApplicable &&
+    planPreference.strategy === "prioritize_goal"
+      ? planPreference.goalId
+      : null;
+  const preferredPlanPriorityKey =
+    planPreference.hasExplicitPreference && planPreference.isApplicable
+      ? planPreference.priorityKey
+      : null;
   const goalPlan = useMemo(
-    () => getGoalPlanFromOnboarding(onboarding, metrics.snapshot.cashflow.suggestedMonthlyContribution, exactValues),
-    [exactValues, metrics.snapshot.cashflow.suggestedMonthlyContribution, onboarding]
+    () => getGoalPlanFromOnboarding(
+      onboarding,
+      getPlanPreferenceGoalBudget({
+        fallbackMonthlyBudget: metrics.snapshot.cashflow.suggestedMonthlyContribution,
+        preference: planPreference
+      }),
+      exactValues,
+      { preferredGoalId }
+    ),
+    [exactValues, metrics.snapshot.cashflow.suggestedMonthlyContribution, onboarding, planPreference, preferredGoalId]
   );
   const hasManualAdjustments = goalPlan.allocations.some(
     (allocation) => allocation.contributionMode === "manual"
   );
   const primaryGoalAllocation =
+    goalPlan.allocations.find((allocation) => allocation.goal.id === preferredGoalId) ??
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
     null;
@@ -1522,18 +1560,19 @@ export default function GoalsOverviewScreen() {
     ]
   );
   const suggestedActions = useMemo(
-    () => getMonthlyActions(data, metrics, undefined, monthlyGoalContext),
-    [data, metrics, monthlyGoalContext]
+    () => getMonthlyActions(data, metrics, preferredPlanPriorityKey ?? undefined, monthlyGoalContext),
+    [data, metrics, monthlyGoalContext, preferredPlanPriorityKey]
   );
   const suggestedPlanProgressKey = useMemo(
-    () => getMonthlyPlanProgressKey(metrics, suggestedActions),
-    [metrics, suggestedActions]
+    () => getMonthlyPlanProgressKey(metrics, suggestedActions, preferredPlanPriorityKey ?? undefined),
+    [metrics, preferredPlanPriorityKey, suggestedActions]
   );
   const activePlanProgressKey = useMemo(
     () => getActiveMonthlyPlanProgressKey(completedActions, suggestedPlanProgressKey),
     [completedActions, suggestedPlanProgressKey]
   );
-  const activePlanPriorityKey = getMonthlyPlanPriorityKey(activePlanProgressKey);
+  const activePlanPriorityKey =
+    preferredPlanPriorityKey ?? getMonthlyPlanPriorityKey(activePlanProgressKey);
   const monthlyActions = useMemo(
     () => getMonthlyActions(data, metrics, activePlanPriorityKey ?? undefined, monthlyGoalContext),
     [activePlanPriorityKey, data, metrics, monthlyGoalContext]
@@ -1590,17 +1629,21 @@ export default function GoalsOverviewScreen() {
     totalInvestedInGoals > 0 ? formatCOP(totalInvestedInGoals) : "$0";
   const monthlyMargin = metrics.snapshot.cashflow.monthlyMargin;
   const currentSavingsForEmergency = metrics.snapshot.values.currentSavings;
+  const selectedReferenceMonthlyBudget = getPlanPreferenceGoalBudget({
+    fallbackMonthlyBudget: metrics.snapshot.cashflow.suggestedMonthlyContribution,
+    preference: planPreference
+  });
   const budgetLabel =
     goalPlan.monthlyGoalBudget > 0
       ? `${formatCOP(goalPlan.monthlyGoalBudget)} aprox.`
       : "Por definir";
   const budgetMarginLabel = getBudgetMarginShortLabel(goalPlan.monthlyGoalBudget, monthlyMargin);
   const recommendedBudgetLabel =
-    metrics.snapshot.cashflow.suggestedMonthlyContribution > 0
-      ? `${formatCOP(metrics.snapshot.cashflow.suggestedMonthlyContribution)} aprox.`
+    selectedReferenceMonthlyBudget > 0
+      ? `${formatCOP(selectedReferenceMonthlyBudget)} aprox.`
       : "Por definir";
   const recommendedBudgetMarginLabel = getBudgetMarginShortLabel(
-    metrics.snapshot.cashflow.suggestedMonthlyContribution,
+    selectedReferenceMonthlyBudget,
     monthlyMargin
   );
   const recommendedBudgetDetailLabel = recommendedBudgetMarginLabel
@@ -1620,6 +1663,12 @@ export default function GoalsOverviewScreen() {
     : goalPlan.remainingBudget > 0
       ? `${formatCOP(goalPlan.remainingBudget)} libres`
       : "Total asignado";
+  const planReferenceOverrideNote =
+    goalPlan.monthlyGoalBudgetMode === "manual"
+      ? `Tu bolsa manual de ${formatCOP(goalPlan.monthlyGoalBudget)} tiene prioridad sobre esta referencia.`
+      : hasManualAdjustments
+        ? "Los aportes manuales definidos dentro de tus metas tienen prioridad sobre esta referencia."
+        : null;
 
   useEffect(() => {
     setBudgetInput(getCurrencyInputValue(onboarding.goalMonthlyBudget));
@@ -1902,6 +1951,35 @@ export default function GoalsOverviewScreen() {
             </View>
           ) : null}
 
+          {planPreference.hasExplicitPreference ? (
+            <View
+              style={[
+                styles.planReferenceCard,
+                !planPreference.isApplicable && styles.planReferenceCardWarning
+              ]}
+            >
+              <View style={styles.planReferenceIcon}>
+                <Sparkles color={colors.primary} size={20} strokeWidth={2.5} />
+              </View>
+              <View style={styles.planReferenceCopy}>
+                <Text style={styles.planReferenceKicker}>
+                  REFERENCIA ELEGIDA EN SIMULACIÓN
+                </Text>
+                <Text style={styles.planReferenceTitle}>{planPreference.label}</Text>
+                <Text style={styles.planReferenceText}>
+                  {planPreference.isApplicable
+                    ? `${formatCOP(planPreference.monthlyReference)} al mes como referencia recalculada.`
+                    : "Esta elección ya no puede aplicarse con los datos actuales; usamos la recomendación automática."}
+                </Text>
+                {planReferenceOverrideNote ? (
+                  <Text style={styles.planReferenceOverride}>
+                    {planReferenceOverrideNote}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+
           <View
             style={[
               styles.budgetCard,
@@ -1944,11 +2022,13 @@ export default function GoalsOverviewScreen() {
                       }
                     ]}
                     calculationTitle="Cómo se reparte tu bolsa"
-                    definition="La bolsa para metas es el presupuesto mensual que puedes distribuir entre una o varias metas. Sale de tu margen mensual recomendado o del monto manual que definas."
+                    definition="La bolsa para metas es el presupuesto mensual que puedes distribuir entre una o varias metas. Sale de la referencia activa de tu plan o del monto manual que definas."
                     estimateLabel={
                       goalPlan.monthlyGoalBudgetMode === "manual"
                         ? "Bolsa definida por ti"
-                        : "Bolsa recomendada desde tu margen"
+                        : planPreference.hasExplicitPreference && planPreference.isApplicable
+                          ? "Referencia elegida en simulación"
+                          : "Bolsa recomendada desde tu margen"
                     }
                     guidanceMode={guidanceMode}
                     plainLanguage={
@@ -2026,7 +2106,9 @@ export default function GoalsOverviewScreen() {
                 <Text style={[styles.helperText, goalPlan.isOverBudget && styles.warningText]}>
                   {goalPlan.isOverBudget
                     ? "Tus aportes manuales superan la bolsa sugerida. Puedes reducir alguna meta o volver a la recomendacion."
-                    : "La bolsa se calcula desde tu margen mensual sugerido. Puedes ajustar aportes sin cambiar tus respuestas financieras."}
+                    : planPreference.hasExplicitPreference && planPreference.isApplicable
+                      ? "La bolsa parte de la referencia que elegiste en Simulación. Puedes ajustar aportes sin cambiar tus respuestas financieras."
+                      : "La bolsa se calcula desde tu margen mensual sugerido. Puedes ajustar aportes sin cambiar tus respuestas financieras."}
                 </Text>
               </View>
               <Pressable
@@ -2372,6 +2454,58 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
+  },
+  planReferenceCard: {
+    alignItems: "flex-start",
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  planReferenceCardWarning: {
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA"
+  },
+  planReferenceIcon: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    height: 42,
+    justifyContent: "center",
+    width: 42
+  },
+  planReferenceCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0
+  },
+  planReferenceKicker: {
+    color: colors.primary,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    letterSpacing: 0.5,
+    lineHeight: typography.lineHeight.small
+  },
+  planReferenceTitle: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  planReferenceText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
+  },
+  planReferenceOverride: {
+    color: "#B45309",
+    fontSize: typography.small,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.small,
+    marginTop: spacing.xs
   },
   goalOptionSlider: {
     gap: spacing.sm,
@@ -3032,10 +3166,27 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     minWidth: 180
   },
+  inputHelperText: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    lineHeight: typography.lineHeight.small
+  },
+  inputLabelRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs
+  },
   inputLabel: {
     color: colors.text,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  inputErrorText: {
+    color: colors.danger,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.caption
   },
   input: {

@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { FinancialEducationCarousel } from "../components/FinancialEducationCarousel";
 import { FinancialEducationModal } from "../components/FinancialEducationModal";
+import { OptionalTag } from "../components/ui/OptionalTag";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
@@ -75,20 +76,20 @@ const fields: FieldConfig[] = [
   },
   {
     id: "monthlyExpenses",
-    label: "Gasto mensual",
-    helper: "Lo que normalmente gastas al mes.",
+    label: "Gastos principales al mes",
+    helper: "Gastos habituales sin sumar cuotas de deuda ni gastos pequeños.",
     icon: ReceiptText,
     iconColor: "#B45309",
     iconBackground: colors.warningSoft,
     education: {
       definition:
-        "Es el total aproximado que utilizas en un mes para vivienda, alimentación, transporte, servicios, deudas y otros consumos.",
+        "Es el monto aproximado que utilizas en un mes para vivienda, alimentación, transporte, servicios y otros gastos habituales.",
       examples: [
         "Suma gastos fijos y un promedio de los variables.",
         "Puedes apoyarte en uno o varios extractos recientes."
       ],
       avoid:
-        "No sumes como gasto una transferencia entre tus propias cuentas ni vuelvas a contar una compra ya incluida en una categoría."
+        "No incluyas cuotas de préstamos o tarjetas ni los gastos pequeños que registras por separado."
     }
   },
   {
@@ -124,7 +125,7 @@ const fields: FieldConfig[] = [
         "Usa un promedio mensual; no necesitas registrar cada compra."
       ],
       avoid:
-        "No incluyas aquí servicios, arriendo, transporte habitual u otros gastos que ya formen parte de tu gasto mensual."
+        "No incluyas aquí servicios, arriendo, transporte habitual u otros gastos que ya formen parte de tus gastos principales."
     }
   }
 ];
@@ -486,7 +487,7 @@ function CurrencyField({
               />
             </FinancialEducationModal>
           </View>
-          <Text style={styles.optionalText}>Opcional</Text>
+          <OptionalTag />
         </View>
         <Text style={styles.fieldHelper}>{field.helper}</Text>
         <TextInput
@@ -675,13 +676,6 @@ const styles = StyleSheet.create({
     fontSize: typography.question,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.question
-  },
-  optionalText: {
-    color: colors.textSubtle,
-    fontSize: typography.small,
-    fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.small,
-    textTransform: "uppercase"
   },
   fieldHelper: {
     color: colors.textMuted,

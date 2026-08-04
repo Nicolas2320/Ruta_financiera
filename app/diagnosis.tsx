@@ -25,6 +25,7 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   calculateFinancialSnapshot,
+  getSmallExpensesMonthlySummary,
   type FinancialSnapshot,
   type SnapshotSource
 } from "../utils/financialCalculations";
@@ -59,6 +60,7 @@ type FinancialMetrics = {
   currentSavingsDisplay: FinancialDisplay;
   incomeValue: number | null;
   expenseValue: number | null;
+  totalOutflowValue: number | null;
   currentSavingsValue: number | null;
   smallExpenseEstimate: FinancialRangeEstimate;
   estimatedMargin: number | null;
@@ -73,6 +75,7 @@ type FinancialMetrics = {
   debtPaymentInterpretation: string;
   emergencyLabel: string;
   canEstimateMonthlyFlow: boolean;
+  isCashflowExact: boolean;
 };
 
 function isLowEmergencyCoverage(emergencyCoverage: string | null) {
@@ -108,10 +111,10 @@ function getExpenseRatioInterpretation(expensePercentage: number | null) {
   }
 
   if (expensePercentage <= 100) {
-    return "Tus gastos están cerca de tus ingresos.";
+    return "Tus salidas están cerca de tus ingresos.";
   }
 
-  return "Tus gastos podrían superar tus ingresos.";
+  return "Tus salidas podrían superar tus ingresos.";
 }
 
 function getDebtPaymentInterpretation(debtPaymentShare: string | null) {
@@ -227,8 +230,8 @@ function getFinancialMetrics(
     value: snapshot.cashflow.monthlyIncome
   });
   const expenseDisplay = getSnapshotDisplay({
-    exactLabel: "Gasto mensual",
-    estimatedLabel: "Rango de gastos",
+    exactLabel: "Gastos principales al mes",
+    estimatedLabel: "Rango de gastos principales",
     source: snapshot.sourceMap.monthlyExpenses,
     value: snapshot.cashflow.monthlyExpenses
   });
@@ -262,12 +265,17 @@ function getFinancialMetrics(
     incomeMidpoint !== null && incomeMidpoint > 0 && smallExpenseMidpoint !== null
       ? Math.round((smallExpenseMidpoint / incomeMidpoint) * 100)
       : null;
+  const isCashflowExact =
+    snapshot.sourceMap.monthlyIncome === "exact" &&
+    snapshot.sourceMap.monthlyExpenses === "exact" &&
+    (snapshot.sourceMap.smallExpenses === "exact" ||
+      snapshot.sourceMap.smallExpenses === "reported_none") &&
+    snapshot.debt.source !== "reported";
 
   let estimatedMarginLabel = "No disponible";
 
   if (estimatedMargin !== null) {
-    const isExact = incomeDisplay.source === "exact" && expenseDisplay.source === "exact";
-    estimatedMarginLabel = isExact
+    estimatedMarginLabel = isCashflowExact
       ? formatSignedCOP(estimatedMargin)
       : `${formatSignedCOP(estimatedMargin)} aprox.`;
   }
@@ -283,7 +291,7 @@ function getFinancialMetrics(
       ? "No usamos gastos pequeños para estimar aportes o escenarios."
       : smallExpensePercentage !== null
       ? snapshot.sourceMap.smallExpenses === "exact"
-        ? `Dato exacto: cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
+        ? `Según el valor ingresado: cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
         : `Cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
       : onboarding.smallExpensesRange
         ? "Rango seleccionado, sin porcentaje calculado."
@@ -296,6 +304,7 @@ function getFinancialMetrics(
     currentSavingsDisplay,
     incomeValue: incomeMidpoint,
     expenseValue: expenseMidpoint,
+    totalOutflowValue: snapshot.cashflow.totalMonthlyOutflow,
     currentSavingsValue,
     smallExpenseEstimate,
     estimatedMargin,
@@ -304,7 +313,7 @@ function getFinancialMetrics(
     estimatedMarginLabel,
     expensePercentageLabel:
       expensePercentage !== null
-        ? incomeDisplay.source === "exact" && expenseDisplay.source === "exact"
+        ? isCashflowExact
           ? `${expensePercentage}%`
           : `${expensePercentage}% aprox.`
         : "No disponible",
@@ -314,7 +323,8 @@ function getFinancialMetrics(
     debtPaymentLabel: getDebtPaymentLabel(onboarding.debtPaymentShare),
     debtPaymentInterpretation: getDebtPaymentInterpretation(onboarding.debtPaymentShare),
     emergencyLabel: onboarding.emergencyCoverage ?? "No disponible",
-    canEstimateMonthlyFlow: estimatedMargin !== null && expensePercentage !== null
+    canEstimateMonthlyFlow: estimatedMargin !== null && expensePercentage !== null,
+    isCashflowExact
   };
 }
 
@@ -373,7 +383,11 @@ function getSmallExpensesMessages(onboarding: OnboardingSnapshot, metrics: Finan
         : "categorías por revisar";
     const messages = [
       `Identificaste pequeños gastos frecuentes en: ${categories}.`,
-      `Estimación mensual: ${onboarding.smallExpensesRange ?? "No respondido"}.`
+      getSmallExpensesMonthlySummary({
+        amount: metrics.snapshot.values.smallExpenses,
+        range: onboarding.smallExpensesRange,
+        source: metrics.snapshot.sourceMap.smallExpenses
+      })
     ];
 
     if (metrics.smallExpensePercentage !== null) {
@@ -530,7 +544,7 @@ function getMetricTone(label: string, metrics: FinancialMetrics, onboarding: Onb
     return metrics.estimatedMargin > 0 ? "positive" : "warning";
   }
 
-  if (label === "Gastos frente a ingresos") {
+  if (label === "Salidas frente a ingresos") {
     if (metrics.expensePercentage === null) {
       return "neutral";
     }
@@ -643,6 +657,11 @@ export default function DiagnosisScreen() {
     expenseBarWidth,
     100
   );
+  const otherExpensesPercentage = Math.max(
+    0,
+    expenseBarWidth - (metrics.smallExpensePercentage ?? 0)
+  );
+  const marginPercentage = 100 - expenseBarWidth;
   const expensesAreHigh = metrics.expensePercentage !== null && metrics.expensePercentage >= 85;
   const hasPositiveMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin > 0;
   const hasNoMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0;
@@ -664,14 +683,14 @@ export default function DiagnosisScreen() {
           : "Margen mensual disponible";
   const flowResultDescription =
     metrics.expensePercentage !== null
-      ? `Tus gastos representan aproximadamente el ${metrics.expensePercentage}% de tus ingresos.`
-      : "Comparamos tus ingresos y gastos mensuales.";
+      ? `Tus salidas representan aproximadamente el ${metrics.expensePercentage}% de tus ingresos.`
+      : "Comparamos tus ingresos con tus salidas mensuales.";
   const flowPlainLanguage =
     metrics.expensePercentage !== null
       ? metrics.expensePercentage > 100
         ? `Por cada $100 que entra, salen cerca de $${metrics.expensePercentage}.`
-        : `Por cada $100 que entra, aproximadamente $${metrics.expensePercentage} se utiliza en gastos.`
-      : "Compara lo que entra durante el mes con lo que utilizas para cubrir gastos.";
+        : `Por cada $100 que entra, aproximadamente $${metrics.expensePercentage} se utiliza en gastos principales, gastos pequeños y deudas.`
+      : "Compara lo que entra durante el mes con tus gastos principales, gastos pequeños y cuotas de deuda.";
   const indicators = [
     {
       label: "Margen mensual",
@@ -679,14 +698,14 @@ export default function DiagnosisScreen() {
       detail:
         metrics.estimatedMargin !== null
           ? metrics.estimatedMargin < 0
-            ? "Tus gastos estimados superan tus ingresos; el signo negativo muestra cuánto falta en el mes."
-            : metrics.incomeDisplay.source === "exact" && metrics.expenseDisplay.source === "exact"
+            ? "Tus salidas estimadas superan tus ingresos; el signo negativo muestra cuánto falta en el mes."
+            : metrics.isCashflowExact
               ? "Calculado con tus datos ingresados."
               : "Calculado con datos ingresados y rangos disponibles."
-          : "Requiere datos de ingresos y gastos."
+          : "Requiere datos de ingresos y salidas."
     },
     {
-      label: "Gastos frente a ingresos",
+      label: "Salidas frente a ingresos",
       value: metrics.expensePercentageLabel,
       detail: metrics.expenseRatioInterpretation
     },
@@ -696,7 +715,7 @@ export default function DiagnosisScreen() {
       detail: metrics.currentSavingsDisplay.helper
     },
     {
-      label: "Gastos hormiga",
+      label: "Pequeños gastos",
       value: metrics.smallExpensesMetricLabel,
       detail: metrics.smallExpensesDetail
     },
@@ -708,7 +727,7 @@ export default function DiagnosisScreen() {
   ];
   const emergencyMessage =
     metrics.snapshot.emergencyFund.coverageMonths !== null
-      ? `${metrics.snapshot.emergencyFund.label}. Con estos datos, tu ahorro cubre cerca de ${metrics.snapshot.emergencyFund.coverageMonths.toFixed(1).replace(".0", "")} meses de gasto mensual.`
+      ? `${metrics.snapshot.emergencyFund.label}. Con estos datos, tu ahorro cubre cerca de ${metrics.snapshot.emergencyFund.coverageMonths.toFixed(1).replace(".0", "")} meses de gastos principales.`
       : metrics.snapshot.emergencyFund.label;
   const emergencyCoverageLabel =
     metrics.snapshot.emergencyFund.coverageMonths !== null
@@ -728,7 +747,7 @@ export default function DiagnosisScreen() {
           : "neutral";
   const emergencyPlainLanguage =
     metrics.snapshot.emergencyFund.coverageMonths === null
-      ? "Necesitamos tu ahorro actual y tus gastos mensuales para estimar cuántos meses podrías cubrir."
+      ? "Necesitamos tu ahorro actual y tus gastos principales para estimar cuántos meses podrías cubrir."
       : metrics.snapshot.emergencyFund.coverageMonths < 1
         ? "Tu ahorro todavía no cubriría un mes completo de gastos."
         : `Si tus ingresos se interrumpieran, tu ahorro podría cubrir cerca de ${emergencyCoverageLabel}.`;
@@ -843,12 +862,12 @@ export default function DiagnosisScreen() {
                             : metrics.incomeDisplay.value
                       },
                       {
-                        label: "Gastos",
+                        label: "Salidas mensuales",
                         operator: "−",
                         value:
-                          metrics.expenseValue !== null
-                            ? formatCOP(metrics.expenseValue)
-                            : metrics.expenseDisplay.value
+                          metrics.totalOutflowValue !== null
+                            ? formatCOP(metrics.totalOutflowValue)
+                            : "No disponible"
                       },
                       {
                         emphasis: true,
@@ -861,7 +880,7 @@ export default function DiagnosisScreen() {
                       }
                     ]}
                     closeLabel="Cerrar"
-                    definition="El margen mensual es lo que queda al restar los gastos de los ingresos. La relación gastos/ingresos muestra qué parte de tus ingresos utilizas en gastos."
+                    definition="El margen mensual es lo que queda al restar gastos principales, gastos pequeños y cuotas de deuda de los ingresos."
                     guidanceMode={guidanceMode}
                     plainLanguage={flowPlainLanguage}
                     resultDescription={flowResultDescription}
@@ -884,13 +903,30 @@ export default function DiagnosisScreen() {
                 <View style={styles.valueRows}>
                   <ValueRow label={metrics.incomeDisplay.label} value={metrics.incomeDisplay.value} />
                   <ValueRow label={metrics.expenseDisplay.label} value={metrics.expenseDisplay.value} />
+                  <ValueRow label="Gastos pequeños" value={metrics.smallExpensesMetricLabel} />
+                  <ValueRow
+                    label="Cuotas de deuda"
+                    value={`${formatCOP(metrics.snapshot.cashflow.monthlyDebtPayments)}${
+                      metrics.snapshot.debt.source === "reported" ? " aprox." : ""
+                    }`}
+                  />
+                  <ValueRow
+                    label="Salidas mensuales"
+                    value={
+                      metrics.totalOutflowValue !== null
+                        ? `${formatCOP(metrics.totalOutflowValue)}${
+                            metrics.isCashflowExact ? "" : " aprox."
+                          }`
+                        : "No disponible"
+                    }
+                  />
                   <ValueRow label="Margen mensual" value={metrics.estimatedMarginLabel} />
-                  <ValueRow label="Gastos frente a ingresos" value={metrics.expensePercentageLabel} />
+                  <ValueRow label="Salidas frente a ingresos" value={metrics.expensePercentageLabel} />
                 </View>
 
                 {metrics.estimatedMargin !== null && metrics.estimatedMargin < 0 ? (
                   <Text style={styles.warningText}>
-                    Tus gastos superan tus ingresos. El signo negativo muestra cuánto faltaría en
+                    Tus salidas superan tus ingresos. El signo negativo muestra cuánto faltaría en
                     un mes.
                   </Text>
                 ) : null}
@@ -923,15 +959,17 @@ export default function DiagnosisScreen() {
                 <View style={styles.legendRow}>
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, styles.legendDotExpenses]} />
-                    <Text style={styles.legendText}>Gastos</Text>
+                    <Text style={styles.legendText}>Gastos ({otherExpensesPercentage}%)</Text>
                   </View>
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, styles.legendDotSmallExpenses]} />
-                    <Text style={styles.legendText}>Gastos hormiga</Text>
+                    <Text style={styles.legendText}>
+                      Pequeños gastos ({metrics.smallExpensePercentage ?? 0}%)
+                    </Text>
                   </View>
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, styles.legendDotMargin]} />
-                    <Text style={styles.legendText}>Margen disponible</Text>
+                    <Text style={styles.legendText}>Margen ({marginPercentage}%)</Text>
                   </View>
                 </View>
               </>
@@ -961,7 +999,7 @@ export default function DiagnosisScreen() {
                           : metrics.currentSavingsDisplay.value
                     },
                     {
-                      label: "Gastos mensuales",
+                      label: "Gastos principales",
                       operator: "÷",
                       value:
                         metrics.expenseValue !== null
@@ -1002,7 +1040,7 @@ export default function DiagnosisScreen() {
 
           <InfoCard
             icon={<ClipboardCheck color={colors.primary} size={18} strokeWidth={2.4} />}
-            title="Gastos hormiga"
+            title="Pequeños gastos"
           >
             {smallExpensesMessages.map((message) => (
               <Text key={message} style={styles.text}>
@@ -1330,13 +1368,15 @@ const styles = StyleSheet.create({
   },
   legendRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md
+    gap: spacing.xs,
+    justifyContent: "space-between"
   },
   legendItem: {
     alignItems: "center",
+    flex: 1,
     flexDirection: "row",
-    gap: spacing.xs
+    gap: spacing.xs,
+    minWidth: 0
   },
   legendDot: {
     borderRadius: radius.pill,
@@ -1354,9 +1394,10 @@ const styles = StyleSheet.create({
   },
   legendText: {
     color: colors.textMuted,
-    fontSize: typography.caption,
+    flexShrink: 1,
+    fontSize: typography.small,
     fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.caption
+    lineHeight: typography.lineHeight.small
   },
   subsection: {
     gap: spacing.xs
