@@ -702,11 +702,11 @@ export default function SimulationScreen() {
                     : "Ver cómo sería mi plan"
                   : session
                     ? selectedPlanStrategy === "prioritize_goal"
-                      ? "Continuar priorizando mi meta"
-                      : "Continuar con la recomendación"
+                      ? "Continuar"
+                      : "Continuar"
                     : selectedPlanStrategy === "prioritize_goal"
-                      ? "Ver plan priorizando mi meta"
-                      : "Ver vista previa del plan recomendado"
+                      ? "Ver plan"
+                      : "Ver vista previa del plan"
               }
             />
             <PrimaryButton
