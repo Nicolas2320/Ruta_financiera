@@ -577,7 +577,13 @@ describe("monthly recurring actions", () => {
       progress.effectiveCompletedActions[
         getMonthlyActionProgressId(planProgressKey, "compare-debt-strategies")
       ]
-    ).toMatchObject({ status: "completed" });
+    ).toMatchObject({
+      status: "completed",
+      evidence: {
+        detail: "Repartir solo a deudas",
+        label: "Estrategia guardada"
+      }
+    });
   });
 
   it("does not generate the discarded small-expense, investing or tracking actions", () => {

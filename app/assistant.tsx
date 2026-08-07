@@ -818,8 +818,17 @@ export default function AssistantScreen() {
             <View style={styles.assistantIntroText}>
               <Text style={styles.assistantIntroLabel}>Consultas con contexto</Text>
               <Text style={styles.assistantIntroDescription}>
-                Pregunta sobre tu diagnóstico, gastos, metas, simulación o plan mensual.
+                Pregunta sobre tu diagnóstico, gastos, metas, simulación o plan mensual. Te ayudo a
+                entender tus resultados con palabras sencillas y a identificar qué podrías revisar
+                primero.
               </Text>
+              <View style={styles.assistantBoundary}>
+                <ShieldCheck color={colors.support} size={19} strokeWidth={2.4} />
+                <Text style={styles.boundaryText}>
+                  Orientación educativa: no recomienda productos financieros específicos, no promete
+                  resultados y no reemplaza asesoría profesional.
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -965,14 +974,6 @@ export default function AssistantScreen() {
             </View>
           </View>
 
-          <View style={[styles.boundaryCard, isPhone && styles.boundaryCardPhone]}>
-            <ShieldCheck color={colors.support} size={24} strokeWidth={2.4} />
-            <Text style={styles.boundaryText}>
-              Orientación educativa: no recomienda productos financieros específicos, no promete
-              resultados y no reemplaza asesoría profesional.
-            </Text>
-          </View>
-
         </View>
       </ScrollView>
 
@@ -1061,16 +1062,26 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   assistantIntroLabel: {
-    color: colors.primary,
-    fontSize: typography.caption,
+    color: colors.text,
+    fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    letterSpacing: 0.2,
-    lineHeight: typography.lineHeight.caption
+    lineHeight: typography.lineHeight.sectionTitle
   },
   assistantIntroDescription: {
-    color: colors.textMuted,
+    color: colors.text,
     fontSize: typography.body,
     lineHeight: typography.lineHeight.body
+  },
+  assistantBoundary: {
+    alignItems: "flex-start",
+    backgroundColor: colors.supportSoft,
+    borderColor: colors.supportBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+    padding: spacing.sm
   },
   emptyState: {
     ...shadows.card,
@@ -1154,14 +1165,14 @@ const styles = StyleSheet.create({
   },
   questionLabel: {
     color: colors.primary,
-    fontSize: typography.small,
+    fontSize: typography.option,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.small
+    lineHeight: typography.lineHeight.option
   },
   questionText: {
     color: colors.text,
     fontSize: typography.caption,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.regular,
     lineHeight: typography.lineHeight.caption
   },
   chatCard: {
@@ -1379,19 +1390,6 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: colors.textSubtle
-  },
-  boundaryCard: {
-    alignItems: "flex-start",
-    backgroundColor: colors.supportSoft,
-    borderColor: "#B9E9CD",
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.md,
-    padding: spacing.md
-  },
-  boundaryCardPhone: {
-    alignItems: "flex-start"
   },
   boundaryText: {
     color: colors.support,

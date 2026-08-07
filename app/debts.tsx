@@ -1315,12 +1315,14 @@ function DebtCard({
   debt,
   onEdit,
   onDelete,
-  onPayments
+  onPayments,
+  compact = false
 }: {
   debt: DebtRecord;
   onEdit: () => void;
   onDelete: () => void;
   onPayments: () => void;
+  compact?: boolean;
 }) {
   const typeOption = getDebtTypeOption(debt.type);
   const Icon = typeOption.icon;
@@ -1344,15 +1346,31 @@ function DebtCard({
           icon={<Icon color={typeToneColors.text} size={22} strokeWidth={2.4} />}
           tone={typeOption.tone}
         />
-        <View style={styles.debtCardTitleGroup}>
+        <View style={[styles.debtCardTitleGroup, compact && styles.debtCardTitleGroupCompact]}>
           <Text style={styles.debtCardTitle}>{getDebtTitle(debt)}</Text>
           <Text style={styles.debtCardSubtitle}>
             {debt.name ? typeOption.label : "Deuda registrada"}
             {debt.lender ? ` · ${debt.lender}` : ""}
           </Text>
         </View>
-        <Chip label={paid ? "Pagada" : debtPaymentStatusLabels[debt.status]} tone={statusTone} />
+        {!compact ? (
+          <Chip label={paid ? "Pagada" : debtPaymentStatusLabels[debt.status]} tone={statusTone} />
+        ) : null}
+        <Pressable
+          accessibilityLabel={`Eliminar deuda ${getDebtTitle(debt)}`}
+          accessibilityRole="button"
+          onPress={onDelete}
+          style={({ pressed }) => [styles.debtDeleteButton, pressed && styles.pressed]}
+        >
+          <Trash2 color="#C2410C" size={18} strokeWidth={2.4} />
+        </Pressable>
       </View>
+
+      {compact ? (
+        <View style={styles.debtCardStatusRow}>
+          <Chip label={paid ? "Pagada" : debtPaymentStatusLabels[debt.status]} tone={statusTone} />
+        </View>
+      ) : null}
 
       <View style={styles.debtCardMetrics}>
         <SummaryMetric
@@ -1400,14 +1418,6 @@ function DebtCard({
       </View>
 
       <View style={styles.debtCardActions}>
-        <PrimaryButton
-          accessibilityLabel={`Eliminar deuda ${getDebtTitle(debt)}`}
-          icon={null}
-          onPress={onDelete}
-          size="compact"
-          title="Eliminar"
-          variant="danger"
-        />
         <PrimaryButton
           accessibilityLabel={`Editar deuda ${getDebtTitle(debt)}`}
           icon={null}
@@ -2171,6 +2181,7 @@ export default function DebtsScreen() {
               <View style={styles.debtList}>
                 {debts.map((debt) => (
                   <DebtCard
+                    compact={isPhone}
                     debt={debt}
                     key={debt.id}
                     onDelete={() => requestDeleteDebt(debt)}
@@ -2451,22 +2462,25 @@ export default function DebtsScreen() {
               variant="secondary"
             />
             <AppModalAction
-              label="Eliminar deuda"
+              label="Eliminar"
               onPress={confirmDeleteDebt}
               variant="danger"
             />
           </AppModalActions>
         }
-        icon={<Trash2 color={colors.surface} size={22} strokeWidth={2.4} />}
-        iconBackgroundColor={colors.danger}
+        icon={<Trash2 color="#DC2626" size={22} strokeWidth={2.4} />}
         onClose={() => setDebtPendingDelete(null)}
         size="compact"
-        title="Eliminar deuda"
+        title={
+          debtPendingDelete
+            ? `Eliminar ${getDebtTitle(debtPendingDelete)}`
+            : "Eliminar deuda"
+        }
         visible={Boolean(debtPendingDelete)}
       >
         <Text style={styles.modalText}>
           {debtPendingDelete
-            ? `¿Quieres eliminar "${getDebtTitle(debtPendingDelete)}" de tus deudas?`
+            ? "Esta deuda se quitará de tu lista y dejará de incluirse en los cálculos del plan."
             : "¿Quieres eliminar esta deuda de tus deudas?"}
         </Text>
       </AppModal>
@@ -2551,10 +2565,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   heroKicker: {
-    color: colors.primary,
-    fontSize: typography.caption,
+    color: colors.text,
+    fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption,
+    lineHeight: typography.lineHeight.sectionTitle,
     marginTop: spacing.xs
   },
   heroAmount: {
@@ -3231,11 +3245,28 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     minWidth: 180
   },
+  debtCardTitleGroupCompact: {
+    minWidth: 0
+  },
+  debtCardStatusRow: {
+    alignItems: "flex-start",
+    flexDirection: "row"
+  },
   debtCardTitle: {
     color: colors.text,
     fontSize: typography.question,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.question
+  },
+  debtDeleteButton: {
+    alignItems: "center",
+    backgroundColor: colors.dangerSoft,
+    borderColor: colors.dangerBorder,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: "center",
+    width: 38
   },
   debtCardSubtitle: {
     color: colors.textMuted,
