@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   Apple,
@@ -825,6 +825,7 @@ function BottomNavItem({
 
 export default function SpendingScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ focus?: string }>();
   const { isPhone, screenPadding } = useResponsiveLayout();
   const { exactValues, onboarding, updateOnboarding } = useOnboarding();
   const guidanceMode = normalizeFinancialGuidanceMode(
@@ -869,6 +870,9 @@ export default function SpendingScreen() {
   const [selectedExpenseCategories, setSelectedExpenseCategories] = useState<string[]>(
     expenseCategories
   );
+  const scrollRef = useRef<ScrollView>(null);
+  const [categorySectionY, setCategorySectionY] = useState<number | null>(null);
+  const focus = Array.isArray(params.focus) ? params.focus[0] : params.focus;
   const hasExactMonthlyExpenses = snapshot.sourceMap.monthlyExpenses === "exact";
   const isCashflowExact =
     snapshot.sourceMap.monthlyIncome === "exact" &&
@@ -927,6 +931,21 @@ export default function SpendingScreen() {
       setSelectedExpenseCategories(expenseCategories);
     }
   }, [expenseCategories, isEditingCategories]);
+
+  useEffect(() => {
+    if (focus !== "categories" || categorySectionY === null) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        animated: true,
+        y: Math.max(categorySectionY - spacing.lg, 0)
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [categorySectionY, focus]);
 
   const toggleExpenseCategory = (category: string) => {
     setSelectedExpenseCategories((currentCategories) =>
@@ -993,6 +1012,7 @@ export default function SpendingScreen() {
       <ScrollView
         alwaysBounceVertical={false}
         contentContainerStyle={[styles.scrollContent, { paddingHorizontal: screenPadding }]}
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
@@ -1256,28 +1276,29 @@ export default function SpendingScreen() {
             </SectionCard>
           ) : null}
 
-          <SectionCard
-            compact={isPhone}
-            actionLabel={
-              expenseCategories.length > 0
-                ? isEditingCategories
-                  ? "Cancelar"
-                  : "Administrar"
-                : undefined
-            }
-            icon={<ReceiptText color={colors.primary} size={20} strokeWidth={2.4} />}
-            onActionPress={
-              isEditingCategories
-                ? cancelCategoryEditing
-                : () => setIsEditingCategories(true)
-            }
-            subtitle={
-              expenseCategories.length === 0
-                ? "Elige las categorías que forman parte de un mes habitual."
-                : undefined
-            }
-            title="Categorías principales"
-          >
+          <View onLayout={(event) => setCategorySectionY(event.nativeEvent.layout.y)}>
+            <SectionCard
+              compact={isPhone}
+              actionLabel={
+                expenseCategories.length > 0
+                  ? isEditingCategories
+                    ? "Cancelar"
+                    : "Administrar"
+                  : undefined
+              }
+              icon={<ReceiptText color={colors.primary} size={20} strokeWidth={2.4} />}
+              onActionPress={
+                isEditingCategories
+                  ? cancelCategoryEditing
+                  : () => setIsEditingCategories(true)
+              }
+              subtitle={
+                expenseCategories.length === 0
+                  ? "Elige las categorías que forman parte de un mes habitual."
+                  : undefined
+              }
+              title="Categorías principales"
+            >
             {expenseCategories.length === 0 || isEditingCategories ? (
               <View style={styles.categorySelectionSection}>
                 <Text style={styles.text}>
@@ -1373,7 +1394,8 @@ export default function SpendingScreen() {
                 </View>
               </View>
             )}
-          </SectionCard>
+            </SectionCard>
+          </View>
 
           </SpendingSectionContent>
         </View>

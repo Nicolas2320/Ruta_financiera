@@ -17,12 +17,15 @@ import {
   type OnboardingData
 } from "../types/financial";
 import { initialOnboarding } from "../types/financial";
-import { isDebtPaid } from "./debtPayments";
+import { getDebtPaymentTotalForPeriod, isDebtPaid } from "./debtPayments";
+import { getRecurringExpenseCategories } from "./debtCalculations";
 import { isDebtGoal, isEmergencyGoal } from "./goalPlanning";
+import { getGoalContributionPeriodSummary } from "./goalContributions";
 
 export type MonthlyPlanData = {
   incomeRange: string | null;
   expensesRange: string | null;
+  expenseCategories: string[];
   expenseCategoryAmounts: ExpenseCategoryAmounts;
   expensesFeeling: string | null;
   monthlyExpensesIncludesSmallExpenses: boolean | null;
@@ -68,10 +71,12 @@ export type MonthlyAction = {
 };
 
 export type MonthlyGoalContext = {
-  title: string | null;
-  monthlyContribution: number | null;
-  estimatedMonthsToGoal: number | null;
+  title?: string | null;
+  monthlyContribution?: number | null;
+  estimatedMonthsToGoal?: number | null;
+  activeGoalCount?: number;
   hasRegisteredContribution?: boolean;
+  monthlyContributionTotal?: number | null;
 };
 
 const monthlyPlanProgressVersion = "monthly-plan-v0.2";
@@ -101,112 +106,128 @@ const monthlyFocusByPriority: Record<PriorityKey, MonthlyFocus> = {
       "Crear una base para imprevistos puede darte más estabilidad antes de avanzar a metas grandes."
   },
   review_small_expenses: {
-    title: "Revisar gastos pequeños",
-    text:
-      "Puedes redirigir una parte de tus pequeños consumos hacia tu meta sin eliminarlos todos."
+    title: "Estás al día",
+    text: "No tienes acciones financieras pendientes por ahora."
   },
   advance_goal: {
-    title: "Avanzar hacia tu meta",
-    text: "Tu plan puede enfocarse en separar un monto mensual adecuado para tu objetivo."
+    title: "Avanzar hacia tus metas",
+    text: "Tu plan puede enfocarse en registrar aportes reales y comparar cómo distribuir tu dinero."
   },
   learn_investing: {
-    title: "Aprender antes de invertir",
-    text: "Puedes empezar entendiendo riesgo, plazo y liquidez antes de tomar decisiones."
+    title: "Estás al día",
+    text: "No tienes acciones financieras pendientes por ahora."
   },
   keep_tracking: {
-    title: "Mantener claridad mensual",
-    text: "Revisar tu plan cada mes te ayuda a tomar mejores decisiones."
+    title: "Estás al día",
+    text: "¡Buen trabajo! Completaste lo necesario y tu plan mensual está actualizado."
   }
 };
 
-function getGoalTitle(goalContext?: MonthlyGoalContext) {
-  const title = goalContext?.title?.trim();
-  return title && title.length > 0 ? title : null;
-}
-
 function getGoalContributionImpact(goalContext?: MonthlyGoalContext) {
-  const contribution = goalContext?.monthlyContribution ?? null;
+  const contribution =
+    goalContext?.monthlyContributionTotal ?? goalContext?.monthlyContribution ?? null;
+  const activeGoalCount = goalContext?.activeGoalCount ?? 0;
 
   if (contribution !== null && contribution > 0) {
-    return `Referencia mensual de tu estrategia: ${formatCOP(contribution)} aprox.`;
+    return activeGoalCount > 1
+      ? `Tu estrategia distribuye ${formatCOP(contribution)} aprox. al mes entre ${activeGoalCount} metas.`
+      : `Tu estrategia asigna ${formatCOP(contribution)} aprox. al mes a tus metas.`;
   }
 
-  return "La estrategia actual no reparte un monto mensual a esta meta.";
+  return "La estrategia actual no reparte un monto mensual a tus metas.";
 }
 
-function getGoalAwareFocus(
-  focus: MonthlyFocus,
-  priorityKey: PriorityKey,
-  goalContext?: MonthlyGoalContext
-): MonthlyFocus {
-  const goalTitle = getGoalTitle(goalContext);
-
-  if (priorityKey !== "advance_goal" || !goalTitle) {
-    return focus;
-  }
-
-  const contribution = goalContext?.monthlyContribution ?? null;
+function getGoalsFocus(goalContext?: MonthlyGoalContext): MonthlyFocus {
+  const contribution =
+    goalContext?.monthlyContributionTotal ?? goalContext?.monthlyContribution ?? null;
+  const activeGoalCount = goalContext?.activeGoalCount ?? 0;
 
   return {
-    title: `Meta del mes: ${goalTitle}`,
+    title: "Avanzar hacia tus metas",
     text:
       contribution !== null && contribution > 0
-        ? `Tu estrategia reparte ${formatCOP(contribution)} aprox. al mes a esta meta. Registra en Metas los aportes que realmente hagas.`
-        : `Tu plan puede enfocarse en registrar un aporte real para ${goalTitle} desde Metas.`
+        ? activeGoalCount > 1
+          ? `Tu estrategia distribuye ${formatCOP(contribution)} aprox. al mes entre ${activeGoalCount} metas. Registra únicamente los aportes que realmente hagas.`
+          : `Tu estrategia asigna ${formatCOP(contribution)} aprox. al mes a tus metas. Registra únicamente los aportes que realmente hagas.`
+        : "Registra desde Metas los aportes que realmente hagas y compara alternativas antes de distribuir tu dinero."
   };
 }
 
-function getGoalAwareActions(
-  actions: MonthlyAction[],
-  priorityKey: PriorityKey,
+function getGeneralGoalActions(
+  data: MonthlyPlanData,
+  metrics: MonthlyPlanMetrics,
   goalContext?: MonthlyGoalContext
-) {
-  const goalTitle = getGoalTitle(goalContext);
+): MonthlyAction[] {
+  const activeGoals = data.goals.filter(
+    (goal) => goal.status !== "completed" && goal.status !== "paused"
+  );
 
-  if (priorityKey !== "advance_goal" || !goalTitle) {
-    return actions;
+  if (activeGoals.length === 0) {
+    return [];
   }
 
-  return actions.map((action) => {
-    if (action.id === "set-goal-contribution") {
-      return {
-        ...action,
-        title: goalContext?.hasRegisteredContribution
-          ? `Registrar otro aporte para ${goalTitle}`
-          : `Registrar el primer aporte para ${goalTitle}`,
-        description:
-          "Hazlo desde Metas para actualizar el avance real y la fecha proyectada.",
-        why: "Registrar solo lo que realmente aportas mantiene el plan alineado con tu avance.",
-        estimatedImpact: getGoalContributionImpact(goalContext)
-      };
-    }
+  const periodKey = getMonthlyPlanPeriodKey();
+  const contributedGoalCount = activeGoals.filter(
+    (goal) => getGoalContributionPeriodSummary(goal, periodKey).amount > 0
+  ).length;
 
-    if (action.id === "review-goal-target") {
-      return {
-        ...action,
-        title: `Revisar el objetivo de ${goalTitle}`,
-        description: "Compara el monto objetivo con la distribución mensual actual.",
-        why: "Ajustar monto, plazo o aporte puede hacer la meta más sostenible."
-      };
+  const actions: MonthlyAction[] = [
+    {
+      id: "set-goal-contribution",
+      title: "Registrar aportes a mis metas",
+      description: `${contributedGoalCount} de ${activeGoals.length} ${activeGoals.length === 1 ? "meta" : "metas"} con aporte registrado este mes.`,
+      why: "Cada aporte actualiza el progreso y la fecha proyectada de la meta correspondiente.",
+      estimatedImpact: getGoalContributionImpact({
+        ...goalContext,
+        activeGoalCount: goalContext?.activeGoalCount ?? activeGoals.length
+      }),
+      difficulty: "Media",
+      category: "Meta"
     }
+  ];
 
-    if (action.id === "compare-goal-contribution") {
-      return {
-        ...action,
-        title: "Comparar escenarios en Simulación",
-        description:
-          "Compara cómo cambia la fecha al repartir el dinero entre deudas y metas.",
-        estimatedImpact:
-          goalContext?.estimatedMonthsToGoal !== null &&
-          goalContext?.estimatedMonthsToGoal !== undefined
-            ? `Elige un escenario para ${goalTitle}. Con el aporte asignado, podría tomar cerca de ${goalContext.estimatedMonthsToGoal} meses.`
-            : `Elige un escenario para ${goalTitle} sin cambiar tu aporte automáticamente.`
-      };
-    }
+  if ((metrics.snapshot.cashflow.monthlyMargin ?? 0) > 0) {
+    actions.push({
+      id: "compare-goal-contribution",
+      title: "Comparar escenarios en Simulación",
+      description: "Compara cómo repartir el dinero disponible entre tus deudas y metas.",
+      why: "Ver la distribución completa ayuda a decidir antes de mover tu dinero.",
+      estimatedImpact: `La simulación usará tu margen mensual de ${formatCOP(metrics.snapshot.cashflow.monthlyMargin ?? 0)} aprox.`,
+      difficulty: "Baja",
+      category: "Meta"
+    });
+  }
 
-    return action;
-  });
+  return actions;
 }
+
+function hasEmergencyGoal(data: MonthlyPlanData) {
+  return data.goals.some(isEmergencyGoal);
+}
+
+function needsEmergencyGoal(
+  data: MonthlyPlanData,
+  metrics: MonthlyPlanMetrics,
+  priorityKey: PriorityKey
+) {
+  return (
+    (metrics.snapshot.priority.key === "build_emergency_fund" ||
+      priorityKey === "build_emergency_fund") &&
+    !hasEmergencyGoal(data)
+  );
+}
+
+const createEmergencyGoalAction: MonthlyAction = {
+  id: "create-emergency-goal",
+  title: "Crear fondo de emergencia en Metas",
+  description:
+    "Crea la meta para definir su monto, fecha y registrar su avance sin mezclarla con tus otros objetivos.",
+  why: "Tenerla como meta permite que la simulación y el plan mensual usen el mismo objetivo.",
+  estimatedImpact:
+    "La app podrá seguir su avance y ajustar la proyección con tus datos actuales.",
+  difficulty: "Baja",
+  category: "Ahorro"
+};
 
 function normalizeText(value: string | null | undefined) {
   return (value ?? "")
@@ -221,6 +242,35 @@ function reportsNoDebts(data: MonthlyPlanData) {
     normalizeText(data.debtSituation).includes("no tengo") ||
     normalizeText(data.debtPaymentShare).includes("no pago")
   );
+}
+
+function getDebtPaymentActions(data: MonthlyPlanData): MonthlyAction[] {
+  const activeDebts = data.debts.filter((debt) => !isDebtPaid(debt));
+
+  if (activeDebts.length === 0) {
+    return [];
+  }
+
+  const periodKey = getMonthlyPlanPeriodKey();
+  const debtsWithPayment = activeDebts.filter(
+    (debt) => getDebtPaymentTotalForPeriod(debt, periodKey) > 0
+  ).length;
+  const missingPaymentCount = activeDebts.length - debtsWithPayment;
+
+  return [
+    {
+      id: "register-debt-payments",
+      title: "Registrar pagos de mis deudas",
+      description: `${debtsWithPayment} de ${activeDebts.length} ${activeDebts.length === 1 ? "deuda" : "deudas"} con pago registrado este mes.`,
+      why: "Registrar cada pago mantiene actualizados el avance y los saldos de tus deudas.",
+      estimatedImpact:
+        missingPaymentCount === 0
+          ? "Todos los pagos mensuales están registrados."
+          : `Falta registrar el pago de ${missingPaymentCount} ${missingPaymentCount === 1 ? "deuda" : "deudas"}.`,
+      difficulty: "Baja",
+      category: "Deudas"
+    }
+  ];
 }
 
 function getDebtPressureActions(
@@ -270,6 +320,74 @@ function getDebtPressureActions(
   return actions;
 }
 
+function getOrganizeCashflowActions(
+  data: MonthlyPlanData,
+  metrics: MonthlyPlanMetrics
+): MonthlyAction[] {
+  const actions: MonthlyAction[] = [];
+  const recurringCategories = getRecurringExpenseCategories(data.expenseCategories);
+  const hasIncompleteCategoryAmounts = recurringCategories.some(
+    (category) => (data.expenseCategoryAmounts[category] ?? 0) <= 0
+  );
+  const categorizedAmount = recurringCategories.reduce(
+    (total, category) => total + Math.max(data.expenseCategoryAmounts[category] ?? 0, 0),
+    0
+  );
+  const categoryAmountsExceedExpenses =
+    metrics.snapshot.cashflow.monthlyExpenses !== null &&
+    categorizedAmount > metrics.snapshot.cashflow.monthlyExpenses;
+
+  if (metrics.snapshot.sourceMap.monthlyIncome !== "exact") {
+    actions.push({
+      id: "confirm-monthly-income",
+      title: "Ingresar mi ingreso mensual promedio",
+      description: "Reemplaza el rango del diagnóstico por una cifra mensual aproximada.",
+      why: "Un ingreso confirmado permite calcular tu margen con mayor precisión.",
+      estimatedImpact: "La app actualizará el flujo de caja y las simulaciones con el valor real.",
+      difficulty: "Baja",
+      category: "Ingresos"
+    });
+  }
+
+  if (metrics.snapshot.sourceMap.monthlyExpenses !== "exact") {
+    actions.push({
+      id: "confirm-monthly-expenses",
+      title: "Ingresar mis gastos mensuales promedio",
+      description: "Reemplaza el rango del diagnóstico por una cifra mensual aproximada.",
+      why: "Un gasto confirmado ayuda a saber si realmente existe dinero disponible.",
+      estimatedImpact: "La app recalculará tu margen y las recomendaciones del plan.",
+      difficulty: "Baja",
+      category: "Gastos"
+    });
+  }
+
+  if (recurringCategories.length === 0) {
+    actions.push({
+      id: "select-expense-categories",
+      title: "Revisar mis categorías principales de gasto",
+      description: "Selecciona en Gastos las categorías que forman parte de un mes habitual.",
+      why: "El diagnóstico inicial estima cuánto gastas, pero no muestra en qué se distribuye.",
+      estimatedImpact: "La app podrá organizar y comparar tus gastos principales.",
+      difficulty: "Baja",
+      category: "Gastos"
+    });
+  } else if (hasIncompleteCategoryAmounts || categoryAmountsExceedExpenses) {
+    actions.push({
+      id: "enter-category-amounts",
+      title: "Ingresar montos de mis categorías principales",
+      description: "Asigna un monto mensual a cada categoría que seleccionaste en Gastos.",
+      why: categoryAmountsExceedExpenses
+        ? "La suma actual supera tus gastos mensuales y conviene revisarla."
+        : "Los montos permiten identificar cuáles categorías tienen mayor peso.",
+      estimatedImpact: "La app mostrará una distribución basada en tus datos registrados.",
+      difficulty: "Baja",
+      category: "Gastos"
+    });
+  }
+
+  return actions;
+}
+
 const noConcreteGoalAmountValues = [
   "",
   "No tengo una cifra todavía",
@@ -280,6 +398,7 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
   const {
     incomeRange = null,
     expensesRange = null,
+    expenseCategories = [],
     expenseCategoryAmounts = {},
     expensesFeeling = null,
     monthlyExpensesIncludesSmallExpenses = null,
@@ -303,6 +422,7 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
   return {
     incomeRange,
     expensesRange,
+    expenseCategories: Array.isArray(expenseCategories) ? expenseCategories : [],
     expenseCategoryAmounts:
       expenseCategoryAmounts && typeof expenseCategoryAmounts === "object" && !Array.isArray(expenseCategoryAmounts)
         ? expenseCategoryAmounts
@@ -364,12 +484,41 @@ export function goalNeedsAmount(goalAmountRange: string | null) {
 }
 
 export function getMonthlyFocus(
-  _data: MonthlyPlanData,
+  data: MonthlyPlanData,
   metrics: MonthlyPlanMetrics,
   priorityKey = metrics.snapshot.priority.key,
   goalContext?: MonthlyGoalContext
 ): MonthlyFocus {
-  return getGoalAwareFocus(monthlyFocusByPriority[priorityKey], priorityKey, goalContext);
+  const actions = getMonthlyActions(data, metrics, priorityKey, goalContext);
+
+  if (actions.length === 0) {
+    return monthlyFocusByPriority.keep_tracking;
+  }
+
+  if (
+    (priorityKey === "review_small_expenses" ||
+      priorityKey === "learn_investing" ||
+      priorityKey === "keep_tracking") &&
+    actions.some((action) => action.id === "register-debt-payments")
+  ) {
+    return {
+      title: "Registrar pagos del mes",
+      text: "Mantén al día el avance de tus deudas registrando los pagos que realizaste este mes."
+    };
+  }
+
+  if (needsEmergencyGoal(data, metrics, priorityKey)) {
+    return monthlyFocusByPriority.build_emergency_fund;
+  }
+
+  if (
+    priorityKey === "advance_goal" ||
+    (priorityKey === "build_emergency_fund" && hasEmergencyGoal(data))
+  ) {
+    return getGoalsFocus(goalContext);
+  }
+
+  return monthlyFocusByPriority[priorityKey];
 }
 
 export function getMonthlyActions(
@@ -378,47 +527,25 @@ export function getMonthlyActions(
   priorityKey = metrics.snapshot.priority.key,
   goalContext?: MonthlyGoalContext
 ): MonthlyAction[] {
-  let actions =
-    priorityKey === "debt_pressure"
-      ? getDebtPressureActions(data, metrics)
-      : getGoalAwareActions(
-          generateMonthlyActions(metrics.snapshot, priorityKey),
-          priorityKey,
-          goalContext
-        );
-  const needsEmergencyGoal =
-    (metrics.snapshot.priority.key === "build_emergency_fund" ||
-      priorityKey === "build_emergency_fund") &&
-    !data.goals.some(
-      (goal) =>
-        goal.status !== "completed" &&
-        goal.status !== "paused" &&
-        isEmergencyGoal(goal)
-    );
-  const createEmergencyGoalAction: MonthlyAction = {
-    id: "create-emergency-goal",
-    title: "Crear fondo de emergencia en Metas",
-    description:
-      "Crea la meta para definir su monto, fecha y registrar su avance sin mezclarla con tus otros objetivos.",
-    why:
-      "Tenerla como meta permite que la simulación y el plan mensual usen el mismo objetivo.",
-    estimatedImpact:
-      "La app podrá seguir su avance y ajustar la proyección con tus datos actuales.",
-    difficulty: "Baja",
-    category: "Ahorro"
-  };
+  const debtPaymentActions = getDebtPaymentActions(data);
 
-  if (needsEmergencyGoal && priorityKey === "build_emergency_fund") {
-    actions = actions.map((action, index) =>
-      index === 0
-        ? createEmergencyGoalAction
-        : action
-    );
-  } else if (needsEmergencyGoal) {
-    actions = [...actions.slice(0, 2), createEmergencyGoalAction];
+  if (needsEmergencyGoal(data, metrics, priorityKey)) {
+    return [...debtPaymentActions, createEmergencyGoalAction];
   }
 
-  return actions;
+  if (priorityKey === "debt_pressure") {
+    return [...debtPaymentActions, ...getDebtPressureActions(data, metrics)];
+  }
+
+  if (priorityKey === "organize_cashflow") {
+    return [...debtPaymentActions, ...getOrganizeCashflowActions(data, metrics)];
+  }
+
+  if (priorityKey === "build_emergency_fund" || priorityKey === "advance_goal") {
+    return [...debtPaymentActions, ...getGeneralGoalActions(data, metrics, goalContext)];
+  }
+
+  return [...debtPaymentActions, ...generateMonthlyActions(metrics.snapshot, priorityKey)];
 }
 
 export function getMonthlyPlanProgressKey(

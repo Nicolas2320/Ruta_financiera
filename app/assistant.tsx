@@ -557,11 +557,19 @@ export default function AssistantScreen() {
       goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
       goalPlan.allocations[0] ??
       null;
+    const activeGoalAllocations = goalPlan.allocations.filter(
+      (allocation) =>
+        allocation.goal.status !== "completed" && allocation.goal.status !== "paused"
+    );
     const monthlyGoalContext: MonthlyGoalContext = {
+      activeGoalCount: activeGoalAllocations.length,
       title: primaryGoalAllocation?.goal.title ?? data.financialGoal,
       monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
+      monthlyContributionTotal: goalPlan.monthlyContributionTotal,
       estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null,
-      hasRegisteredContribution: (primaryGoalAllocation?.currentAmount ?? 0) > 0
+      hasRegisteredContribution: activeGoalAllocations.some(
+        (allocation) => allocation.currentAmount > 0
+      )
     };
     const periodKey = getMonthlyPlanPeriodKey();
     const suggestedActions = getMonthlyActions(
@@ -605,9 +613,11 @@ export default function AssistantScreen() {
     const monthlyPlanProgress = getEffectiveMonthlyPlanProgress({
       actions,
       completedActions: completedActionsForPlanSelection,
+      debts: data.debts,
+      goalAllocations: goalPlan.allocations,
       periodKey,
       planProgressKey: activePlanProgressKey,
-      primaryGoalAllocation
+      simulationPlanPreference: onboarding.simulationPlanPreference
     });
     const completedCount = monthlyPlanProgress.completedCount;
     const progressPercentage =
@@ -624,8 +634,8 @@ export default function AssistantScreen() {
       progressPercentage,
       realContributionThisMonth: monthlyPlanProgress.impactSummary.realContributionTotal,
       referenceMonthlyContribution:
-        activePlanPriorityKey === "advance_goal"
-          ? primaryGoalAllocation?.monthlyContribution ?? 0
+        actions.some((action) => action.id === "set-goal-contribution")
+          ? goalPlan.monthlyContributionTotal
           : metrics.balancedScenarioAmount,
       snapshot: metrics.snapshot
     });

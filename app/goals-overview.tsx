@@ -1373,19 +1373,28 @@ export default function GoalsOverviewScreen() {
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
     null;
+  const activeGoalAllocations = goalPlan.allocations.filter(
+    (allocation) =>
+      allocation.goal.status !== "completed" && allocation.goal.status !== "paused"
+  );
   const monthlyGoalContext = useMemo<MonthlyGoalContext>(
     () => ({
+      activeGoalCount: activeGoalAllocations.length,
       title: primaryGoalAllocation?.goal.title ?? data.financialGoal,
       monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
+      monthlyContributionTotal: goalPlan.monthlyContributionTotal,
       estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null,
-      hasRegisteredContribution: (primaryGoalAllocation?.currentAmount ?? 0) > 0
+      hasRegisteredContribution: activeGoalAllocations.some(
+        (allocation) => allocation.currentAmount > 0
+      )
     }),
     [
+      activeGoalAllocations,
       data.financialGoal,
+      goalPlan.monthlyContributionTotal,
       primaryGoalAllocation?.estimatedMonthsToGoal,
       primaryGoalAllocation?.goal.title,
-      primaryGoalAllocation?.monthlyContribution,
-      primaryGoalAllocation?.currentAmount
+      primaryGoalAllocation?.monthlyContribution
     ]
   );
   const suggestedActions = useMemo(
@@ -1410,16 +1419,10 @@ export default function GoalsOverviewScreen() {
     () => getMonthlyPlanProgressKey(metrics, monthlyActions, activePlanPriorityKey ?? undefined),
     [activePlanPriorityKey, monthlyActions, metrics]
   );
-  const primaryGoalContributionAction =
-    monthlyActions.find((action) => {
-      if (!isGoalContributionActionId(action.id)) {
-        return false;
-      }
-
-      return action.id !== "initial-emergency-contribution" || isEmergencyGoal(primaryGoalAllocation?.goal);
-    }) ?? null;
-  const primaryGoalContributionProgressId = primaryGoalContributionAction
-    ? getMonthlyActionProgressId(monthlyPlanProgressKey, primaryGoalContributionAction.id)
+  const monthlyGoalContributionAction =
+    monthlyActions.find((action) => isGoalContributionActionId(action.id)) ?? null;
+  const monthlyGoalContributionProgressId = monthlyGoalContributionAction
+    ? getMonthlyActionProgressId(monthlyPlanProgressKey, monthlyGoalContributionAction.id)
     : null;
   const periodKey = getMonthlyPlanPeriodKey();
   const totalGoalContributionsThisMonth = goalPlan.allocations.reduce(
@@ -1525,11 +1528,10 @@ export default function GoalsOverviewScreen() {
 
   const registerGoalContribution = (goalId: string, amount: number) => {
     const shouldCompletePlanAction =
-      goalId === primaryGoalAllocation?.goal.id &&
-      primaryGoalContributionAction !== null &&
-      primaryGoalContributionProgressId !== null &&
-      !isActionProgressCompleted(completedActions[primaryGoalContributionProgressId]);
-    const sourceProgressId = shouldCompletePlanAction ? primaryGoalContributionProgressId : null;
+      monthlyGoalContributionAction !== null &&
+      monthlyGoalContributionProgressId !== null &&
+      !isActionProgressCompleted(completedActions[monthlyGoalContributionProgressId]);
+    const sourceProgressId = shouldCompletePlanAction ? monthlyGoalContributionProgressId : null;
 
     persistGoals(
       applyGoalContribution(goals, goalId, {
@@ -1539,12 +1541,12 @@ export default function GoalsOverviewScreen() {
       })
     );
 
-    if (shouldCompletePlanAction && primaryGoalContributionProgressId) {
-      updateActionProgress(primaryGoalContributionProgressId, {
+    if (shouldCompletePlanAction && monthlyGoalContributionProgressId) {
+      updateActionProgress(monthlyGoalContributionProgressId, {
         status: "completed",
         evidence: {
           type: "amount",
-          label: getGoalContributionLabelForActionId(primaryGoalContributionAction.id),
+          label: getGoalContributionLabelForActionId(monthlyGoalContributionAction.id),
           amount,
           detail: null
         }

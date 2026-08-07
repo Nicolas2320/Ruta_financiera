@@ -85,7 +85,8 @@ export default function ExpensesScreen() {
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isSpendingEditMode = source === "spending";
   const isProfileEditMode = source === "profile";
-  const isEditMode = isSpendingEditMode || isProfileEditMode;
+  const isActionPlanEditMode = source === "action-plan";
+  const isEditMode = isSpendingEditMode || isProfileEditMode || isActionPlanEditMode;
   const [selectedExpenseRange, setSelectedExpenseRange] = useState<string | null>(
     normalizeExpenseRange(onboarding.expensesRange)
   );
@@ -93,7 +94,7 @@ export default function ExpensesScreen() {
     onboarding.expensesFeeling
   );
   const [usesExactExpenses, setUsesExactExpenses] = useState(
-    hasExactFinancialValue(exactValues.monthlyExpenses)
+    isActionPlanEditMode || hasExactFinancialValue(exactValues.monthlyExpenses)
   );
   const [exactExpensesInput, setExactExpensesInput] = useState(
     hasExactFinancialValue(exactValues.monthlyExpenses)
@@ -110,13 +111,15 @@ export default function ExpensesScreen() {
     hasHydratedStoredAnswers.current = true;
     setSelectedExpenseRange(normalizeExpenseRange(onboarding.expensesRange));
     setSelectedExpenseFeeling(onboarding.expensesFeeling);
-    setUsesExactExpenses(hasExactFinancialValue(exactValues.monthlyExpenses));
+    setUsesExactExpenses(
+      isActionPlanEditMode || hasExactFinancialValue(exactValues.monthlyExpenses)
+    );
     setExactExpensesInput(
       hasExactFinancialValue(exactValues.monthlyExpenses)
         ? formatCOP(exactValues.monthlyExpenses)
         : ""
     );
-  }, [exactValues.monthlyExpenses, onboarding, onboardingSyncStatus]);
+  }, [exactValues.monthlyExpenses, isActionPlanEditMode, onboarding, onboardingSyncStatus]);
 
   const parsedExactExpenses = parseCOPInput(exactExpensesInput);
 
@@ -165,6 +168,11 @@ export default function ExpensesScreen() {
       return;
     }
 
+    if (isActionPlanEditMode) {
+      router.replace("/action-plan");
+      return;
+    }
+
     router.push(
       isSpendingEditMode
         ? "/spending"
@@ -189,11 +197,19 @@ export default function ExpensesScreen() {
                 router.push(
                   isSpendingEditMode
                     ? "/spending"
-                    : { pathname: "/summary", params: { mode: "edit" } }
+                    : isActionPlanEditMode
+                      ? "/action-plan"
+                      : { pathname: "/summary", params: { mode: "edit" } }
                 )
               }
-              subtitle={isSpendingEditMode ? "Volveras a Gastos." : "Volveras al perfil financiero."}
-              title="Editar gastos"
+              subtitle={
+                isSpendingEditMode
+                  ? "Volverás a Gastos."
+                  : isActionPlanEditMode
+                    ? "Volverás al plan de acción."
+                    : "Volverás al perfil financiero."
+              }
+              title={isActionPlanEditMode ? "Ingresar gastos mensuales" : "Editar gastos"}
             />
           ) : null}
           {!isEditMode ? (
@@ -209,11 +225,23 @@ export default function ExpensesScreen() {
           ) : null}
 
           <HeroInfoCard
-            badge="Puedes elegir un rango o ingresar una cifra."
+            badge={
+              isActionPlanEditMode
+                ? "Puede ser un promedio aproximado."
+                : "Puedes elegir un rango o ingresar una cifra."
+            }
             image={expensesCupReceipt}
             imageStyle={styles.heroImage}
-            text="Incluye todos tus gastos habituales, también las compras pequeñas que se repiten. No incluyas cuotas de deudas o préstamos."
-            title="Tus gastos mensuales"
+            text={
+              isActionPlanEditMode
+                ? "Para completar esta acción, reemplaza el rango del diagnóstico por una cifra mensual. Incluye tus gastos habituales, pero no las cuotas de deudas."
+                : "Incluye todos tus gastos habituales, también las compras pequeñas que se repiten. No incluyas cuotas de deudas o préstamos."
+            }
+            title={
+              isActionPlanEditMode
+                ? "Ingresa tus gastos mensuales promedio"
+                : "Tus gastos mensuales"
+            }
           />
 
           <View style={styles.card}>
@@ -222,29 +250,38 @@ export default function ExpensesScreen() {
               Piensa en todo lo que gastas durante el mes. No sumes cuotas de deudas o préstamos;
               las revisaremos por separado.
             </Text>
-            <View style={styles.compactList}>
-              {expenseRanges.map((expenseRange) => (
+            {!isActionPlanEditMode ? (
+              <View style={styles.compactList}>
+                {expenseRanges.map((expenseRange) => (
+                  <SelectableCard
+                    key={expenseRange}
+                    onPress={() => {
+                      setUsesExactExpenses(false);
+                      setSelectedExpenseRange(expenseRange);
+                    }}
+                    selected={!usesExactExpenses && selectedExpenseRange === expenseRange}
+                    style={styles.compactOption}
+                    title={expenseRange}
+                  />
+                ))}
                 <SelectableCard
-                  key={expenseRange}
-                  onPress={() => {
-                    setUsesExactExpenses(false);
-                    setSelectedExpenseRange(expenseRange);
-                  }}
-                  selected={!usesExactExpenses && selectedExpenseRange === expenseRange}
+                  onPress={() => setUsesExactExpenses(true)}
+                  selected={usesExactExpenses}
                   style={styles.compactOption}
-                  title={expenseRange}
+                  title={exactExpenseOption}
                 />
-              ))}
-              <SelectableCard
-                onPress={() => setUsesExactExpenses(true)}
-                selected={usesExactExpenses}
-                style={styles.compactOption}
-                title={exactExpenseOption}
-              />
-            </View>
+              </View>
+            ) : null}
             {usesExactExpenses ? (
               <ExactAmountField
                 accessibilityLabel="Gastos mensuales"
+                autoFocus={isActionPlanEditMode}
+                helper={
+                  isActionPlanEditMode
+                    ? "Si cambia cada mes, usa el promedio de tus últimos meses."
+                    : undefined
+                }
+                label={isActionPlanEditMode ? "Cifra mensual" : undefined}
                 onChangeText={handleExactExpensesChange}
                 value={exactExpensesInput}
               />
@@ -268,20 +305,26 @@ export default function ExpensesScreen() {
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel={
-                isEditMode ? "Guardar cambios de gastos" : "Continuar hacia ahorros y deudas"
+                isActionPlanEditMode
+                  ? "Guardar cifra de gastos"
+                  : isEditMode
+                    ? "Guardar cambios de gastos"
+                    : "Continuar hacia ahorros y deudas"
               }
               disabled={!canContinue}
               iconPosition="right"
               onPress={handleContinue}
               style={styles.primaryButton}
-              title={isEditMode ? "Guardar cambios" : "Continuar"}
+              title={isActionPlanEditMode ? "Guardar cifra" : isEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
               accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() => router.back()}
+              onPress={() =>
+                isActionPlanEditMode ? router.replace("/action-plan") : router.back()
+              }
               style={styles.secondaryButton}
-              title="Volver"
+              title={isActionPlanEditMode ? "Volver al plan" : "Volver"}
               variant="secondary"
             />
           </View>

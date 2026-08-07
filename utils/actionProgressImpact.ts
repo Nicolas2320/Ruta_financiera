@@ -72,6 +72,11 @@ const impactDefinitionsByActionId: Record<string, ImpactDefinition> = {
     label: "Escenario aprendido",
     target: "goal"
   },
+  "compare-debt-strategies": {
+    kind: "insight",
+    label: "Estrategia de deuda revisada",
+    target: "debt"
+  },
   "confirm-goal-priority": {
     kind: "insight",
     label: "Meta principal revisada",
@@ -81,11 +86,6 @@ const impactDefinitionsByActionId: Record<string, ImpactDefinition> = {
     kind: "insight",
     label: "Horizonte definido",
     target: "education"
-  },
-  "initial-emergency-contribution": {
-    kind: "real_contribution",
-    label: "Aporte real a emergencia",
-    target: "emergency"
   },
   "learn-risk-time": {
     kind: "insight",
@@ -102,56 +102,31 @@ const impactDefinitionsByActionId: Record<string, ImpactDefinition> = {
     label: "Proteccion definida",
     target: "emergency"
   },
-  "protect-emergency-money": {
-    kind: "insight",
-    label: "Regla de emergencia",
-    target: "emergency"
-  },
   "redirect-small-expenses": {
     kind: "real_contribution",
     label: "Aporte real a meta",
     target: "goal"
+  },
+  "register-debt-payments": {
+    kind: "real_contribution",
+    label: "Pagos reales de deudas",
+    target: "debt"
   },
   "review-financial-data": {
     kind: "data_signal",
     label: "Dato financiero revisado",
     target: "profile"
   },
-  "review-goal-target": {
-    kind: "insight",
-    label: "Meta revisada",
-    target: "goal"
-  },
-  "review-main-expenses": {
-    kind: "insight",
-    label: "Gastos revisados",
-    target: "cashflow"
-  },
-  "separate-emergency-money": {
-    kind: "insight",
-    label: "Dinero separado",
-    target: "emergency"
-  },
   "set-goal-contribution": {
     kind: "real_contribution",
-    label: "Aporte real a meta",
+    label: "Aporte real a metas",
     target: "goal"
-  },
-  "small-automatic-separation": {
-    kind: "real_contribution",
-    label: "Ahorro real separado",
-    target: "general_savings"
   },
   "small-expense-limit": {
     kind: "limit_commitment",
     label: "Límite mensual definido",
     target: "small_expenses"
   },
-  "weekly-limit": {
-    kind: "limit_commitment",
-    label: "Límite semanal definido",
-    target: "cashflow"
-  }
 };
 
 function getActionIdFromProgressId(progressId: string) {
@@ -247,7 +222,7 @@ export function getMonthlyActionImpactSummary(
     .filter((item): item is MonthlyActionImpactItem => Boolean(item))
     .filter((item) => item.periodKey === periodKey);
   const completedItems = trackedItems.filter((item) => item.status === "completed");
-  const realContributions = completedItems.filter((item) => item.kind === "real_contribution");
+  const realContributions = trackedItems.filter((item) => item.kind === "real_contribution");
   const limitCommitments = completedItems.filter((item) => item.kind === "limit_commitment");
   const insightSignals = completedItems.filter((item) => item.kind === "insight");
   const dataSignals = completedItems.filter((item) => item.kind === "data_signal");

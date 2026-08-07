@@ -52,8 +52,16 @@ export function getDebtPaymentTotal(debt: DebtRecord) {
 export function getDebtPaymentTotalForMonth(debt: DebtRecord, referenceDate = new Date()) {
   const referencePeriod = `${referenceDate.getFullYear()}-${`${referenceDate.getMonth() + 1}`.padStart(2, "0")}`;
 
+  return getDebtPaymentTotalForPeriod(debt, referencePeriod);
+}
+
+export function getDebtPaymentTotalForPeriod(debt: DebtRecord, periodKey: string) {
+  if (!/^\d{4}-\d{2}$/.test(periodKey)) {
+    return 0;
+  }
+
   return (debt.payments ?? []).reduce((total, payment) => {
-    if (!payment.date.startsWith(referencePeriod)) {
+    if (!payment.date.startsWith(periodKey)) {
       return total;
     }
 

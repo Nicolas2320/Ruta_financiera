@@ -3,7 +3,6 @@ import type { ComponentType, ReactNode } from "react";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
-  ArrowRight,
   BookOpen,
   CalendarCheck,
   ChartColumnIncreasing,
@@ -105,8 +104,24 @@ function getActionVisual(actionId: string): {
     return { icon: HandCoins, color: "#7C3AED", backgroundColor: "#F1E8FF" };
   }
 
-  if (actionId === "register-debts" || actionId === "compare-debt-strategies") {
+  if (
+    actionId === "register-debts" ||
+    actionId === "register-debt-payments" ||
+    actionId === "compare-debt-strategies"
+  ) {
     return { icon: Wallet, color: "#F97316", backgroundColor: "#FFF1E7" };
+  }
+
+  if (actionId === "confirm-monthly-income") {
+    return { icon: Wallet, color: colors.support, backgroundColor: colors.supportSoft };
+  }
+
+  if (
+    actionId === "confirm-monthly-expenses" ||
+    actionId === "select-expense-categories" ||
+    actionId === "enter-category-amounts"
+  ) {
+    return { icon: Search, color: "#B77900", backgroundColor: colors.warningSoft };
   }
 
   if (actionId === "education") {
@@ -146,24 +161,6 @@ type EvidenceConfig = {
 };
 
 const amountEvidenceByActionId: Record<string, Omit<EvidenceConfig, "type">> = {
-  "weekly-limit": {
-    title: "Define el límite",
-    prompt: "Escribe el límite semanal que vas a probar.",
-    placeholder: "E",
-    resultLabel: "Límite semanal definido"
-  },
-  "small-automatic-separation": {
-    title: "Registra lo que separaste",
-    prompt: "Anota la cantidad mínima que apartaste o vas a apartar al recibir ingresos.",
-    placeholder: "",
-    resultLabel: "Monto separado"
-  },
-  "initial-emergency-contribution": {
-    title: "Registra el aporte",
-    prompt: "Anota cuánto separaste para tu fondo de emergencia.",
-    placeholder: "",
-    resultLabel: "Aporte a emergencia"
-  },
   "small-expense-limit": {
     title: "Define el límite mensual",
     prompt: "Escribe el límite que vas a probar para esta categoría.",
@@ -178,46 +175,19 @@ const amountEvidenceByActionId: Record<string, Omit<EvidenceConfig, "type">> = {
   },
   "set-goal-contribution": {
     title: "Registra el aporte",
-    prompt: "Anota cuánto separaste o te comprometes a separar para esta meta.",
+    prompt: "Anota cuánto separaste o te comprometes a separar para tus metas.",
     placeholder: "",
-    resultLabel: "Aporte a meta"
+    resultLabel: "Aporte a metas"
   }
 };
 
 const detailEvidenceByActionId: Record<string, Omit<EvidenceConfig, "type"> & { type?: EvidenceConfig["type"] }> = {
-  "review-main-expenses": {
-    title: "Registra categorías",
-    prompt: "Anota las categorías principales que revisaste.",
-    placeholder: "Ej. arriendo, transporte, alimentación",
-    resultLabel: "Categorías revisadas",
-    type: "category"
-  },
-  "separate-emergency-money": {
-    title: "Define dónde guardarlo",
-    prompt: "Anota dónde quedará separado ese dinero.",
-    placeholder: "Ej. Bolsillo de ahorro / cuenta separada",
-    resultLabel: "Lugar definido"
-  },
-  "protect-emergency-money": {
-    title: "Define tu regla de uso",
-    prompt: "Anota qué cuenta como emergencia para ti.",
-    placeholder: "Ej. salud, reparación urgente o pérdida de ingreso",
-    resultLabel: "Regla de emergencia",
-    type: "decision"
-  },
   "observe-small-expense-category": {
     title: "Elige una categoría",
     prompt: "Anota la categoría de gasto pequeño que observarás esta semana.",
     placeholder: "Ej. domicilios",
     resultLabel: "Categoría observada",
     type: "category"
-  },
-  "review-goal-target": {
-    title: "Registra la decisión",
-    prompt: "Anota si mantienes, bajas o ajustas el monto objetivo.",
-    placeholder: "Ej. Mantengo la meta, pero amplio el plazo",
-    resultLabel: "Decisión sobre meta",
-    type: "decision"
   },
   "compare-goal-contribution": {
     title: "Registra la estrategia revisada",
@@ -438,9 +408,12 @@ function ActionCard({
   expanded,
   impactItem,
   onOpenDebts,
+  onOpenExpenses,
   onOpenGoals,
   onOpenGoalsOverview,
+  onOpenIncome,
   onOpenSimulation,
+  onOpenSpendingCategories,
   onProgressChange,
   onToggleExpanded,
   progress,
@@ -451,9 +424,12 @@ function ActionCard({
   expanded: boolean;
   impactItem: MonthlyActionImpactItem | null;
   onOpenDebts: () => void;
+  onOpenExpenses: () => void;
   onOpenGoals: () => void;
   onOpenGoalsOverview: () => void;
+  onOpenIncome: () => void;
   onOpenSimulation: () => void;
+  onOpenSpendingCategories: () => void;
   onProgressChange: (patch: ActionProgressPatch) => void;
   onToggleExpanded: () => void;
   progress: ActionProgressValue | undefined;
@@ -482,7 +458,12 @@ function ActionCard({
   const hasOptions = Boolean(evidenceConfig.options && evidenceConfig.options.length > 0);
   const isScenarioComparisonAction =
     action.id === "compare-goal-contribution" || action.id === "compare-debt-strategies";
-  const isDebtDetailsAction = action.id === "register-debts";
+  const isDebtDetailsAction =
+    action.id === "register-debts" || action.id === "register-debt-payments";
+  const isIncomeDetailsAction = action.id === "confirm-monthly-income";
+  const isExpensesDetailsAction = action.id === "confirm-monthly-expenses";
+  const isExpenseCategoriesAction =
+    action.id === "select-expense-categories" || action.id === "enter-category-amounts";
   const isCreateEmergencyGoalAction = action.id === "create-emergency-goal";
   const isGoalContributionAction = isGoalContributionActionId(action.id);
   const hasSavedProgress = Boolean(
@@ -616,7 +597,6 @@ function ActionCard({
             ]}
           >
             <Text style={styles.cardActionButtonText}>Ver simulación</Text>
-            <ArrowRight color={colors.surface} size={17} strokeWidth={2.6} />
           </Pressable>
         ) : null}
         {isDebtDetailsAction ? (
@@ -630,7 +610,45 @@ function ActionCard({
             ]}
           >
             <Text style={styles.cardActionButtonText}>Ver mis deudas</Text>
-            <ArrowRight color={colors.surface} size={17} strokeWidth={2.6} />
+          </Pressable>
+        ) : null}
+        {isIncomeDetailsAction ? (
+          <Pressable
+            accessibilityLabel="Ingresar cifra de ingresos mensuales"
+            accessibilityRole="button"
+            onPress={onOpenIncome}
+            style={({ pressed }) => [
+              styles.cardActionButton,
+              pressed && styles.checkboxPressed
+            ]}
+          >
+            <Text style={styles.cardActionButtonText}>Ingresar cifra</Text>
+          </Pressable>
+        ) : null}
+        {isExpensesDetailsAction ? (
+          <Pressable
+            accessibilityLabel="Ingresar cifra de gastos mensuales"
+            accessibilityRole="button"
+            onPress={onOpenExpenses}
+            style={({ pressed }) => [
+              styles.cardActionButton,
+              pressed && styles.checkboxPressed
+            ]}
+          >
+            <Text style={styles.cardActionButtonText}>Ingresar cifra</Text>
+          </Pressable>
+        ) : null}
+        {isExpenseCategoriesAction ? (
+          <Pressable
+            accessibilityLabel="Abrir categorías principales de gasto"
+            accessibilityRole="button"
+            onPress={onOpenSpendingCategories}
+            style={({ pressed }) => [
+              styles.cardActionButton,
+              pressed && styles.checkboxPressed
+            ]}
+          >
+            <Text style={styles.cardActionButtonText}>Ver categorías</Text>
           </Pressable>
         ) : null}
         {isCreateEmergencyGoalAction ? (
@@ -644,7 +662,6 @@ function ActionCard({
             ]}
           >
             <Text style={styles.cardActionButtonText}>Crear en Metas</Text>
-            <ArrowRight color={colors.surface} size={17} strokeWidth={2.6} />
           </Pressable>
         ) : null}
         {isGoalContributionAction ? (
@@ -663,6 +680,9 @@ function ActionCard({
           </Pressable>
         ) : !isScenarioComparisonAction &&
           !isDebtDetailsAction &&
+          !isIncomeDetailsAction &&
+          !isExpensesDetailsAction &&
+          !isExpenseCategoriesAction &&
           !isCreateEmergencyGoalAction ? (
           <Pressable
             accessibilityLabel={`${registrationButtonLabel} de ${action.title}`}
@@ -868,19 +888,28 @@ export default function ActionPlanScreen() {
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
     null;
+  const activeGoalAllocations = goalPlan.allocations.filter(
+    (allocation) =>
+      allocation.goal.status !== "completed" && allocation.goal.status !== "paused"
+  );
   const monthlyGoalContext = useMemo<MonthlyGoalContext>(
     () => ({
+      activeGoalCount: activeGoalAllocations.length,
       title: primaryGoalAllocation?.goal.title ?? data.financialGoal,
       monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
+      monthlyContributionTotal: goalPlan.monthlyContributionTotal,
       estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null,
-      hasRegisteredContribution: (primaryGoalAllocation?.currentAmount ?? 0) > 0
+      hasRegisteredContribution: activeGoalAllocations.some(
+        (allocation) => allocation.currentAmount > 0
+      )
     }),
     [
+      activeGoalAllocations,
       data.financialGoal,
+      goalPlan.monthlyContributionTotal,
       primaryGoalAllocation?.estimatedMonthsToGoal,
       primaryGoalAllocation?.goal.title,
-      primaryGoalAllocation?.monthlyContribution,
-      primaryGoalAllocation?.currentAmount
+      primaryGoalAllocation?.monthlyContribution
     ]
   );
   const completedActionsForPlanSelection = useMemo(
@@ -918,29 +947,44 @@ export default function ActionPlanScreen() {
       getEffectiveMonthlyPlanProgress({
         actions,
         completedActions: completedActionsForPlanSelection,
+        debts: data.debts,
+        goalAllocations: goalPlan.allocations,
         periodKey,
         planProgressKey,
-        primaryGoalAllocation
+        simulationPlanPreference: onboarding.simulationPlanPreference
       }),
-    [actions, completedActionsForPlanSelection, periodKey, planProgressKey, primaryGoalAllocation]
+    [
+      actions,
+      completedActionsForPlanSelection,
+      data.debts,
+      goalPlan.allocations,
+      onboarding.simulationPlanPreference,
+      periodKey,
+      planProgressKey
+    ]
   );
   const { completedCount, effectiveCompletedActions, impactSummary, inProgressCount } =
     monthlyPlanProgress;
   const actionCount = actions.length;
   const progressPercentage = actionCount > 0 ? Math.round((completedCount / actionCount) * 100) : 0;
+  const isPlanComplete = actionCount === 0 || completedCount === actionCount;
   const engagedCount = completedCount + inProgressCount;
   const fallbackContributionLabel =
     metrics.balancedScenarioAmount > 0
       ? `${formatCOP(metrics.balancedScenarioAmount)} aprox.`
       : "Por definir";
+  const isGeneralGoalFlow = actions.some((action) => action.id === "set-goal-contribution");
+  const isCreateEmergencyGoalFlow = actions.some(
+    (action) => action.id === "create-emergency-goal"
+  );
   const contributionLabel =
-    activePlanPriorityKey === "advance_goal" && primaryGoalAllocation
-      ? formatGoalContribution(primaryGoalAllocation.monthlyContribution)
+    isGeneralGoalFlow
+      ? formatGoalContribution(goalPlan.monthlyContributionTotal)
       : fallbackContributionLabel;
   const contributionMetricLabel =
-    activePlanPriorityKey === "advance_goal" ? "Aporte a meta" : "Referencia mensual";
+    isGeneralGoalFlow ? "Aporte a metas" : "Referencia mensual";
   const shouldShowGoalContributionSummary =
-    activePlanPriorityKey !== "advance_goal" && primaryGoalAllocation !== null;
+    !isGeneralGoalFlow && !isCreateEmergencyGoalFlow && primaryGoalAllocation !== null;
   const goalContributionSummaryLabel =
     goalPlan.allocations.length > 1 ? "Aporte meta principal" : "Aporte meta";
   const goalContributionSummaryValue = primaryGoalAllocation
@@ -986,7 +1030,16 @@ export default function ActionPlanScreen() {
             <View style={styles.planHeroBody}>
               <Text style={styles.text}>{focus.text}</Text>
 
-              {primaryGoalTitle ? (
+              {isGeneralGoalFlow && activeGoalAllocations.length > 0 ? (
+                <View style={styles.goalPill}>
+                  <Target color={colors.primary} size={16} strokeWidth={2.4} />
+                  <Text style={styles.goalPillText}>
+                    {activeGoalAllocations.length === 1
+                      ? "1 meta activa"
+                      : `${activeGoalAllocations.length} metas activas`}
+                  </Text>
+                </View>
+              ) : !isCreateEmergencyGoalFlow && primaryGoalTitle ? (
                 <View style={styles.goalPill}>
                   <Target color={colors.primary} size={16} strokeWidth={2.4} />
                   <Text style={styles.goalPillText}>Meta principal: {primaryGoalTitle}</Text>
@@ -1010,9 +1063,9 @@ export default function ActionPlanScreen() {
                   </>
                 ) : (
                   <>
-                    <Text style={styles.progressText}>Sin acciones pendientes por ahora</Text>
+                    <Text style={styles.progressText}>¡Estás al día!</Text>
                     <Text style={styles.progressHelper}>
-                      El plan volverá a evaluarse cuando cambien tus datos financieros.
+                      Tu plan está actualizado. Volveremos a evaluarlo cuando cambien tus datos o comience un nuevo mes.
                     </Text>
                   </>
                 )}
@@ -1024,7 +1077,7 @@ export default function ActionPlanScreen() {
                 ) : null}
                 {actionCount > 0 && completedCount === actionCount ? (
                   <Text style={styles.completedMessage}>
-                    Buen trabajo. Completaste tu primer plan mensual.
+                    ¡Buen trabajo! Completaste todas las acciones de este mes y tu plan está al día.
                   </Text>
                 ) : null}
               </View>
@@ -1105,7 +1158,7 @@ export default function ActionPlanScreen() {
           </View>
 
           <View style={styles.actionsList}>
-            {actions.length > 0 ? (
+            {actions.length > 0 && !isPlanComplete ? (
               actions.map((action, index) => {
                 const actionProgressId = getMonthlyActionProgressId(planProgressKey, action.id);
                 const actionProgress = effectiveCompletedActions[actionProgressId];
@@ -1120,6 +1173,9 @@ export default function ActionPlanScreen() {
                     expanded={expandedActionId === actionProgressId}
                     impactItem={impactItem}
                     onOpenDebts={() => router.push("/debts")}
+                    onOpenExpenses={() =>
+                      router.push({ pathname: "/expenses", params: { source: "action-plan" } })
+                    }
                     onOpenGoals={() =>
                       router.push({
                         pathname: "/goals",
@@ -1134,7 +1190,13 @@ export default function ActionPlanScreen() {
                       })
                     }
                     onOpenGoalsOverview={() => router.push("/goals-overview")}
+                    onOpenIncome={() =>
+                      router.push({ pathname: "/income", params: { source: "action-plan" } })
+                    }
                     onOpenSimulation={() => router.push("/simulation")}
+                    onOpenSpendingCategories={() =>
+                      router.push({ pathname: "/spending", params: { focus: "categories" } })
+                    }
                     onProgressChange={(patch) => updateActionProgress(actionProgressId, patch)}
                     onToggleExpanded={() =>
                       setExpandedActionId((currentActionId) =>
@@ -1151,9 +1213,11 @@ export default function ActionPlanScreen() {
                   <CalendarCheck color={colors.primary} size={26} strokeWidth={2.4} />
                 </View>
                 <View style={styles.guidanceTextGroup}>
-                  <Text style={styles.guidanceTitle}>No tienes acciones pendientes</Text>
+                  <Text style={styles.guidanceTitle}>¡Estás al día!</Text>
                   <Text style={styles.text}>
-                    Mantén tus datos al día. El motor mostrará el siguiente paso cuando sea necesario.
+                    {actionCount > 0
+                      ? "Completaste todas las acciones de este mes. ¡Buen trabajo!"
+                      : "No tienes acciones pendientes. El motor mostrará el siguiente paso cuando sea necesario."}
                   </Text>
                 </View>
               </View>
@@ -1629,10 +1693,10 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     borderRadius: radius.md,
     borderWidth: 1,
+    height: 46,
     justifyContent: "center",
-    minHeight: 44,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
+    width: 180
   },
   cardActionButtonText: {
     color: colors.surface,
