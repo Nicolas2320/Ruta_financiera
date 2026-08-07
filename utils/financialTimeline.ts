@@ -668,10 +668,13 @@ export function buildFinancialScenarioTimeline({
         totalPayment: basePayment
       };
     });
-    const baseDebtPayments = debtPayments.reduce(
+    const detailedBaseDebtPayments = debtPayments.reduce(
       (total, payment) => total + payment.basePayment,
       0
     );
+    const baseDebtPayments =
+      detailedBaseDebtPayments +
+      input.cashflow.unitemizedRequiredDebtPaymentsTotal;
     let protectedMargin = 0;
     let unassignedAmount = 0;
     const goalContributions: TimelineGoalContribution[] = [];

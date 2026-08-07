@@ -158,4 +158,56 @@ describe("resolved monthly distribution", () => {
     expect(distribution.extraDebtPaymentsTotal).toBe(0);
     expect(distribution.unassignedAmount).toBe(distribution.distributableAmount);
   });
+
+  it("uses the reported total debt payment consistently in Simulation and Goals", () => {
+    const onboarding = makeOnboarding({
+      hasDebts: true,
+      debtMonthlyPaymentRange: "$1.000.000 – $2.000.000",
+      debts: [],
+      goals: [
+        makeGoal({
+          id: "investment-goal",
+          targetAmount: 10_000_000,
+          title: "Empezar a invertir",
+          type: "investment"
+        })
+      ],
+      simulationPlanPreference: {
+        strategy: "accelerate_goal",
+        goalId: null,
+        debtShare: null,
+        protectedMarginMode: "automatic",
+        customProtectedMargin: null,
+        selectedAt: "2026-08-07T12:00:00.000Z"
+      }
+    });
+    const reportedExactValues = {
+      ...exactValues,
+      monthlyDebtPayments: 1_200_000
+    };
+    const distribution = resolveMonthlyDistribution({
+      exactValues: reportedExactValues,
+      onboarding
+    });
+    const preference = resolvePlanPreference({
+      exactValues: reportedExactValues,
+      onboarding
+    });
+    const goalPlan = getGoalPlanFromOnboarding(
+      onboarding,
+      preference.goalMonthlyContribution,
+      reportedExactValues,
+      getPlanPreferenceGoalPlanOptions(preference, null)
+    );
+
+    expect(distribution).toMatchObject({
+      distributableAmount: 1_620_000,
+      goalContributionTotal: 1_620_000,
+      requiredDebtPaymentsTotal: 1_200_000,
+      sourceMode: "preliminary",
+      status: "ready"
+    });
+    expect(preference.isApplicable).toBe(true);
+    expect(goalPlan.monthlyContributionTotal).toBe(1_620_000);
+  });
 });

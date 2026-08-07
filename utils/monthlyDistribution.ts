@@ -168,7 +168,10 @@ function resolvePreliminaryDistribution({
   const normalizedStrategy =
     selectedStrategy === "prioritize_goal" ? "accelerate_goal" : selectedStrategy;
   const isUnsupportedDebtStrategy =
-    normalizedStrategy === "reduce_interest" || normalizedStrategy === "split_debt_goal";
+    experience.mode === "reported_debt" &&
+    (normalizedStrategy === "current_reference" ||
+      normalizedStrategy === "reduce_interest" ||
+      normalizedStrategy === "split_debt_goal");
   let goalId: string | null = null;
   let requestedGoalAmount = 0;
   let label = "Recomendación del diagnóstico";

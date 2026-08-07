@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildDistributionScenarios,
-  calculateProtectedMargin
+  calculateProtectedMargin,
+  lockScenariosUntilDebtDetails
 } from "../utils/financialDistribution";
 import { buildFinancialProjectionInput } from "../utils/financialProjectionInput";
 import { makeDebt, makeGoal, makeOnboarding } from "./fixtures/financial";
@@ -154,6 +155,7 @@ describe("monthly distribution strategies", () => {
         smallExpenses: 0
       },
       onboarding: makeOnboarding({
+        hasDebts: false,
         debts: [],
         goals: [
           makeGoal({ id: "primary", title: "Principal" }),
@@ -170,6 +172,33 @@ describe("monthly distribution strategies", () => {
       { amount: 600_000, goalId: "primary", title: "Principal" },
       { amount: 400_000, goalId: "secondary", title: "Secundaria" }
     ]);
+  });
+
+  it("keeps only the goals strategy available until debts are itemized", () => {
+    const input = buildFinancialProjectionInput({
+      exactValues: {
+        monthlyDebtPayments: 1_200_000,
+        monthlyExpenses: 1_000_000,
+        monthlyIncome: 4_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        hasDebts: true,
+        debts: [],
+        goals: [makeGoal()]
+      })
+    });
+    const scenarios = lockScenariosUntilDebtDetails(
+      buildDistributionScenarios({ input })
+    );
+
+    expect(scenarios.accelerateGoal.status).toBe("ready");
+    expect(scenarios.currentReference.status).toBe("not_applicable");
+    expect(scenarios.reduceInterest.status).toBe("not_applicable");
+    expect(scenarios.splitDebtGoal.status).toBe("not_applicable");
+    expect(scenarios.currentReference.issues[0]?.code).toBe(
+      "missing_debt_details"
+    );
   });
 
   it("builds concrete comparisons from the example without allocating every peso", () => {

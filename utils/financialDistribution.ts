@@ -29,6 +29,7 @@ export type DistributionIssueCode =
   | "unknown_interest_rate"
   | "missing_debt_balance"
   | "no_known_debt_balance"
+  | "missing_debt_details"
   | "missing_goal"
   | "missing_goal_target";
 
@@ -307,6 +308,7 @@ type StrategyBase = {
   poolBreakdown: DistributionPoolBreakdown | null;
   status: DistributionScenarioStatus;
   surplusBeforeProtection: number | null;
+  unitemizedRequiredDebtPaymentsTotal: number;
 };
 
 function getStrategyBase(
@@ -332,7 +334,9 @@ function getStrategyBase(
       protectedMargin: emptyProtectedMargin,
       poolBreakdown: null,
       status: "incomplete",
-      surplusBeforeProtection: null
+      surplusBeforeProtection: null,
+      unitemizedRequiredDebtPaymentsTotal:
+        input.cashflow.unitemizedRequiredDebtPaymentsTotal
     };
   }
 
@@ -351,12 +355,14 @@ function getStrategyBase(
       protectedMargin: emptyProtectedMargin,
       poolBreakdown: null,
       status: "incomplete",
-      surplusBeforeProtection: null
+      surplusBeforeProtection: null,
+      unitemizedRequiredDebtPaymentsTotal:
+        input.cashflow.unitemizedRequiredDebtPaymentsTotal
     };
   }
 
   const surplusBeforeProtection =
-    monthlyIncome - operatingCosts - sumDebtPayments(debtAllocations);
+    monthlyIncome - operatingCosts - input.cashflow.knownRequiredDebtPaymentsTotal;
   const protectedMarginResult = calculateProtectedMargin({
     preference,
     surplusBeforeProtection
@@ -380,7 +386,9 @@ function getStrategyBase(
         : distributableAmount <= 0
           ? "no_surplus"
           : "ready",
-    surplusBeforeProtection
+    surplusBeforeProtection,
+    unitemizedRequiredDebtPaymentsTotal:
+      input.cashflow.unitemizedRequiredDebtPaymentsTotal
   };
 }
 
@@ -507,6 +515,7 @@ function getMonthlyBalance({
   return (
     base.monthlyIncome -
     base.operatingCosts -
+    base.unitemizedRequiredDebtPaymentsTotal -
     sumDebtPayments(debtAllocations) -
     sumGoalContributions(goalAllocations)
   );
@@ -765,5 +774,31 @@ export function buildDistributionScenarios({
     currentReference: getReferenceScenario(input, protectedMarginPreference),
     reduceInterest: getReduceInterestScenario(input, base),
     splitDebtGoal: getSplitScenario({ base, debtShare: splitDebtShare, input })
+  };
+}
+
+export function lockScenariosUntilDebtDetails(
+  scenarios: DistributionScenarioSet
+): DistributionScenarioSet {
+  const issue: DistributionIssue = {
+    code: "missing_debt_details",
+    message:
+      "Para ver esta estrategia, registra el saldo y la cuota de tus deudas."
+  };
+  const lockScenario = (scenario: DistributionScenario): DistributionScenario => ({
+    ...scenario,
+    debtAllocations: [],
+    goalAllocations: [],
+    issues: [issue],
+    monthlyBalance: null,
+    status: "not_applicable",
+    unassignedAmount: scenario.distributableAmount
+  });
+
+  return {
+    accelerateGoal: scenarios.accelerateGoal,
+    currentReference: lockScenario(scenarios.currentReference),
+    reduceInterest: lockScenario(scenarios.reduceInterest),
+    splitDebtGoal: lockScenario(scenarios.splitDebtGoal)
   };
 }
