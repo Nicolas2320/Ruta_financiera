@@ -199,7 +199,7 @@ export function PreliminarySimulationComparison({
           <Text style={styles.priorityExplanationText}>
             Tus ahorros equivalen aproximadamente a {new Intl.NumberFormat("es-CO", {
               maximumFractionDigits: 1
-            }).format(emergencyCoverageMonths)} meses de gastos principales. Por eso el fondo
+            }).format(emergencyCoverageMonths)} meses de gastos mensuales registrados. Por eso el fondo
             de emergencia ya no aparece como primera prioridad. Ese ahorro general no se suma
             automáticamente a la meta: allí solo cuenta el dinero que registraste como ya
             separado para ella.
@@ -336,8 +336,9 @@ export function PreliminarySimulationComparison({
       </View>
 
       <Text style={styles.disclaimer}>
-        La selección se guardará cuando continúes. No supone que ya separaste el dinero;
-        cuando registres tus deudas, aparecerá la comparación completa.
+        {experience.mode === "goal_only"
+          ? "La selección se guardará cuando continúes. No supone que ya separaste el dinero."
+          : "La selección se guardará cuando continúes. No supone que ya separaste el dinero; cuando registres el detalle de tus deudas, aparecerá la comparación completa."}
       </Text>
     </View>
   );

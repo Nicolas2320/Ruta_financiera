@@ -521,7 +521,7 @@ export function evaluateNewDebt({
       viability: "missing",
       label: "Faltan ingresos y gastos",
       message:
-        "Completa ingreso y gastos principales para calcular el margen que quedaría después de esta cuota.",
+        "Completa ingreso y gastos mensuales para calcular el margen que quedaría después de esta cuota.",
       marginAfterNewPayment,
       totalDebtPayment,
       totalDebtToIncomeRatio

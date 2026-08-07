@@ -284,11 +284,11 @@ function getCategoryShareLabel(
   }
 
   if (share === null) {
-    return "Agrega tus gastos principales";
+    return `Agrega ${totalExpensesLabel.toLowerCase()}`;
   }
 
   if (share > 100) {
-    return "Supera tus gastos principales";
+    return `Supera ${totalExpensesLabel.toLowerCase()}`;
   }
 
   return `${share}% de ${totalExpensesLabel.toLowerCase()} ${

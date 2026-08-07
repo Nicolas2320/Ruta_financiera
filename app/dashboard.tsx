@@ -779,7 +779,7 @@ export default function DashboardScreen() {
     state: snapshot.emergencyFund.label,
     text:
       snapshot.emergencyFund.coverageMonths !== null
-        ? `Con estos datos, tu ahorro cubre cerca de ${getRoundedMonthsLabel(snapshot.emergencyFund.coverageMonths)} meses de gastos principales.`
+        ? `Con estos datos, tu ahorro cubre cerca de ${getRoundedMonthsLabel(snapshot.emergencyFund.coverageMonths)} meses de gastos mensuales registrados.`
         : snapshot.emergencyFund.label,
     tone: emergencyTone
   };
@@ -866,6 +866,10 @@ export default function DashboardScreen() {
     snapshot.smallExpenses.amount === null
       ? "Ya están considerados en el total mensual. Detallarlos después es opcional y no los sumará dos veces."
       : snapshot.smallExpenses.recommendation;
+  const hasSmallExpensesDetail =
+    data.hasSmallExpenses !== null ||
+    data.smallExpensesRange !== null ||
+    snapshot.smallExpenses.amount !== null;
   const dashboardDebtTone = getDashboardDebtTone(snapshot.debt.level);
   const dashboardDebtValue =
     snapshot.debt.monthlyPaymentTotal > 0
@@ -1032,23 +1036,27 @@ export default function DashboardScreen() {
 
           <RowCard
             compact={isPhone}
-            actionLabel="Revisar gastos"
+            actionLabel={hasSmallExpensesDetail ? "Revisar gastos" : "Detallar (opcional)"}
             icon={<Coffee color="#B45309" size={36} strokeWidth={2.4} />}
             onPress={() => router.push({ pathname: "/small-expenses", params: { source: "dashboard" } })}
             text={smallExpensesText}
             title="Gastos pequeños"
-            tone="warning"
+            tone={hasSmallExpensesDetail ? "warning" : "neutral"}
             value={smallExpensesValue}
           >
-            <View style={styles.categoryChipLine}>
-              <Text style={styles.rowInlineText}>
-                Intención:{" "}
-                {data.hasSmallExpenses === "No"
-                  ? "No aplica"
-                  : getDefinedLabel(data.smallExpensesIntention, "No definida")}
-              </Text>
-              <Chip label={snapshot.smallExpenses.label} tone="warning" />
-            </View>
+            {hasSmallExpensesDetail ? (
+              <View style={styles.categoryChipLine}>
+                <Text style={styles.rowInlineText}>
+                  Intención:{" "}
+                  {data.hasSmallExpenses === "No"
+                    ? "No aplica"
+                    : getDefinedLabel(data.smallExpensesIntention, "No definida")}
+                </Text>
+                <Chip label={snapshot.smallExpenses.label} tone="warning" />
+              </View>
+            ) : (
+              <Chip label="Detalle opcional" tone="neutral" />
+            )}
           </RowCard>
 
           <RowCard

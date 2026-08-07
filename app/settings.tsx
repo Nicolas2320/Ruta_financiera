@@ -169,7 +169,7 @@ export default function SettingsScreen() {
             <View style={styles.settingsLinkBody}>
               <Text style={styles.settingsLinkTitle}>Mejorar mi plan financiero</Text>
               <Text style={styles.settingsLinkText}>
-                Edita ingreso, gastos principales, ahorro general y gastos pequeños para mejorar tus cálculos.
+                Edita ingreso, gastos mensuales y ahorro general. El detalle de gastos pequeños es opcional.
               </Text>
             </View>
             <ChevronRight color={colors.primary} size={22} strokeWidth={2.5} />
@@ -187,7 +187,7 @@ export default function SettingsScreen() {
             <View style={styles.settingsLinkBody}>
               <Text style={styles.settingsLinkTitle}>Editar perfil financiero</Text>
               <Text style={styles.settingsLinkText}>
-                Actualiza nombre, edad, país, tipo de ingreso, hábitos, deudas, inversiones y respuestas iniciales.
+                Actualiza nombre, ingresos, gastos, ahorro y deudas usados en tu diagnóstico.
               </Text>
             </View>
             <ChevronRight color={colors.primary} size={22} strokeWidth={2.5} />

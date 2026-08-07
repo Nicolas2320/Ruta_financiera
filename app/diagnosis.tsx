@@ -194,8 +194,12 @@ function getFinancialMetrics(
     value: snapshot.cashflow.monthlyIncome
   });
   const expenseDisplay = getSnapshotDisplay({
-    exactLabel: "Gastos principales al mes",
-    estimatedLabel: "Rango de gastos principales",
+    exactLabel: snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
+      ? "Gastos mensuales"
+      : "Gastos principales al mes",
+    estimatedLabel: snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
+      ? "Rango de gastos mensuales"
+      : "Rango de gastos principales",
     source: snapshot.sourceMap.monthlyExpenses,
     value: snapshot.cashflow.monthlyExpenses
   });
@@ -344,6 +348,16 @@ function getMainPriority(metrics: FinancialMetrics): MainPriority {
 }
 
 function getSmallExpensesMessages(onboarding: OnboardingSnapshot, metrics: FinancialMetrics) {
+  if (
+    metrics.snapshot.cashflow.monthlyExpensesIncludesSmallExpenses &&
+    metrics.snapshot.smallExpenses.amount === null
+  ) {
+    return [
+      "Tus compras pequeñas ya están incluidas en el gasto mensual que compartiste.",
+      "Separarlas después es opcional y sirve solo para analizarlas; no las sumaremos dos veces."
+    ];
+  }
+
   if (onboarding.hasSmallExpenses === "Sí") {
     const messages = [
       "Identificaste pequeños gastos frecuentes.",
@@ -637,7 +651,7 @@ export default function DiagnosisScreen() {
   ];
   const emergencyMessage =
     metrics.snapshot.emergencyFund.coverageMonths !== null
-      ? `${metrics.snapshot.emergencyFund.label}. Con estos datos, tu ahorro cubre cerca de ${metrics.snapshot.emergencyFund.coverageMonths.toFixed(1).replace(".0", "")} meses de gastos principales.`
+      ? `${metrics.snapshot.emergencyFund.label}. Con estos datos, tu ahorro cubre cerca de ${metrics.snapshot.emergencyFund.coverageMonths.toFixed(1).replace(".0", "")} meses de gastos mensuales registrados.`
       : metrics.snapshot.emergencyFund.label;
   const emergencyCoverageLabel =
     metrics.snapshot.emergencyFund.coverageMonths !== null
@@ -657,7 +671,7 @@ export default function DiagnosisScreen() {
           : "neutral";
   const emergencyPlainLanguage =
     metrics.snapshot.emergencyFund.coverageMonths === null
-      ? "Necesitamos tu ahorro actual y tus gastos principales para estimar cuántos meses podrías cubrir."
+      ? "Necesitamos tu ahorro actual y tus gastos mensuales para estimar cuántos meses podrías cubrir."
       : metrics.snapshot.emergencyFund.coverageMonths < 1
         ? "Tu ahorro todavía no cubriría un mes completo de gastos."
         : `Si tus ingresos se interrumpieran, tu ahorro podría cubrir cerca de ${emergencyCoverageLabel}.`;
@@ -874,14 +888,18 @@ export default function DiagnosisScreen() {
                 <View style={styles.legendRow}>
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, styles.legendDotExpenses]} />
-                    <Text style={styles.legendText}>Gastos ({otherExpensesPercentage}%)</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, styles.legendDotSmallExpenses]} />
                     <Text style={styles.legendText}>
-                      Pequeños gastos ({metrics.smallExpensePercentage ?? 0}%)
+                      Gastos y deudas ({otherExpensesPercentage}%)
                     </Text>
                   </View>
+                  {smallExpensesBarWidth > 0 ? (
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, styles.legendDotSmallExpenses]} />
+                      <Text style={styles.legendText}>
+                        Pequeños gastos ({metrics.smallExpensePercentage}%)
+                      </Text>
+                    </View>
+                  ) : null}
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, styles.legendDotMargin]} />
                     <Text style={styles.legendText}>Margen ({marginPercentage}%)</Text>

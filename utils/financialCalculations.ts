@@ -220,7 +220,7 @@ const emergencyFundLabels: Record<EmergencyFundStatus, string> = {
   building: "Vas construyendo protección",
   solid: "Tienes una base sólida",
   strong: "Tienes una protección amplia",
-  unknown: "Necesitamos ahorro actual y gastos principales para estimar tu fondo"
+  unknown: "Necesitamos ahorro actual y gastos mensuales para estimar tu fondo"
 };
 
 const goalLabels: Record<GoalStatus, string> = {
