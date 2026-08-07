@@ -71,8 +71,11 @@ const scenarioCopy: Record<
   }
 };
 
-function sumBaseDebtPayments(scenario: DistributionScenario) {
-  return scenario.debtAllocations.reduce(
+function sumBaseDebtPayments(
+  input: FinancialProjectionInput,
+  scenario: DistributionScenario
+) {
+  return input.cashflow.unitemizedRequiredDebtPaymentsTotal + scenario.debtAllocations.reduce(
     (total, allocation) => total + allocation.basePayment,
     0
   );
@@ -178,7 +181,7 @@ export function presentDistributionScenario({
 
   return {
     badge,
-    baseDebtPayments: sumBaseDebtPayments(scenario),
+    baseDebtPayments: sumBaseDebtPayments(input, scenario),
     description: copy.description,
     debtSharePercent,
     extraDebtPayment: sumExtraDebtPayments(scenario),

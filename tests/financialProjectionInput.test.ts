@@ -43,6 +43,7 @@ describe("financial projection input", () => {
       totalMonthlyExpenses: 2_247_000,
       plannedDebtPaymentsTotal: 1_327_000,
       knownRequiredDebtPaymentsTotal: 827_000,
+      unitemizedRequiredDebtPaymentsTotal: 0,
       hasCompleteRequiredDebtPayments: true,
       availableAfterPlannedPayments: 2_553_000,
       availableAfterRequiredPayments: 3_053_000
@@ -55,6 +56,31 @@ describe("financial projection input", () => {
       targetMonth: "2027-01"
     });
     expect(input.goals[0]).not.toHaveProperty("priority");
+  });
+
+  it("reserves a reported debt payment before projecting goals without debt details", () => {
+    const input = buildFinancialProjectionInput({
+      exactValues: {
+        monthlyDebtPayments: 1_200_000,
+        monthlyExpenses: 1_500_000,
+        monthlyIncome: 4_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        hasDebts: true,
+        debtMonthlyPaymentRange: "$1.000.000 – $2.000.000",
+        debts: [],
+        goals: [makeGoal()]
+      })
+    });
+
+    expect(input.cashflow).toMatchObject({
+      hasCompleteRequiredDebtPayments: true,
+      knownRequiredDebtPaymentsTotal: 1_200_000,
+      plannedDebtPaymentsTotal: 1_200_000,
+      unitemizedRequiredDebtPaymentsTotal: 1_200_000,
+      availableAfterRequiredPayments: 1_300_000
+    });
   });
 
   it("uses a selected goal range as an explicit projection reference", () => {

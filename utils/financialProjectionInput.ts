@@ -10,6 +10,7 @@ import { isDebtPaid } from "./debtPayments";
 import { calculateFinancialSnapshot, type SnapshotSource } from "./financialCalculations";
 import { getGoalAmountRangeEstimate } from "./financialRanges";
 import { getMonthsUntilTargetMonth } from "./monthYear";
+import { buildSimulationExperience } from "./simulationExperience";
 
 export type ProjectionDataOwner = "income" | "expenses" | "debts" | "goals" | "planning";
 
@@ -79,6 +80,7 @@ export type FinancialProjectionInput = {
     smallMonthlyExpenses: number | null;
     plannedDebtPaymentsTotal: number;
     knownRequiredDebtPaymentsTotal: number;
+    unitemizedRequiredDebtPaymentsTotal: number;
     hasCompleteRequiredDebtPayments: boolean;
     availableAfterPlannedPayments: number | null;
     availableAfterRequiredPayments: number | null;
@@ -249,17 +251,41 @@ export function buildFinancialProjectionInput({
     }
   });
 
+  const getEffectiveDebtPayment = (
+    debt: ProjectionDebtInput,
+    payment: number
+  ) =>
+    debt.remainingAmount === null
+      ? Math.max(0, payment)
+      : Math.min(Math.max(0, debt.remainingAmount), Math.max(0, payment));
   const plannedDebtPaymentsTotal = debts.reduce(
-    (total, debt) => total + debt.plannedMonthlyPayment,
+    (total, debt) =>
+      total + getEffectiveDebtPayment(debt, debt.plannedMonthlyPayment),
     0
   );
-  const knownRequiredDebtPaymentsTotal = debts.reduce(
-    (total, debt) => total + (debt.requiredMonthlyPayment ?? 0),
+  const detailedRequiredDebtPaymentsTotal = debts.reduce(
+    (total, debt) =>
+      total +
+      getEffectiveDebtPayment(debt, debt.requiredMonthlyPayment ?? 0),
     0
   );
-  const hasCompleteRequiredDebtPayments = debts.every(
-    (debt) => debt.requiredMonthlyPayment !== null
-  );
+  const simulationExperience = buildSimulationExperience({ exactValues, onboarding });
+  const unitemizedRequiredDebtPaymentsTotal =
+    debts.length === 0 && simulationExperience.mode === "reported_debt"
+      ? simulationExperience.debtPaymentRange.maximum ??
+        simulationExperience.debtPaymentRange.minimum ??
+        0
+      : 0;
+  const hasCompleteUnitemizedDebtPayment =
+    simulationExperience.mode !== "reported_debt" ||
+    simulationExperience.debtPaymentRange.maximum !== null;
+  const hasCompleteRequiredDebtPayments =
+    debts.every((debt) => debt.requiredMonthlyPayment !== null) &&
+    hasCompleteUnitemizedDebtPayment;
+  const knownRequiredDebtPaymentsTotal =
+    detailedRequiredDebtPaymentsTotal + unitemizedRequiredDebtPaymentsTotal;
+  const totalPlannedDebtPayments =
+    plannedDebtPaymentsTotal + unitemizedRequiredDebtPaymentsTotal;
   const monthlyIncome = snapshot.cashflow.monthlyIncome;
   const baselineMonthlyExpenses = snapshot.cashflow.monthlyExpenses;
   const smallMonthlyExpenses = snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
@@ -267,7 +293,7 @@ export function buildFinancialProjectionInput({
     : snapshot.values.smallExpenses;
   const totalMonthlyExpenses =
     baselineMonthlyExpenses !== null && smallMonthlyExpenses !== null
-      ? baselineMonthlyExpenses + smallMonthlyExpenses + plannedDebtPaymentsTotal
+      ? baselineMonthlyExpenses + smallMonthlyExpenses + totalPlannedDebtPayments
       : null;
   let baselineMonthlyExpensesSource: ProjectionExpenseSource = "missing";
 
@@ -296,14 +322,18 @@ export function buildFinancialProjectionInput({
       baselineMonthlyExpenses,
       baselineMonthlyExpensesSource,
       smallMonthlyExpenses,
-      plannedDebtPaymentsTotal,
+      plannedDebtPaymentsTotal: totalPlannedDebtPayments,
       knownRequiredDebtPaymentsTotal,
+      unitemizedRequiredDebtPaymentsTotal,
       hasCompleteRequiredDebtPayments,
       availableAfterPlannedPayments:
         monthlyIncome !== null &&
         baselineMonthlyExpenses !== null &&
         smallMonthlyExpenses !== null
-        ? monthlyIncome - baselineMonthlyExpenses - smallMonthlyExpenses - plannedDebtPaymentsTotal
+        ? monthlyIncome -
+          baselineMonthlyExpenses -
+          smallMonthlyExpenses -
+          totalPlannedDebtPayments
         : null,
       availableAfterRequiredPayments:
         monthlyIncome !== null &&

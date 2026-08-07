@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ChevronDown, ChevronUp } from "lucide-react-native";
+import { ArrowRight, Check, ChevronDown, ChevronUp } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
@@ -14,6 +14,7 @@ import {
 } from "./FinancialTimelineChart";
 
 function getStatusLabel(scenario: DistributionScenarioPresentation) {
+  if (scenario.issueCodes.includes("missing_debt_details")) return "Faltan deudas";
   if (scenario.status === "incomplete") return "Faltan datos";
   if (scenario.status === "no_surplus") return "Sin margen";
   if (scenario.status === "not_applicable") return "No aplica";
@@ -333,6 +334,7 @@ export function DistributionScenarioCard({
   onSelect,
   onSplitDebtPercentChange,
   onToggle,
+  resolveLabel = "Completar información",
   scenario,
   saved = false,
   selected = false
@@ -343,6 +345,7 @@ export function DistributionScenarioCard({
   onSelect?: () => void;
   onSplitDebtPercentChange?: (value: number) => void;
   onToggle: () => void;
+  resolveLabel?: string;
   scenario: DistributionScenarioPresentation;
   saved?: boolean;
   selected?: boolean;
@@ -455,26 +458,29 @@ export function DistributionScenarioCard({
           onPress={onResolve}
           style={({ pressed }) => [styles.resolveButton, pressed && styles.pressed]}
         >
-          <Text style={styles.resolveButtonText}>Completar información</Text>
+          <Text style={styles.resolveButtonText}>{resolveLabel}</Text>
+          <ArrowRight color={colors.surface} size={19} strokeWidth={2.5} />
         </Pressable>
       ) : null}
 
-      <Pressable
-        accessibilityRole="button"
-        onPress={onToggle}
-        style={({ pressed }) => [styles.toggle, pressed && styles.pressed]}
-      >
-        <Text style={styles.toggleText}>
-          {expanded ? "Ocultar proyección" : "Ver proyección"}
-        </Text>
-        {expanded ? (
-          <ChevronUp color={colors.primary} size={18} strokeWidth={2.5} />
-        ) : (
-          <ChevronDown color={colors.primary} size={18} strokeWidth={2.5} />
-        )}
-      </Pressable>
+      {!unavailable ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onToggle}
+          style={({ pressed }) => [styles.toggle, pressed && styles.pressed]}
+        >
+          <Text style={styles.toggleText}>
+            {expanded ? "Ocultar proyección" : "Ver proyección"}
+          </Text>
+          {expanded ? (
+            <ChevronUp color={colors.primary} size={18} strokeWidth={2.5} />
+          ) : (
+            <ChevronDown color={colors.primary} size={18} strokeWidth={2.5} />
+          )}
+        </Pressable>
+      ) : null}
 
-      {expanded ? (
+      {expanded && !unavailable ? (
         <View style={styles.detail}>
           <TimelinePreview scenario={scenario} />
 
@@ -688,19 +694,23 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.caption
   },
   resolveButton: {
+    alignItems: "center",
     alignSelf: "flex-start",
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.primaryBorder,
-    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+    borderRadius: radius.md,
     borderWidth: 1,
-    paddingHorizontal: spacing.md,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 48,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm
   },
   resolveButtonText: {
-    color: colors.primary,
-    fontSize: typography.caption,
+    color: colors.surface,
+    fontSize: typography.button,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
+    lineHeight: typography.lineHeight.button
   },
   toggle: {
     alignItems: "center",
