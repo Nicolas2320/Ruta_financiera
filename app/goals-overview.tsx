@@ -12,7 +12,6 @@ import {
   ChevronUp,
   CheckCircle2,
   BriefcaseBusiness,
-  CreditCard,
   Dumbbell,
   Flag,
   Gift,
@@ -133,13 +132,6 @@ const goalVisualOptions: GoalVisualOption[] = [
     icon: PiggyBank,
     color: colors.primary,
     backgroundColor: colors.primarySoft
-  },
-  {
-    title: "Pagar deudas",
-    iconKey: "debt",
-    icon: CreditCard,
-    color: "#7C3AED",
-    backgroundColor: "#F1E8FF"
   },
   {
     title: "Ahorrar para vivienda",
@@ -731,6 +723,8 @@ function GoalCard({
     Boolean(onAssignCurrentSavings);
   const parsedEditorTargetAmount = getParsedCurrencyInput(targetInput);
   const hasValidEditorTargetMonth = targetMonth !== null;
+  const hasDebtGoalTitle =
+    selectedGoalOptionKey === "other" && getGoalTypeFromTitle(titleInput) === "debt";
 
   const resetEditorFields = () => {
     const nextGoalOptionKey = getGoalOptionKey(allocation.goal);
@@ -798,7 +792,7 @@ function GoalCard({
   };
 
   const handleSaveDetails = () => {
-    if (!hasValidEditorTargetMonth) {
+    if (!hasValidEditorTargetMonth || hasDebtGoalTitle) {
       return;
     }
 
@@ -1170,7 +1164,7 @@ function GoalCard({
               variant="secondary"
             />
             <AppModalAction
-              disabled={!hasValidEditorTargetMonth}
+              disabled={!hasValidEditorTargetMonth || hasDebtGoalTitle}
               icon={<CheckCircle2 color={colors.surface} size={19} strokeWidth={2.4} />}
               label="Guardar cambios"
               onPress={handleSaveDetails}
@@ -1227,6 +1221,11 @@ function GoalCard({
                       style={styles.input}
                       value={titleInput}
                     />
+                    {hasDebtGoalTitle ? (
+                      <Text style={[styles.helperText, styles.warningText]}>
+                        Las deudas se registran y proyectan desde Mis deudas.
+                      </Text>
+                    ) : null}
                   </View>
                   <View style={styles.editGroup}>
                     <Text style={styles.inputLabel}>Icono</Text>
@@ -1374,19 +1373,28 @@ export default function GoalsOverviewScreen() {
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
     null;
+  const activeGoalAllocations = goalPlan.allocations.filter(
+    (allocation) =>
+      allocation.goal.status !== "completed" && allocation.goal.status !== "paused"
+  );
   const monthlyGoalContext = useMemo<MonthlyGoalContext>(
     () => ({
+      activeGoalCount: activeGoalAllocations.length,
       title: primaryGoalAllocation?.goal.title ?? data.financialGoal,
       monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
+      monthlyContributionTotal: goalPlan.monthlyContributionTotal,
       estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null,
-      hasRegisteredContribution: (primaryGoalAllocation?.currentAmount ?? 0) > 0
+      hasRegisteredContribution: activeGoalAllocations.some(
+        (allocation) => allocation.currentAmount > 0
+      )
     }),
     [
+      activeGoalAllocations,
       data.financialGoal,
+      goalPlan.monthlyContributionTotal,
       primaryGoalAllocation?.estimatedMonthsToGoal,
       primaryGoalAllocation?.goal.title,
-      primaryGoalAllocation?.monthlyContribution,
-      primaryGoalAllocation?.currentAmount
+      primaryGoalAllocation?.monthlyContribution
     ]
   );
   const suggestedActions = useMemo(
@@ -1411,16 +1419,10 @@ export default function GoalsOverviewScreen() {
     () => getMonthlyPlanProgressKey(metrics, monthlyActions, activePlanPriorityKey ?? undefined),
     [activePlanPriorityKey, monthlyActions, metrics]
   );
-  const primaryGoalContributionAction =
-    monthlyActions.find((action) => {
-      if (!isGoalContributionActionId(action.id)) {
-        return false;
-      }
-
-      return action.id !== "initial-emergency-contribution" || isEmergencyGoal(primaryGoalAllocation?.goal);
-    }) ?? null;
-  const primaryGoalContributionProgressId = primaryGoalContributionAction
-    ? getMonthlyActionProgressId(monthlyPlanProgressKey, primaryGoalContributionAction.id)
+  const monthlyGoalContributionAction =
+    monthlyActions.find((action) => isGoalContributionActionId(action.id)) ?? null;
+  const monthlyGoalContributionProgressId = monthlyGoalContributionAction
+    ? getMonthlyActionProgressId(monthlyPlanProgressKey, monthlyGoalContributionAction.id)
     : null;
   const periodKey = getMonthlyPlanPeriodKey();
   const totalGoalContributionsThisMonth = goalPlan.allocations.reduce(
@@ -1526,11 +1528,10 @@ export default function GoalsOverviewScreen() {
 
   const registerGoalContribution = (goalId: string, amount: number) => {
     const shouldCompletePlanAction =
-      goalId === primaryGoalAllocation?.goal.id &&
-      primaryGoalContributionAction !== null &&
-      primaryGoalContributionProgressId !== null &&
-      !isActionProgressCompleted(completedActions[primaryGoalContributionProgressId]);
-    const sourceProgressId = shouldCompletePlanAction ? primaryGoalContributionProgressId : null;
+      monthlyGoalContributionAction !== null &&
+      monthlyGoalContributionProgressId !== null &&
+      !isActionProgressCompleted(completedActions[monthlyGoalContributionProgressId]);
+    const sourceProgressId = shouldCompletePlanAction ? monthlyGoalContributionProgressId : null;
 
     persistGoals(
       applyGoalContribution(goals, goalId, {
@@ -1540,12 +1541,12 @@ export default function GoalsOverviewScreen() {
       })
     );
 
-    if (shouldCompletePlanAction && primaryGoalContributionProgressId) {
-      updateActionProgress(primaryGoalContributionProgressId, {
+    if (shouldCompletePlanAction && monthlyGoalContributionProgressId) {
+      updateActionProgress(monthlyGoalContributionProgressId, {
         status: "completed",
         evidence: {
           type: "amount",
-          label: getGoalContributionLabelForActionId(primaryGoalContributionAction.id),
+          label: getGoalContributionLabelForActionId(monthlyGoalContributionAction.id),
           amount,
           detail: null
         }

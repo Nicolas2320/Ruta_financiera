@@ -1,6 +1,6 @@
 import {
   exactFinancialValueKeys,
-  getPrimaryFinancialGoal,
+  getOnboardingGoals,
   type CompletedActionsState,
   type ExactFinancialValues,
   type OnboardingData
@@ -9,7 +9,9 @@ import {
   getRegisteredDebtSummary,
   type DebtDataSource
 } from "./debtCalculations";
+import { isDebtPaid } from "./debtPayments";
 import { formatCOP } from "./financialRanges";
+import { isDebtGoal, isEmergencyGoal } from "./goalPlanning";
 
 export type SnapshotSource = "exact" | "estimated" | "withheld" | "missing";
 export type SmallExpensesSource =
@@ -95,6 +97,7 @@ export type FinancialSnapshot = {
   };
   emergencyFund: {
     coverageMonths: number | null;
+    isGoalCompleted: boolean;
     targetThreeMonths: number | null;
     missingForThreeMonths: number | null;
     status: EmergencyFundStatus;
@@ -588,23 +591,15 @@ function getPriority(
   }
 
   if (
-    snapshot.emergencyFund.status === "none" ||
-    snapshot.emergencyFund.status === "starter"
+    !snapshot.emergencyFund.isGoalCompleted &&
+    (snapshot.emergencyFund.status === "none" ||
+      snapshot.emergencyFund.status === "starter")
   ) {
     return {
       key: "build_emergency_fund",
       title: "Construir fondo de emergencia",
       description:
         "Crear una base para imprevistos puede darte más estabilidad antes de avanzar a metas grandes."
-    };
-  }
-
-  if (snapshot.smallExpenses.level === "high") {
-    return {
-      key: "review_small_expenses",
-      title: "Revisar gastos pequeños",
-      description:
-        "Puedes redirigir una parte de tus pequeños consumos hacia tu meta sin eliminarlos todos."
     };
   }
 
@@ -626,7 +621,10 @@ function getPriority(
 
 export function calculateFinancialSnapshot(profile: FinancialProfileInput): FinancialSnapshot {
   const { onboarding } = profile;
-  const primaryGoal = getPrimaryFinancialGoal(onboarding);
+  const planningGoals = getOnboardingGoals(onboarding).filter((goal) => !isDebtGoal(goal));
+  const emergencyGoal = planningGoals.find(isEmergencyGoal) ?? null;
+  const primaryGoal =
+    planningGoals.find((goal) => goal.isPrimary) ?? planningGoals[0] ?? null;
   const exactValues = getExactValues(profile);
   const exactMonthlyIncome = exactValues.monthlyIncome;
   const exactMonthlyExpenses = exactValues.monthlyExpenses;
@@ -668,6 +666,14 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const goalCurrentSavings = isNonNegativeNumber(primaryGoal?.currentAmount)
     ? primaryGoal.currentAmount
     : currentSavings;
+  const emergencyGoalAmount = isNonNegativeNumber(emergencyGoal?.currentAmount)
+    ? emergencyGoal.currentAmount
+    : 0;
+  const emergencyFundSavings = emergencyGoal
+    ? emergencyGoal.status === "completed"
+      ? Math.max(emergencyGoalAmount, emergencyGoal.targetAmount ?? 0)
+      : emergencyGoalAmount
+    : currentSavings;
 
   const selectedDebtLevel = getDebtLevel(onboarding.debtSituation, onboarding.debtPaymentShare);
   const registeredDebtSummary = getRegisteredDebtSummary({
@@ -679,8 +685,13 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
     reportedMonthlyPaymentRange: onboarding.debtMonthlyPaymentRange,
     monthlyIncome
   });
-  const debtLevel =
-    registeredDebtSummary.source !== "none" ? registeredDebtSummary.level : selectedDebtLevel;
+  const hasOnlyPaidDetailedDebts =
+    onboarding.debts.length > 0 && onboarding.debts.every(isDebtPaid);
+  const debtLevel = hasOnlyPaidDetailedDebts
+    ? "none"
+    : registeredDebtSummary.source !== "none"
+      ? registeredDebtSummary.level
+      : selectedDebtLevel;
   const totalMonthlyOutflow =
     monthlyExpenses !== null &&
     (monthlyExpensesIncludesSmallExpenses || smallExpenses !== null)
@@ -706,13 +717,13 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
     suggestedContributionRate
   );
 
-  const coverageMonths = safeDivide(currentSavings, monthlyExpenses);
+  const coverageMonths = safeDivide(emergencyFundSavings, monthlyExpenses);
   const targetThreeMonths = monthlyExpenses !== null ? monthlyExpenses * 3 : null;
   const missingForThreeMonths =
-    targetThreeMonths !== null && currentSavings !== null
-      ? Math.max(targetThreeMonths - currentSavings, 0)
+    targetThreeMonths !== null && emergencyFundSavings !== null
+      ? Math.max(targetThreeMonths - emergencyFundSavings, 0)
       : null;
-  const emergencyFundStatus = getEmergencyFundStatus(currentSavings, monthlyExpenses);
+  const emergencyFundStatus = getEmergencyFundStatus(emergencyFundSavings, monthlyExpenses);
 
   const goalProgressPercentage =
     goalCurrentSavings !== null && goalTargetAmount !== null && goalTargetAmount > 0
@@ -789,6 +800,7 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
     },
     emergencyFund: {
       coverageMonths,
+      isGoalCompleted: emergencyGoal?.status === "completed",
       targetThreeMonths,
       missingForThreeMonths,
       status: emergencyFundStatus,
@@ -849,226 +861,18 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   };
 }
 
-function getImpactLabel(amount: number | null) {
-  return amount !== null && amount > 0
-    ? `Referencia educativa: ${formatCOP(amount)} aprox.`
-    : "Referencia educativa, sin monto sugerido por ahora.";
-}
-
 export function generateMonthlyActions(
   snapshot: FinancialSnapshot,
   priorityKey: PriorityKey = snapshot.priority.key
 ): FinancialAction[] {
-  const contribution = snapshot.cashflow.suggestedMonthlyContribution;
-  const opportunity = snapshot.smallExpenses.opportunityAmount;
-
   const actionsByPriority: Record<PriorityKey, FinancialAction[]> = {
-    debt_pressure: [
-      {
-        id: "debt-monthly-payment",
-        title: "Revisar cuánto pagas al mes en deudas",
-        description: "Haz una lista simple de tus pagos mensuales de deuda.",
-        why: "Conocer ese valor ayuda a entender qué tanto presiona tu flujo mensual.",
-        estimatedImpact: "Te dará claridad para decidir qué revisar primero.",
-        difficulty: "Media",
-        category: "Deudas"
-      },
-      {
-        id: "debt-pressure-source",
-        title: "Identificar la deuda que más presión genera",
-        description: "Marca cuál deuda pesa más por pago mensual, interés o urgencia.",
-        why: "No todas las deudas afectan tu mes de la misma manera.",
-        estimatedImpact: "Puede ayudarte a priorizar sin tomar decisiones apresuradas.",
-        difficulty: "Media",
-        category: "Deudas"
-      },
-      {
-        id: "avoid-new-debt",
-        title: "Evitar nuevas deudas este mes si no es necesario",
-        description: "Antes de comprar a crédito, revisa si puede esperar.",
-        why: "Reducir presión nueva puede proteger tu margen mensual.",
-        estimatedImpact: "Ayuda a no aumentar la carga mientras ordenas el plan.",
-        difficulty: "Media",
-        category: "Deudas"
-      }
-    ],
-    organize_cashflow: [
-      {
-        id: "review-main-expenses",
-        title: "Revisar tus 3 categorías principales de gasto",
-        description: "Elige las tres categorías que más pesan y anota cuánto representan.",
-        why: "Entender el destino del dinero es el primer paso para recuperar margen.",
-        estimatedImpact: "Puede mostrar oportunidades sin hacer cambios extremos.",
-        difficulty: "Baja",
-        category: "Gastos"
-      },
-      {
-        id: "weekly-limit",
-        title: "Definir un límite semanal simple",
-        description: "Elige una categoría variable y define un límite realista por semana.",
-        why: "Un límite corto es más fácil de observar y ajustar.",
-        estimatedImpact: "Puede ayudarte a ordenar el mes sin esperar al cierre.",
-        difficulty: "Media",
-        category: "Gastos"
-      },
-      {
-        id: "small-automatic-separation",
-        title: "Separar una cantidad pequeña al recibir ingresos",
-        description: "Si puedes, aparta una cantidad mínima apenas recibas dinero.",
-        why: "Separar primero puede evitar que todo se vaya en gastos del mes.",
-        estimatedImpact: getImpactLabel(contribution),
-        difficulty: "Media",
-        category: "Ahorro"
-      }
-    ],
-    build_emergency_fund: [
-      {
-        id: "initial-emergency-contribution",
-        title: "Separar un aporte inicial para fondo de emergencia",
-        description: "Elige un monto pequeño y sostenible para empezar o fortalecer tu base.",
-        why: "Una base para imprevistos puede darte más estabilidad.",
-        estimatedImpact: getImpactLabel(contribution),
-        difficulty: "Media",
-        category: "Ahorro"
-      },
-      {
-        id: "separate-emergency-money",
-        title: "Guardar ese dinero en un lugar separado",
-        description: "Evita mezclarlo con el dinero de gastos diarios.",
-        why: "Separarlo ayuda a no usarlo sin darte cuenta.",
-        estimatedImpact: "Mejora la claridad de tu fondo de emergencia.",
-        difficulty: "Baja",
-        category: "Ahorro"
-      },
-      {
-        id: "protect-emergency-money",
-        title: "Evitar usarlo para gastos no urgentes",
-        description: "Define qué cuenta como emergencia antes de necesitarlo.",
-        why: "Una regla simple protege tu base financiera.",
-        estimatedImpact: "Ayuda a que el fondo cumpla su propósito.",
-        difficulty: "Media",
-        category: "Ahorro"
-      }
-    ],
-    review_small_expenses: [
-      {
-        id: "observe-small-expense-category",
-        title: "Elegir una categoría de gasto pequeño para observar",
-        description: "Observa una sola categoría durante una semana.",
-        why: "Mirar una categoría evita que el ajuste se sienta abrumador.",
-        estimatedImpact: "Puede revelar consumos repetidos fáciles de ajustar.",
-        difficulty: "Baja",
-        category: "Gastos hormiga"
-      },
-      {
-        id: "small-expense-limit",
-        title: "Definir un límite mensual para esa categoría",
-        description: "Pon un límite realista, sin eliminar todos tus gustos.",
-        why: "La idea es decidir, no castigarte.",
-        estimatedImpact: getImpactLabel(opportunity),
-        difficulty: "Media",
-        category: "Gastos hormiga"
-      },
-      {
-        id: "redirect-small-expenses",
-        title: "Redirigir una parte de esos gastos hacia tu meta",
-        description: "Aparta una parte de lo que ajustes para tu objetivo.",
-        why: "Un ajuste pequeño puede convertirse en avance visible.",
-        estimatedImpact: getImpactLabel(opportunity),
-        difficulty: "Media",
-        category: "Meta"
-      }
-    ],
-    advance_goal: [
-      {
-        id: "set-goal-contribution",
-        title: "Separar el aporte mensual sugerido si es posible",
-        description: "Úsalo como referencia. Puedes ajustarlo.",
-        why: "Un aporte realista ayuda a avanzar sin desordenar el mes.",
-        estimatedImpact: getImpactLabel(contribution),
-        difficulty: "Media",
-        category: "Meta"
-      },
-      {
-        id: "review-goal-target",
-        title: "Revisar si el monto objetivo sigue siendo realista",
-        description: "Compara tu objetivo con tu margen y tu horizonte.",
-        why: "Ajustar la meta puede hacer el plan más sostenible.",
-        estimatedImpact: "Te ayuda a mantener una meta clara y viable.",
-        difficulty: "Baja",
-        category: "Meta"
-      },
-      {
-        id: "compare-goal-contribution",
-        title: "Comparar cuánto cambia la meta al ajustar el aporte",
-        description: "Prueba mentalmente un aporte menor y uno mayor.",
-        why: "Ver escenarios ayuda a decidir con más calma.",
-        estimatedImpact:
-          snapshot.goal.estimatedMonthsToGoal !== null
-            ? `Con estos datos, podría tomar cerca de ${snapshot.goal.estimatedMonthsToGoal} meses.`
-            : "Necesitamos margen mensual para estimar meses.",
-        difficulty: "Baja",
-        category: "Meta"
-      }
-    ],
-    learn_investing: [
-      {
-        id: "learn-risk-time",
-        title: "Leer una explicación corta sobre riesgo y plazo",
-        description: "Dedica 10 minutos a entender esos dos conceptos.",
-        why: "Antes de invertir, conviene saber qué puede variar y en cuánto tiempo.",
-        estimatedImpact: "Mejora tu claridad antes de tomar decisiones.",
-        difficulty: "Baja",
-        category: "Educación"
-      },
-      {
-        id: "define-investing-horizon",
-        title: "Definir si tu meta es de corto o largo plazo",
-        description: "Anota si necesitarás ese dinero pronto o puedes esperar.",
-        why: "El plazo cambia el tipo de riesgo que podrías asumir.",
-        estimatedImpact: "Te ayuda a ordenar expectativas.",
-        difficulty: "Baja",
-        category: "Educación"
-      },
-      {
-        id: "protect-emergency-before-investing",
-        title: "Evitar invertir dinero que necesitas para emergencias",
-        description: "Mantén separado tu fondo de emergencia.",
-        why: "La base de emergencia no debería depender de resultados inciertos.",
-        estimatedImpact: "Protege tu estabilidad antes de explorar inversión.",
-        difficulty: "Media",
-        category: "Ahorro"
-      }
-    ],
-    keep_tracking: [
-      {
-        id: "review-financial-data",
-        title: "Revisar tus datos financieros una vez este mes",
-        description: "Confirma si tus ingresos, gastos y ahorro siguen parecidos.",
-        why: "Actualizar datos mejora la claridad del plan.",
-        estimatedImpact: "Te ayuda a tomar mejores decisiones.",
-        difficulty: "Baja",
-        category: "Seguimiento"
-      },
-      {
-        id: "confirm-goal-priority",
-        title: "Confirmar si tu meta principal sigue vigente",
-        description: "Revisa si todavía quieres enfocarte primero en ese objetivo.",
-        why: "Tus objetivos pueden cambiar, y el plan debe seguir tu realidad.",
-        estimatedImpact: "Mantiene el plan alineado contigo.",
-        difficulty: "Baja",
-        category: "Meta"
-      },
-      {
-        id: "complete-optional-data",
-        title: "Completar los datos opcionales para mejorar el plan",
-        description: "Agrega ingreso, gasto, ahorro o monto objetivo si los tienes claros.",
-        why: "Más datos claros permiten cálculos más útiles.",
-        estimatedImpact: "Mejora la precisión del Dashboard y del plan mensual.",
-        difficulty: "Baja",
-        category: "Datos"
-      }
-    ]
+    debt_pressure: [],
+    organize_cashflow: [],
+    build_emergency_fund: [],
+    review_small_expenses: [],
+    advance_goal: [],
+    learn_investing: [],
+    keep_tracking: []
   };
 
   return actionsByPriority[priorityKey];

@@ -44,11 +44,13 @@ export default function IncomeScreen() {
   } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isProfileEditMode = source === "profile";
+  const isActionPlanEditMode = source === "action-plan";
+  const isEditMode = isProfileEditMode || isActionPlanEditMode;
   const [selectedIncomeRange, setSelectedIncomeRange] = useState<string | null>(
     onboarding.incomeRange
   );
   const [usesExactIncome, setUsesExactIncome] = useState(
-    hasExactFinancialValue(exactValues.monthlyIncome)
+    isActionPlanEditMode || hasExactFinancialValue(exactValues.monthlyIncome)
   );
   const [exactIncomeInput, setExactIncomeInput] = useState(
     hasExactFinancialValue(exactValues.monthlyIncome)
@@ -64,13 +66,15 @@ export default function IncomeScreen() {
 
     hasHydratedStoredAnswers.current = true;
     setSelectedIncomeRange(onboarding.incomeRange);
-    setUsesExactIncome(hasExactFinancialValue(exactValues.monthlyIncome));
+    setUsesExactIncome(
+      isActionPlanEditMode || hasExactFinancialValue(exactValues.monthlyIncome)
+    );
     setExactIncomeInput(
       hasExactFinancialValue(exactValues.monthlyIncome)
         ? formatCOP(exactValues.monthlyIncome)
         : ""
     );
-  }, [exactValues.monthlyIncome, onboarding, onboardingSyncStatus]);
+  }, [exactValues.monthlyIncome, isActionPlanEditMode, onboarding, onboardingSyncStatus]);
 
   const parsedExactIncome = parseCOPInput(exactIncomeInput);
 
@@ -114,6 +118,11 @@ export default function IncomeScreen() {
       return;
     }
 
+    if (isActionPlanEditMode) {
+      router.replace("/action-plan");
+      return;
+    }
+
     router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/expenses");
   };
 
@@ -126,14 +135,22 @@ export default function IncomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          {isProfileEditMode ? (
+          {isEditMode ? (
             <ContextHeader
-              onBack={() => router.push({ pathname: "/summary", params: { mode: "edit" } })}
-              subtitle="Volveras al perfil financiero."
-              title="Editar ingresos"
+              onBack={() =>
+                isActionPlanEditMode
+                  ? router.replace("/action-plan")
+                  : router.push({ pathname: "/summary", params: { mode: "edit" } })
+              }
+              subtitle={
+                isActionPlanEditMode
+                  ? "Volverás al plan de acción."
+                  : "Volverás al perfil financiero."
+              }
+              title={isActionPlanEditMode ? "Ingresar ingreso mensual" : "Editar ingresos"}
             />
           ) : null}
-          {!isProfileEditMode ? (
+          {!isEditMode ? (
             <StepHeader
               currentStep={3}
               nextAccessibilityLabel="Continuar hacia preguntas de gastos"
@@ -146,38 +163,55 @@ export default function IncomeScreen() {
           ) : null}
 
           <HeroInfoCard
-            badge="No incluyas préstamos ni ingresos excepcionales."
+            badge={
+              isActionPlanEditMode
+                ? "Puede ser un promedio aproximado."
+                : "No incluyas préstamos ni ingresos excepcionales."
+            }
             image={incomePiggy}
             imageStyle={styles.heroImage}
-            text="Si tus ingresos cambian, usa un promedio mensual. Puedes elegir un rango o ingresar una cifra."
-            title="Tus ingresos"
+            text={
+              isActionPlanEditMode
+                ? "Para completar esta acción, reemplaza el rango del diagnóstico por una cifra mensual. No incluyas préstamos ni ingresos excepcionales."
+                : "Si tus ingresos cambian, usa un promedio mensual. Puedes elegir un rango o ingresar una cifra."
+            }
+            title={isActionPlanEditMode ? "Ingresa tu ingreso mensual promedio" : "Tus ingresos"}
           />
 
           <View style={styles.card}>
             <Text style={styles.questionTitle}>
               En un mes normal, ¿cuánto dinero recibes aproximadamente?
             </Text>
-            <View style={styles.optionList}>
-              {incomeRanges.map((incomeRange) => (
+            {!isActionPlanEditMode ? (
+              <View style={styles.optionList}>
+                {incomeRanges.map((incomeRange) => (
+                  <SelectableCard
+                    key={incomeRange}
+                    onPress={() => {
+                      setUsesExactIncome(false);
+                      setSelectedIncomeRange(incomeRange);
+                    }}
+                    selected={!usesExactIncome && selectedIncomeRange === incomeRange}
+                    title={incomeRange}
+                  />
+                ))}
                 <SelectableCard
-                  key={incomeRange}
-                  onPress={() => {
-                    setUsesExactIncome(false);
-                    setSelectedIncomeRange(incomeRange);
-                  }}
-                  selected={!usesExactIncome && selectedIncomeRange === incomeRange}
-                  title={incomeRange}
+                  onPress={() => setUsesExactIncome(true)}
+                  selected={usesExactIncome}
+                  title={exactIncomeOption}
                 />
-              ))}
-              <SelectableCard
-                onPress={() => setUsesExactIncome(true)}
-                selected={usesExactIncome}
-                title={exactIncomeOption}
-              />
-            </View>
+              </View>
+            ) : null}
             {usesExactIncome ? (
               <ExactAmountField
                 accessibilityLabel="Ingreso promedio mensual"
+                autoFocus={isActionPlanEditMode}
+                helper={
+                  isActionPlanEditMode
+                    ? "Si cambia cada mes, usa el promedio de tus últimos meses."
+                    : undefined
+                }
+                label={isActionPlanEditMode ? "Cifra mensual" : undefined}
                 onChangeText={handleExactIncomeChange}
                 value={exactIncomeInput}
               />
@@ -186,19 +220,27 @@ export default function IncomeScreen() {
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel={isProfileEditMode ? "Guardar cambios de ingresos" : "Continuar hacia preguntas de gastos"}
+              accessibilityLabel={
+                isActionPlanEditMode
+                  ? "Guardar cifra de ingresos"
+                  : isEditMode
+                    ? "Guardar cambios de ingresos"
+                    : "Continuar hacia preguntas de gastos"
+              }
               disabled={!canContinue}
               iconPosition="right"
               onPress={handleContinue}
               style={styles.primaryButton}
-              title={isProfileEditMode ? "Guardar cambios" : "Continuar"}
+              title={isActionPlanEditMode ? "Guardar cifra" : isEditMode ? "Guardar cambios" : "Continuar"}
             />
             <PrimaryButton
               accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() => router.back()}
+              onPress={() =>
+                isActionPlanEditMode ? router.replace("/action-plan") : router.back()
+              }
               style={styles.secondaryButton}
-              title="Volver"
+              title={isActionPlanEditMode ? "Volver al plan" : "Volver"}
               variant="secondary"
             />
           </View>

@@ -701,19 +701,28 @@ export default function DashboardScreen() {
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
     null;
+  const activeGoalAllocations = goalPlan.allocations.filter(
+    (allocation) =>
+      allocation.goal.status !== "completed" && allocation.goal.status !== "paused"
+  );
   const primaryGoalTitle =
     primaryGoalAllocation?.goal.title ?? snapshot.goal.name ?? data.financialGoal;
   const monthlyGoalContext = useMemo<MonthlyGoalContext>(
     () => ({
+      activeGoalCount: activeGoalAllocations.length,
       title: primaryGoalTitle,
       monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
+      monthlyContributionTotal: goalPlan.monthlyContributionTotal,
       estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null,
-      hasRegisteredContribution: (primaryGoalAllocation?.currentAmount ?? 0) > 0
+      hasRegisteredContribution: activeGoalAllocations.some(
+        (allocation) => allocation.currentAmount > 0
+      )
     }),
     [
+      activeGoalAllocations,
+      goalPlan.monthlyContributionTotal,
       primaryGoalAllocation?.estimatedMonthsToGoal,
       primaryGoalAllocation?.monthlyContribution,
-      primaryGoalAllocation?.currentAmount,
       primaryGoalTitle
     ]
   );
@@ -752,11 +761,21 @@ export default function DashboardScreen() {
       getEffectiveMonthlyPlanProgress({
         actions,
         completedActions: completedActionsForPlanSelection,
+        debts: data.debts,
+        goalAllocations: goalPlan.allocations,
         periodKey,
         planProgressKey,
-        primaryGoalAllocation
+        simulationPlanPreference: onboarding.simulationPlanPreference
       }),
-    [actions, completedActionsForPlanSelection, periodKey, planProgressKey, primaryGoalAllocation]
+    [
+      actions,
+      completedActionsForPlanSelection,
+      data.debts,
+      goalPlan.allocations,
+      onboarding.simulationPlanPreference,
+      periodKey,
+      planProgressKey
+    ]
   );
   const { completedCount, impactSummary } = monthlyPlanProgress;
   const actionCount = actions.length;

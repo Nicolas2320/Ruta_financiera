@@ -1,5 +1,8 @@
 import {
   type ActionProgressRecord,
+  type ActionProgressStatus,
+  type DebtRecord,
+  type SimulationPlanPreference,
   type CompletedActionsState
 } from "../types/financial";
 import {
@@ -7,7 +10,8 @@ import {
   type MonthlyActionImpactSummary
 } from "./actionProgressImpact";
 import { getGoalContributionPeriodSummary } from "./goalContributions";
-import { isEmergencyGoal, type GoalAllocation } from "./goalPlanning";
+import { type GoalAllocation } from "./goalPlanning";
+import { getDebtPaymentTotalForPeriod, isDebtPaid } from "./debtPayments";
 import {
   getMonthlyActionProgressId,
   getMonthlyActionProgressStatus,
@@ -17,15 +21,8 @@ import {
   type MonthlyAction
 } from "./monthlyPlan";
 
-const goalContributionActionIds = new Set([
-  "initial-emergency-contribution",
-  "set-goal-contribution",
-  "redirect-small-expenses"
-]);
-const autoInjectedGoalContributionActionIds = new Set([
-  "set-goal-contribution",
-  "redirect-small-expenses"
-]);
+const goalContributionActionIds = new Set(["set-goal-contribution"]);
+const autoInjectedGoalContributionActionIds = new Set(["set-goal-contribution"]);
 
 export type EffectiveMonthlyPlanProgress = {
   completedCount: number;
@@ -44,28 +41,47 @@ function getActionIdFromProgressId(progressId: string) {
   return progressId.slice(planProgressKey.length + 1);
 }
 
-function getGoalContributionProgressRecord({
+function getTrackedProgressRecord({
   amount,
   completedAt,
+  detail,
+  status,
   label
 }: {
   amount: number;
   completedAt: string | null;
+  detail: string | null;
+  status: ActionProgressStatus;
   label: string;
 }): ActionProgressRecord {
   const timestamp = completedAt ?? new Date().toISOString();
 
   return {
-    status: "completed",
+    status,
     evidence: {
       type: "amount",
       label,
       amount,
-      detail: null
+      detail
     },
     startedAt: timestamp,
-    completedAt: timestamp,
+    completedAt: status === "completed" ? timestamp : null,
     updatedAt: timestamp
+  };
+}
+
+function getDecisionProgressRecord(selectedAt: string): ActionProgressRecord {
+  return {
+    status: "completed",
+    evidence: {
+      type: "decision",
+      label: "Estrategia guardada",
+      amount: null,
+      detail: "Escenario guardado este mes"
+    },
+    startedAt: selectedAt,
+    completedAt: selectedAt,
+    updatedAt: selectedAt
   };
 }
 
@@ -74,15 +90,11 @@ export function isGoalContributionActionId(actionId: string) {
 }
 
 export function getGoalContributionLabelForActionId(actionId: string) {
-  if (actionId === "initial-emergency-contribution") {
-    return "Aporte a emergencia";
-  }
-
   if (actionId === "redirect-small-expenses") {
     return "Monto redirigido";
   }
 
-  return "Aporte a meta";
+  return "Aporte a metas";
 }
 
 export function removeStoredGoalContributionActionsForPeriod(
@@ -111,40 +123,108 @@ export function removeStoredGoalContributionActionsForPeriod(
 export function getEffectiveMonthlyPlanProgress({
   actions,
   completedActions,
+  debts = [],
+  goalAllocations,
   periodKey,
   planProgressKey,
-  primaryGoalAllocation
+  simulationPlanPreference = null
 }: {
   actions: MonthlyAction[];
   completedActions: CompletedActionsState;
+  debts?: DebtRecord[];
+  goalAllocations: GoalAllocation[];
   periodKey: string;
   planProgressKey: string;
-  primaryGoalAllocation: GoalAllocation | null;
+  simulationPlanPreference?: SimulationPlanPreference | null;
 }): EffectiveMonthlyPlanProgress {
   const effectiveCompletedActions = { ...completedActions };
-  const goalContributionAction = actions.find((action) => {
-    if (!goalContributionActionIds.has(action.id)) {
-      return false;
-    }
-
-    return action.id !== "initial-emergency-contribution" || isEmergencyGoal(primaryGoalAllocation?.goal);
-  });
-  const goalContributionPeriodSummary = getGoalContributionPeriodSummary(
-    primaryGoalAllocation?.goal,
-    periodKey
+  const goalContributionAction = actions.find((action) =>
+    goalContributionActionIds.has(action.id)
   );
-  const goalContributionProgressAmount =
-    primaryGoalAllocation !== null && primaryGoalAllocation.currentAmount > 0
-      ? Math.min(goalContributionPeriodSummary.amount, primaryGoalAllocation.currentAmount)
-      : 0;
+  const activeGoalAllocations = goalAllocations.filter(
+    (allocation) =>
+      allocation.goal.status !== "completed" && allocation.goal.status !== "paused"
+  );
+  const goalContributionProgress = activeGoalAllocations.reduce(
+    (progress, allocation) => {
+      const periodSummary = getGoalContributionPeriodSummary(allocation.goal, periodKey);
+      const amount = Math.min(periodSummary.amount, Math.max(allocation.currentAmount, 0));
 
-  if (goalContributionAction && goalContributionProgressAmount > 0) {
+      return {
+        amount: progress.amount + amount,
+        contributedGoalCount:
+          progress.contributedGoalCount + (periodSummary.amount > 0 ? 1 : 0),
+        latestDate:
+          periodSummary.latestDate &&
+          (!progress.latestDate || periodSummary.latestDate > progress.latestDate)
+            ? periodSummary.latestDate
+            : progress.latestDate
+      };
+    },
+    { amount: 0, contributedGoalCount: 0, latestDate: null as string | null }
+  );
+
+  if (goalContributionAction && goalContributionProgress.amount > 0) {
     effectiveCompletedActions[getMonthlyActionProgressId(planProgressKey, goalContributionAction.id)] =
-      getGoalContributionProgressRecord({
-        amount: goalContributionProgressAmount,
-        completedAt: goalContributionPeriodSummary.latestDate,
+      getTrackedProgressRecord({
+        amount: goalContributionProgress.amount,
+        completedAt: goalContributionProgress.latestDate,
+        detail: `${goalContributionProgress.contributedGoalCount} de ${activeGoalAllocations.length} metas con aporte registrado`,
+        status:
+          goalContributionProgress.contributedGoalCount === activeGoalAllocations.length
+            ? "completed"
+            : "in_progress",
         label: getGoalContributionLabelForActionId(goalContributionAction.id)
       });
+  }
+
+  const debtPaymentAction = actions.find((action) => action.id === "register-debt-payments");
+  const activeDebts = debts.filter((debt) => !isDebtPaid(debt));
+  const debtPaymentProgress = activeDebts.reduce(
+    (progress, debt) => {
+      const amount = getDebtPaymentTotalForPeriod(debt, periodKey);
+      const latestDate = (debt.payments ?? [])
+        .filter((payment) => payment.date.startsWith(periodKey) && payment.amount > 0)
+        .reduce<string | null>(
+          (latest, payment) => (!latest || payment.date > latest ? payment.date : latest),
+          null
+        );
+
+      return {
+        amount: progress.amount + amount,
+        debtCount: progress.debtCount + (amount > 0 ? 1 : 0),
+        latestDate:
+          latestDate && (!progress.latestDate || latestDate > progress.latestDate)
+            ? latestDate
+            : progress.latestDate
+      };
+    },
+    { amount: 0, debtCount: 0, latestDate: null as string | null }
+  );
+
+  if (debtPaymentAction && debtPaymentProgress.amount > 0) {
+    effectiveCompletedActions[getMonthlyActionProgressId(planProgressKey, debtPaymentAction.id)] =
+      getTrackedProgressRecord({
+        amount: debtPaymentProgress.amount,
+        completedAt: debtPaymentProgress.latestDate,
+        detail: `${debtPaymentProgress.debtCount} de ${activeDebts.length} deudas con pago registrado`,
+        status:
+          debtPaymentProgress.debtCount === activeDebts.length ? "completed" : "in_progress",
+        label: "Pagos de deudas"
+      });
+  }
+
+  const scenarioAction = actions.find(
+    (action) =>
+      action.id === "compare-goal-contribution" || action.id === "compare-debt-strategies"
+  );
+
+  if (
+    scenarioAction &&
+    simulationPlanPreference?.selectedAt.startsWith(periodKey)
+  ) {
+    effectiveCompletedActions[getMonthlyActionProgressId(planProgressKey, scenarioAction.id)] =
+      getDecisionProgressRecord(simulationPlanPreference.selectedAt);
   }
 
   const completedCount = actions.filter((action) =>

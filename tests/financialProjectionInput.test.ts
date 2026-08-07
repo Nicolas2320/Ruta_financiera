@@ -4,6 +4,33 @@ import { buildFinancialProjectionInput } from "../utils/financialProjectionInput
 import { makeDebt, makeGoal, makeOnboarding } from "./fixtures/financial";
 
 describe("financial projection input", () => {
+  it("keeps debt goals out of goal allocations because debts have their own projection", () => {
+    const input = buildFinancialProjectionInput({
+      exactValues: {
+        monthlyExpenses: 1_000_000,
+        monthlyIncome: 4_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        goals: [
+          makeGoal({
+            id: "debt-goal",
+            title: "Pagar deudas",
+            type: "debt"
+          }),
+          makeGoal({
+            id: "travel-goal",
+            isPrimary: false,
+            title: "Ahorrar para viajar",
+            type: "wellbeing"
+          })
+        ]
+      })
+    });
+
+    expect(input.goals.map((goal) => goal.id)).toEqual(["travel-goal"]);
+  });
+
   it("keeps baseline expenses and planned debt payments separate", () => {
     const input = buildFinancialProjectionInput({
       asOfDate: "2026-07-31",

@@ -4,12 +4,14 @@ import { colors, radius, spacing, typography } from "../../constants/theme";
 
 export function ExactAmountField({
   accessibilityLabel,
+  autoFocus = false,
   helper,
   label,
   onChangeText,
   value
 }: {
   accessibilityLabel?: string;
+  autoFocus?: boolean;
   helper?: string;
   label?: string;
   onChangeText: (value: string) => void;
@@ -21,6 +23,7 @@ export function ExactAmountField({
       {helper ? <Text style={styles.helper}>{helper}</Text> : null}
       <TextInput
         accessibilityLabel={accessibilityLabel ?? label ?? "Ingresar cifra"}
+        autoFocus={autoFocus}
         inputMode="numeric"
         keyboardType="numeric"
         onChangeText={onChangeText}

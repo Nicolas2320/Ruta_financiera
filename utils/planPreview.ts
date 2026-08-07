@@ -69,11 +69,19 @@ export function getPlanPreviewData(
     null;
   const goalTitle =
     primaryGoalAllocation?.goal.title ?? data.financialGoal ?? metrics.snapshot.goal.name;
+  const activeGoalAllocations = goalPlan.allocations.filter(
+    (allocation) =>
+      allocation.goal.status !== "completed" && allocation.goal.status !== "paused"
+  );
   const monthlyGoalContext = {
+    activeGoalCount: activeGoalAllocations.length,
     title: goalTitle,
     monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
+    monthlyContributionTotal: goalPlan.monthlyContributionTotal,
     estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null,
-    hasRegisteredContribution: (primaryGoalAllocation?.currentAmount ?? 0) > 0
+    hasRegisteredContribution: activeGoalAllocations.some(
+      (allocation) => allocation.currentAmount > 0
+    )
   };
   const focus = getMonthlyFocus(data, metrics, planPriorityKey, monthlyGoalContext);
   const actions = getMonthlyActions(data, metrics, planPriorityKey, monthlyGoalContext);
@@ -81,8 +89,7 @@ export function getPlanPreviewData(
   const monthlyMargin = metrics.estimatedMargin;
   const suggestedContribution =
     planPriorityKey === "advance_goal"
-      ? primaryGoalAllocation?.monthlyContribution ??
-        metrics.snapshot.cashflow.suggestedMonthlyContribution
+      ? goalPlan.monthlyContributionTotal
       : planPreference.monthlyReference;
   const estimatedMonths =
     primaryGoalAllocation?.estimatedMonthsToGoal ??
@@ -94,7 +101,7 @@ export function getPlanPreviewData(
       suggestedContribution > 0 ? `${formatCOP(suggestedContribution)} aprox.` : "Por definir",
     contributionPurpose:
       planPriorityKey === "advance_goal"
-        ? `para avanzar hacia ${goalTitle ?? "tu meta financiera"}.`
+        ? "para avanzar hacia tus metas."
         : `como referencia inicial para ${focus.title.toLocaleLowerCase("es-CO")}.`,
     firstActionDescription:
       firstAction?.description ??

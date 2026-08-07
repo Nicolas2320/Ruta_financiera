@@ -90,7 +90,15 @@ describe("getPlanPreviewData", () => {
       makeOnboarding({
         debtPaymentShare: "No pago deudas",
         debtSituation: "No tengo deudas",
-        goals: [makeGoal({ title: "Especialización" })],
+        goals: [
+          makeGoal({ title: "Especialización", type: "education" }),
+          makeGoal({
+            id: "goal-emergency",
+            isPrimary: false,
+            title: "Fondo de emergencia",
+            type: "security"
+          })
+        ],
         simulationPlanPreference: {
           strategy: "prioritize_goal",
           goalId: "goal-1",
@@ -110,8 +118,8 @@ describe("getPlanPreviewData", () => {
 
     expect(preview.selectedStrategy).toBe("prioritize_goal");
     expect(preview.selectedReferenceLabel).toBe("Priorizar Especialización");
-    expect(preview.focusTitle).toBe("Meta del mes: Especialización");
+    expect(preview.focusTitle).toBe("Avanzar hacia tus metas");
     expect(preview.contributionLabel).toBe("$1.620.000 aprox.");
-    expect(preview.contributionPurpose).toContain("Especialización");
+    expect(preview.contributionPurpose).toBe("para avanzar hacia tus metas.");
   });
 });

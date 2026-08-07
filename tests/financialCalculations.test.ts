@@ -107,7 +107,7 @@ describe("calculateFinancialSnapshot", () => {
       suggestedContributionBeforeRounding: 956_250,
       suggestedMonthlyContribution: 950_000
     });
-    expect(snapshot.emergencyFund.coverageMonths).toBeCloseTo(0.8333, 3);
+    expect(snapshot.emergencyFund.coverageMonths).toBeCloseTo(0.1667, 3);
     expect(snapshot.emergencyFund.status).toBe("starter");
     expect(snapshot.goal).toMatchObject({
       progressPercentage: 250_000 / 3_000_000 * 100,
