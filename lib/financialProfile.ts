@@ -67,6 +67,15 @@ export function normalizeOnboardingData(
     firstName: typeof onboarding?.firstName === "string" ? onboarding.firstName : "",
     lastName: typeof onboarding?.lastName === "string" ? onboarding.lastName : "",
     financialGuidanceMode: normalizeFinancialGuidanceMode(onboarding?.financialGuidanceMode),
+    monthlyExpensesIncludesSmallExpenses:
+      typeof onboarding?.monthlyExpensesIncludesSmallExpenses === "boolean"
+        ? onboarding.monthlyExpensesIncludesSmallExpenses
+        : null,
+    hasDebts: typeof onboarding?.hasDebts === "boolean" ? onboarding.hasDebts : null,
+    debtMonthlyPaymentRange:
+      typeof onboarding?.debtMonthlyPaymentRange === "string"
+        ? onboarding.debtMonthlyPaymentRange
+        : null,
     expenseCategories: expenseData.expenseCategories,
     expenseCategoryAmounts: expenseData.expenseCategoryAmounts,
     debts,

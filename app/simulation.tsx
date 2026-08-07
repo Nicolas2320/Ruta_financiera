@@ -46,7 +46,6 @@ import {
   type SimulationAmountRange
 } from "../utils/simulationExperience";
 
-type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
 type Tone = "primary" | "support" | "warning" | "purple" | "neutral";
 type Route = Parameters<ReturnType<typeof useRouter>["push"]>[0];
 
@@ -56,25 +55,6 @@ type IconProps = {
   size?: number;
   strokeWidth?: number;
 };
-function hasLowEmergencyCoverage(emergencyCoverage: string | null) {
-  return emergencyCoverage === "No podría cubrirlos" || emergencyCoverage === "Menos de 1 mes";
-}
-
-function hasDebtPressure(debtSituation: string | null, debtPaymentShare: string | null) {
-  return (
-    debtSituation === "A veces me cuesta pagarlas" ||
-    debtSituation === "Son una preocupación importante" ||
-    debtPaymentShare === "Más del 40%"
-  );
-}
-
-function wantsInvestmentEducation(investmentSituation: string | null) {
-  return (
-    investmentSituation === "No, pero quiero aprender" ||
-    investmentSituation === "Sí, pero no entiendo bien cómo funcionan"
-  );
-}
-
 function getToneColors(tone: Tone) {
   if (tone === "support") {
     return {
@@ -135,17 +115,18 @@ function formatSimulationAmountRange(range: SimulationAmountRange) {
   return `${formatCOP(range.minimum ?? 0)} – ${formatCOP(range.maximum ?? 0)}`;
 }
 
-function getInvestmentEducationMessage(onboarding: OnboardingSnapshot) {
-  if (hasLowEmergencyCoverage(onboarding.emergencyCoverage)) {
+function getInvestmentEducationMessage(
+  snapshot: ReturnType<typeof calculateFinancialSnapshot>
+) {
+  if (
+    snapshot.emergencyFund.status === "none" ||
+    snapshot.emergencyFund.status === "starter"
+  ) {
     return "Primero conviene fortalecer una base para imprevistos.";
   }
 
-  if (hasDebtPressure(onboarding.debtSituation, onboarding.debtPaymentShare)) {
+  if (snapshot.debt.level === "high" || snapshot.debt.level === "medium") {
     return "Antes de invertir, puede ser útil revisar el peso mensual de tus deudas.";
-  }
-
-  if (wantsInvestmentEducation(onboarding.investmentSituation)) {
-    return "Puedes empezar por riesgo, plazo, liquidez y diversificación.";
   }
 
   return "Si después confirmas que tu base está estable, puedes explorar inversión con calma y educación.";
@@ -452,7 +433,9 @@ export default function SimulationScreen() {
   const debtMetricLabel = isDetailedDebtMode
     ? "Cuotas requeridas"
     : simulationExperience.mode === "reported_debt"
-      ? "Pagos de deuda estimados"
+      ? snapshot.debt.isPaymentEstimated
+        ? "Pagos de deuda estimados"
+        : "Pagos de deuda"
       : "Pagos de deuda";
   const debtMetricValue = isDetailedDebtMode
     ? formatCOP(projectionInput.cashflow.knownRequiredDebtPaymentsTotal)
@@ -465,13 +448,19 @@ export default function SimulationScreen() {
       ? "Indicaste que no pagas deudas"
       : simulationExperience.debtDataSource === "category"
         ? "Referencia registrada dentro de gastos"
+        : snapshot.debt.reportedPaymentKind === "exact"
+          ? "Pago mensual informado"
+          : snapshot.debt.reportedPaymentKind === "range"
+            ? "Según el rango mensual que elegiste"
         : onboarding.debtPaymentShare
           ? `Según tu respuesta: ${onboarding.debtPaymentShare}`
           : "Sin inventar una cuota exacta";
   const heroSubtitle = isDetailedDebtMode
     ? "Compara distintas formas de repartir el mismo dinero mensual. Ninguna alternativa cambia tu plan hasta que tú lo decidas."
     : simulationExperience.mode === "reported_debt"
-      ? "Explora tu capacidad mensual sin registrar cada deuda. Trabajamos con el rango que compartiste y evitamos inventar saldos o intereses."
+      ? snapshot.debt.reportedPaymentKind === "exact"
+        ? "Explora tu capacidad mensual con el pago total que informaste, sin inventar saldos ni intereses."
+        : "Explora tu capacidad mensual sin registrar cada deuda. Trabajamos con el rango que compartiste y evitamos inventar saldos o intereses."
       : "Explora cuánto podrías dirigir a tu meta y cómo cambia el resultado al proteger una parte del margen.";
 
   return (
@@ -684,7 +673,7 @@ export default function SimulationScreen() {
                 />
                 <Text style={styles.insightTitle}>Antes de invertir</Text>
               </View>
-              <Text style={styles.text}>{getInvestmentEducationMessage(onboarding)}</Text>
+              <Text style={styles.text}>{getInvestmentEducationMessage(snapshot)}</Text>
             </View>
           </View>
 

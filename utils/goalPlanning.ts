@@ -110,26 +110,8 @@ export function getGoalTargetAmount(
   return getGoalAmountRangeEstimate(goal.amountRange).midpoint;
 }
 
-function getGoalPriorityScore(priority: string | null | undefined) {
-  const normalizedPriority = normalizeText(priority);
-
-  if (normalizedPriority.includes("muy")) {
-    return 4;
-  }
-
-  if (normalizedPriority.includes("alta")) {
-    return 3;
-  }
-
-  if (normalizedPriority.includes("media")) {
-    return 2;
-  }
-
-  if (normalizedPriority.includes("baja")) {
-    return 1;
-  }
-
-  return 2;
+function getGoalFocusScore(isPrimary: boolean | undefined) {
+  return isPrimary ? 6 : 4;
 }
 
 function getGoalUrgencyScore(horizonMonths: number | null) {
@@ -210,7 +192,7 @@ function getGoalScore({
   }
 
   return (
-    getGoalPriorityScore(goal.priority) * 2 +
+    getGoalFocusScore(goal.isPrimary) +
     getGoalUrgencyScore(horizonMonths) +
     getGoalTypeScore(goal.type) +
     getGoalViabilityScore({ monthlyGoalBudget, requiredMonthlyContribution })

@@ -94,12 +94,15 @@ export type OnboardingData = {
   expenseCategories: string[];
   expenseCategoryAmounts: ExpenseCategoryAmounts;
   expensesFeeling: string | null;
+  monthlyExpensesIncludesSmallExpenses: boolean | null;
   hasSmallExpenses: string | null;
   smallExpenseCategories: string[];
   smallExpensesRange: string | null;
   smallExpensesIntention: string | null;
   savingsRange: string | null;
   emergencyCoverage: string | null;
+  hasDebts: boolean | null;
+  debtMonthlyPaymentRange: string | null;
   debtSituation: string | null;
   debtPaymentShare: string | null;
   debts: DebtRecord[];
@@ -271,7 +274,8 @@ export const exactFinancialValueKeys = [
   "monthlyIncome",
   "monthlyExpenses",
   "currentSavings",
-  "smallExpenses"
+  "smallExpenses",
+  "monthlyDebtPayments"
 ] as const;
 
 export type ExactFinancialValueKey = (typeof exactFinancialValueKeys)[number];
@@ -292,12 +296,15 @@ export const initialOnboarding: OnboardingData = {
   expenseCategories: [],
   expenseCategoryAmounts: {},
   expensesFeeling: null,
+  monthlyExpensesIncludesSmallExpenses: null,
   hasSmallExpenses: null,
   smallExpenseCategories: [],
   smallExpensesRange: null,
   smallExpensesIntention: null,
   savingsRange: null,
   emergencyCoverage: null,
+  hasDebts: null,
+  debtMonthlyPaymentRange: null,
   debtSituation: null,
   debtPaymentShare: null,
   debts: [],
@@ -714,7 +721,6 @@ export function createFinancialGoal({
   amountRange,
   iconKey,
   isPrimary = false,
-  priority,
   targetMonth,
   targetAmount,
   title
@@ -722,7 +728,6 @@ export function createFinancialGoal({
   amountRange: string | null;
   iconKey?: string | null;
   isPrimary?: boolean;
-  priority: string | null;
   targetMonth?: string | null;
   targetAmount?: number | null;
   title: string;
@@ -735,7 +740,7 @@ export function createFinancialGoal({
     title,
     type: getGoalTypeFromTitle(title),
     iconKey: iconKey ?? getGoalIconKeyFromTitle(title),
-    priority,
+    priority: null,
     amountRange,
     targetAmount: targetAmount ?? null,
     targetMonth: normalizedTargetMonth,
@@ -850,43 +855,27 @@ export function getLegacyFieldsFromGoal(goal: FinancialGoal | null) {
 }
 
 export function hasCompletedOnboarding(onboarding: OnboardingData) {
-  const skipsSmallExpenseDetails = onboarding.hasSmallExpenses === "No";
-  const hasRecurringExpenseCategory = onboarding.expenseCategories.some((category) => {
-    const normalizedCategory = category
-      .trim()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
-
-    return normalizedCategory.length > 0 && !normalizedCategory.includes("deuda");
-  });
-  const hasRequiredSmallExpenseCategories =
-    onboarding.hasSmallExpenses !== "Sí" || onboarding.smallExpenseCategories.length > 0;
-  const hasRequiredSmallExpensePlan =
-    skipsSmallExpenseDetails ||
-    Boolean(onboarding.smallExpensesRange && onboarding.smallExpensesIntention);
   const primaryGoal = getPrimaryFinancialGoal(onboarding);
+  const hasDebtPresenceAnswer =
+    onboarding.hasDebts !== null || Boolean(onboarding.debtSituation);
+  const reportsNoDebts =
+    onboarding.hasDebts === false ||
+    (onboarding.hasDebts === null &&
+      (onboarding.debtSituation === "No tengo deudas" ||
+        onboarding.debtPaymentShare === "No pago deudas"));
+  const hasDebtPaymentAnswer =
+    reportsNoDebts ||
+    Boolean(onboarding.debtMonthlyPaymentRange || onboarding.debtPaymentShare);
 
   return Boolean(
     onboarding.firstName.trim() &&
-      onboarding.ageRange &&
-      onboarding.country &&
       onboarding.incomeRange &&
-      onboarding.incomeType &&
-      onboarding.incomeFrequency &&
       onboarding.expensesRange &&
-      hasRecurringExpenseCategory &&
       onboarding.expensesFeeling &&
-      onboarding.hasSmallExpenses &&
-      hasRequiredSmallExpenseCategories &&
-      hasRequiredSmallExpensePlan &&
       onboarding.savingsRange &&
-      onboarding.emergencyCoverage &&
-      onboarding.debtSituation &&
-      onboarding.debtPaymentShare &&
-      onboarding.investmentSituation &&
+      hasDebtPresenceAnswer &&
+      hasDebtPaymentAnswer &&
       primaryGoal?.title &&
-      primaryGoal.targetMonth &&
-      primaryGoal.priority
+      primaryGoal.targetMonth
   );
 }

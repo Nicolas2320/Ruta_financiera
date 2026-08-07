@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   ClipboardList,
-  Coffee,
   PencilLine,
   PiggyBank,
   ReceiptText,
@@ -31,11 +30,11 @@ import {
   type FinancialGuidanceMode
 } from "../types/financial";
 import {
+  formatCOP,
   getCurrentSavingsDisplay,
   getGoalTargetAmountDisplay,
   getMonthlyExpensesDisplay,
-  getMonthlyIncomeDisplay,
-  getSmallExpensesDisplay
+  getMonthlyIncomeDisplay
 } from "../utils/financialRanges";
 import { formatTargetMonth } from "../utils/monthYear";
 
@@ -210,8 +209,25 @@ export default function SummaryScreen() {
   const incomeDisplay = getMonthlyIncomeDisplay(financialProfile);
   const expensesDisplay = getMonthlyExpensesDisplay(financialProfile);
   const savingsDisplay = getCurrentSavingsDisplay(financialProfile);
-  const smallExpensesDisplay = getSmallExpensesDisplay(financialProfile);
   const goalAmountDisplay = getGoalTargetAmountDisplay(financialProfile);
+  const hasDebts =
+    typeof onboarding.hasDebts === "boolean"
+      ? onboarding.hasDebts
+      : onboarding.debtSituation === "No tengo deudas" ||
+          onboarding.debtPaymentShare === "No pago deudas"
+        ? false
+        : onboarding.debtSituation || onboarding.debtPaymentShare
+          ? true
+          : onboarding.debts.length > 0
+            ? true
+          : null;
+  const debtPaymentValue =
+    hasDebts === false
+      ? "No aplica"
+      : exactValues.monthlyDebtPayments !== undefined &&
+          exactValues.monthlyDebtPayments > 0
+        ? formatCOP(exactValues.monthlyDebtPayments)
+        : onboarding.debtMonthlyPaymentRange ?? onboarding.debtPaymentShare;
   const openGuidanceModal = () => {
     setSelectedGuidanceMode(onboarding.financialGuidanceMode);
     setShowGuidanceModal(true);
@@ -270,31 +286,23 @@ export default function SummaryScreen() {
           </View>
 
           <SummarySection
-            description="Datos básicos para contextualizar tus recomendaciones."
+            description="El nombre que usamos para personalizar tu experiencia."
             editAccessibilityLabel="Editar perfil básico"
             fields={[
-              { label: "Nombre", value: onboarding.firstName },
-              { label: "Apellido/s", value: onboarding.lastName, optional: true },
-              { label: "Rango de edad", value: onboarding.ageRange },
-              { label: "País", value: onboarding.country },
-              { label: "Ciudad", value: onboarding.city, optional: true }
+              { label: "Nombre o apodo", value: onboarding.firstName }
             ]}
             icon={UserRound}
             onEdit={() =>
               router.push(isEditMode ? { pathname: "/profile", params: { source: "profile" } } : "/profile")
             }
             tone="neutral"
-            title="Perfil básico"
+            title="Tu nombre"
           />
 
           <SummarySection
             description="Base para estimar tu capacidad mensual."
             editAccessibilityLabel="Editar ingresos"
-            fields={[
-              { label: incomeDisplay.label, value: incomeDisplay.value },
-              { label: "Tipo de ingreso", value: onboarding.incomeType },
-              { label: "Frecuencia de ingreso", value: onboarding.incomeFrequency }
-            ]}
+            fields={[{ label: incomeDisplay.label, value: incomeDisplay.value }]}
             icon={Wallet}
             onEdit={() =>
               router.push(isEditMode ? { pathname: "/income", params: { source: "profile" } } : "/income")
@@ -308,7 +316,6 @@ export default function SummaryScreen() {
             editAccessibilityLabel="Editar gastos"
             fields={[
               { label: expensesDisplay.label, value: expensesDisplay.value },
-              { label: "Categorías principales", value: onboarding.expenseCategories },
               { label: "Cómo sientes tus gastos", value: onboarding.expensesFeeling }
             ]}
             icon={ReceiptText}
@@ -319,50 +326,15 @@ export default function SummaryScreen() {
           />
 
           <SummarySection
-            description="Hábitos pequeños que pueden convertirse en margen."
-            editAccessibilityLabel="Editar gastos hormiga"
-            fields={[
-              {
-                label: "Gastos pequeños frecuentes",
-                value: onboarding.hasSmallExpenses
-              },
-              {
-                label: "Categorías seleccionadas",
-                value:
-                  onboarding.hasSmallExpenses === "No"
-                    ? "No aplica"
-                    : onboarding.smallExpenseCategories
-              },
-              { label: smallExpensesDisplay.label, value: smallExpensesDisplay.value },
-              {
-                label: "Qué quiere hacer con esos gastos",
-                value:
-                  onboarding.hasSmallExpenses === "No"
-                    ? "No aplica"
-                    : onboarding.smallExpensesIntention
-              }
-            ]}
-            icon={Coffee}
-            onEdit={() =>
-              router.push(
-                isEditMode
-                  ? { pathname: "/small-expenses", params: { source: "profile" } }
-                  : "/small-expenses"
-              )
-            }
-            tone="neutral"
-            title="Gastos hormiga"
-          />
-
-          <SummarySection
             description="Punto de partida para medir estabilidad y prioridad."
-            editAccessibilityLabel="Editar ahorros, deudas e inversiones"
+            editAccessibilityLabel="Editar ahorros y deudas"
             fields={[
               { label: savingsDisplay.label, value: savingsDisplay.value },
-              { label: "Cobertura de gastos esenciales", value: onboarding.emergencyCoverage },
-              { label: "Situación de deudas", value: onboarding.debtSituation },
-              { label: "Peso mensual de deudas", value: onboarding.debtPaymentShare },
-              { label: "Situación de inversiones", value: onboarding.investmentSituation }
+              {
+                label: "Deudas o préstamos por pagar",
+                value: hasDebts === null ? null : hasDebts ? "Sí" : "No"
+              },
+              { label: "Pago mensual de deudas", value: debtPaymentValue }
             ]}
             icon={PiggyBank}
             onEdit={() =>
@@ -373,7 +345,7 @@ export default function SummaryScreen() {
               )
             }
             tone="support"
-            title="Ahorros, deudas e inversiones"
+            title="Ahorros y deudas"
           />
 
           {!isEditMode ? (
@@ -393,14 +365,17 @@ export default function SummaryScreen() {
                     ? formatTargetMonth(primaryGoal.targetMonth)
                     : null
                 },
-                { label: "Importancia", value: onboarding.goalPriority },
                 {
                   label:
                     goalAmountDisplay.source === "exact"
                       ? goalAmountDisplay.label
                       : getGoalDetailLabel(onboarding.financialGoal),
-                  value: goalAmountDisplay.source === "empty" ? null : goalAmountDisplay.value,
-                  optional: true
+                  value:
+                    goalAmountDisplay.source === "empty"
+                      ? primaryGoal
+                        ? "Aún no lo sé"
+                        : null
+                      : goalAmountDisplay.value
                 }
               ]}
               icon={Target}

@@ -23,6 +23,7 @@ import {
   PieChart,
   ReceiptText,
   ShoppingBag,
+  Smartphone,
   Users
 } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -31,6 +32,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNavigation } from "../components/BottomNavigation";
 import { FinancialEducationModal } from "../components/FinancialEducationModal";
 import { FinancialEducationStory } from "../components/FinancialEducationStory";
+import { CategoryChip } from "../components/ui/CategoryChip";
 import {
   SpendingSectionContent,
   SpendingSectionTabs
@@ -46,7 +48,8 @@ import {
 import { getMonthlyActionImpactSummary } from "../utils/actionProgressImpact";
 import {
   getRecurringExpenseCategories,
-  isDebtExpenseCategory
+  isDebtExpenseCategory,
+  syncDebtExpenseCategory
 } from "../utils/debtCalculations";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
 import {
@@ -107,6 +110,11 @@ const categoryVisuals: Record<string, CategoryVisual> = {
     color: "#1C7ED6",
     backgroundColor: "#E5F2FF"
   },
+  "celular o plan de datos": {
+    icon: Smartphone,
+    color: "#0F766E",
+    backgroundColor: "#E6FFFB"
+  },
   deudas: {
     icon: CreditCard,
     color: "#2563EB",
@@ -144,6 +152,21 @@ const categoryVisuals: Record<string, CategoryVisual> = {
   },
   otros: defaultCategoryVisual
 };
+
+const selectableExpenseCategories = [
+  "Arriendo",
+  "Alimentación",
+  "Transporte",
+  "Servicios públicos",
+  "Celular o plan de datos",
+  "Educación",
+  "Salud",
+  "Familia",
+  "Entretenimiento",
+  "Suscripciones",
+  "Compras",
+  "Otros"
+] as const;
 
 function normalizeLabel(label: string) {
   return label
@@ -251,7 +274,8 @@ function getCategorySharePercentage(amount: number | null, totalExpenses: number
 function getCategoryShareLabel(
   amount: number | null,
   totalExpenses: number | null,
-  isExactMonthlyExpense: boolean
+  isExactMonthlyExpense: boolean,
+  totalExpensesLabel: string
 ) {
   const share = getCategorySharePercentage(amount, totalExpenses);
 
@@ -267,7 +291,9 @@ function getCategoryShareLabel(
     return "Supera tus gastos principales";
   }
 
-  return `${share}% de los gastos principales ${isExactMonthlyExpense ? "ingresados" : "estimados"}`;
+  return `${share}% de ${totalExpensesLabel.toLowerCase()} ${
+    isExactMonthlyExpense ? "ingresados" : "estimados"
+  }`;
 }
 
 function getCategoryAmountsTotal(amounts: Record<string, number>) {
@@ -277,18 +303,22 @@ function getCategoryAmountsTotal(amounts: Record<string, number>) {
 function getCategoryCoverageText({
   categorizedAmount,
   isExactMonthlyExpense,
-  totalExpenses
+  totalExpenses,
+  totalExpensesLabel
 }: {
   categorizedAmount: number;
   isExactMonthlyExpense: boolean;
   totalExpenses: number | null;
+  totalExpensesLabel: string;
 }) {
+  const normalizedExpensesLabel = totalExpensesLabel.toLowerCase();
+
   if (totalExpenses === null || totalExpenses <= 0) {
-    return "Agrega tus gastos principales para comparar las categorías contra el total.";
+    return `Agrega tus ${normalizedExpensesLabel} para comparar las categorías contra el total.`;
   }
 
   if (categorizedAmount > totalExpenses) {
-    return "La suma de categorías supera tus gastos principales. Revisa los montos o actualiza esa cifra.";
+    return `La suma de categorías supera tus ${normalizedExpensesLabel}. Revisa los montos o actualiza esa cifra.`;
   }
 
   if (categorizedAmount === 0) {
@@ -297,12 +327,12 @@ function getCategoryCoverageText({
 
   const unclassifiedAmount = totalExpenses - categorizedAmount;
   if (unclassifiedAmount > 0) {
-    return `Quedan ${formatCOP(unclassifiedAmount)} sin clasificar de los gastos principales ${
-      isExactMonthlyExpense ? "ingresado" : "estimado"
+    return `Quedan ${formatCOP(unclassifiedAmount)} sin clasificar de ${normalizedExpensesLabel} ${
+      isExactMonthlyExpense ? "ingresados" : "estimados"
     }.`;
   }
 
-  return "Tus categorías cubren los gastos principales registrados.";
+  return `Tus categorías cubren los ${normalizedExpensesLabel} registrados.`;
 }
 
 function getPrioritizedCategoryLabels(categories: string[], amounts: Record<string, number>) {
@@ -392,6 +422,10 @@ function getSmallExpensesValue(metrics: MonthlyPlanMetrics) {
   const { amount } = metrics.snapshot.smallExpenses;
   const source = metrics.snapshot.sourceMap.smallExpenses;
 
+  if (metrics.snapshot.cashflow.monthlyExpensesIncludesSmallExpenses && amount === null) {
+    return "Incluidos en el total mensual";
+  }
+
   if (source === "reported_none") {
     return "No identificados";
   }
@@ -409,6 +443,12 @@ function getSmallExpensesValue(metrics: MonthlyPlanMetrics) {
 
 function getSmallExpensesComparisonValue(metrics: MonthlyPlanMetrics) {
   const smallExpenses = metrics.snapshot.smallExpenses.amount;
+
+  if (metrics.snapshot.cashflow.monthlyExpensesIncludesSmallExpenses) {
+    return smallExpenses === null
+      ? "Incluidos en gastos mensuales"
+      : `${formatCOP(smallExpenses)} dentro del total`;
+  }
 
   if (metrics.snapshot.sourceMap.smallExpenses === "reported_none") {
     return "No identificados";
@@ -441,7 +481,7 @@ function getDebtPaymentsComparisonValue(metrics: MonthlyPlanMetrics) {
     return "Sin pagos registrados";
   }
 
-  return `${formatCOP(amount)}${metrics.snapshot.debt.source === "reported" ? " aprox." : ""}`;
+  return `${formatCOP(amount)}${metrics.snapshot.debt.isPaymentEstimated ? " aprox." : ""}`;
 }
 
 function getCashflowMetricLabel(isCashflowExact: boolean) {
@@ -461,6 +501,13 @@ function getCashflowMetricValue(metrics: MonthlyPlanMetrics) {
 }
 
 function getSmallExpensesText(data: MonthlyPlanData, metrics: MonthlyPlanMetrics) {
+  if (
+    metrics.snapshot.cashflow.monthlyExpensesIncludesSmallExpenses &&
+    metrics.snapshot.smallExpenses.amount === null
+  ) {
+    return "Ya están considerados en tu gasto mensual. Puedes detallarlos más adelante si quieres analizarlos por separado.";
+  }
+
   if (data.hasSmallExpenses === "No") {
     return "No marcaste gastos pequeños frecuentes. Puedes volver a revisarlo si aparecen consumos repetidos.";
   }
@@ -612,11 +659,13 @@ function ComparisonMetric({
 function CategoryCoverageSummary({
   categorizedAmount,
   isExactMonthlyExpense,
-  totalExpenses
+  totalExpenses,
+  totalExpensesLabel
 }: {
   categorizedAmount: number;
   isExactMonthlyExpense: boolean;
   totalExpenses: number | null;
+  totalExpensesLabel: string;
 }) {
   const hasTotalExpenses = totalExpenses !== null && totalExpenses > 0;
   const unclassifiedAmount = hasTotalExpenses ? Math.max(totalExpenses - categorizedAmount, 0) : null;
@@ -624,7 +673,8 @@ function CategoryCoverageSummary({
   const coverageText = getCategoryCoverageText({
     categorizedAmount,
     isExactMonthlyExpense,
-    totalExpenses
+    totalExpenses,
+    totalExpensesLabel
   });
 
   return (
@@ -639,7 +689,9 @@ function CategoryCoverageSummary({
           value={categorizedAmount > 0 ? formatCOP(categorizedAmount) : "$0"}
         />
         <CategorySummaryMetric
-          label={isExactMonthlyExpense ? "Gastos principales ingresados" : "Gastos principales estimados"}
+          label={`${totalExpensesLabel} ${
+            isExactMonthlyExpense ? "ingresados" : "estimados"
+          }`}
           tone={hasTotalExpenses ? "primary" : "neutral"}
           value={hasTotalExpenses && totalExpenses !== null ? formatCOP(totalExpenses) : "Sin total"}
         />
@@ -669,7 +721,8 @@ function CategoryAmountRow({
   locked,
   onChangeText,
   onManagePress,
-  totalExpenses
+  totalExpenses,
+  totalExpensesLabel
 }: {
   isExactMonthlyExpense: boolean;
   inputValue: string;
@@ -678,6 +731,7 @@ function CategoryAmountRow({
   onChangeText: (value: string) => void;
   onManagePress?: () => void;
   totalExpenses: number | null;
+  totalExpensesLabel: string;
 }) {
   const visual = getCategoryVisual(label);
   const Icon = visual.icon;
@@ -724,7 +778,12 @@ function CategoryAmountRow({
         )}
       </View>
       <Text style={[styles.categoryShareText, { color: shareIsOverTotal ? "#C2410C" : visual.color }]}>
-        {getCategoryShareLabel(amount, totalExpenses, isExactMonthlyExpense)}
+        {getCategoryShareLabel(
+          amount,
+          totalExpenses,
+          isExactMonthlyExpense,
+          totalExpensesLabel
+        )}
       </Text>
       <View style={styles.categoryShareTrack}>
         {sharePercentage !== null ? (
@@ -736,30 +795,6 @@ function CategoryAmountRow({
           />
         ) : null}
       </View>
-    </View>
-  );
-}
-
-function EmptyState({
-  text,
-  actionLabel,
-  onPress
-}: {
-  text: string;
-  actionLabel: string;
-  onPress: () => void;
-}) {
-  return (
-    <View style={styles.emptyState}>
-      <Text style={styles.text}>{text}</Text>
-      <Pressable
-        accessibilityRole="button"
-        onPress={onPress}
-        style={({ pressed }) => [styles.inlineButton, pressed && styles.pressed]}
-      >
-        <Text style={styles.inlineButtonText}>{actionLabel}</Text>
-        <ChevronRight color={colors.primary} size={20} strokeWidth={2.5} />
-      </Pressable>
     </View>
   );
 }
@@ -835,13 +870,21 @@ export default function SpendingScreen() {
     getCategoryAmountInputValues(expenseCategories, savedCategoryAmounts)
   );
   const [categoryAmountFeedback, setCategoryAmountFeedback] = useState<string | null>(null);
+  const [isEditingCategories, setIsEditingCategories] = useState(false);
+  const [selectedExpenseCategories, setSelectedExpenseCategories] = useState<string[]>(
+    expenseCategories
+  );
   const hasExactMonthlyExpenses = snapshot.sourceMap.monthlyExpenses === "exact";
   const isCashflowExact =
     snapshot.sourceMap.monthlyIncome === "exact" &&
     snapshot.sourceMap.monthlyExpenses === "exact" &&
-    (snapshot.sourceMap.smallExpenses === "exact" ||
+    (snapshot.cashflow.monthlyExpensesIncludesSmallExpenses ||
+      snapshot.sourceMap.smallExpenses === "exact" ||
       snapshot.sourceMap.smallExpenses === "reported_none") &&
-    snapshot.debt.source !== "reported";
+    !snapshot.debt.isPaymentEstimated;
+  const monthlyExpensesLabel = snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
+    ? "Gastos mensuales"
+    : "Gastos principales";
   const categoryAmountsFromInputs = useMemo(
     () => getCategoryAmountsFromInputs(expenseCategories, categoryAmountInputs),
     [categoryAmountInputs, expenseCategories]
@@ -872,6 +915,42 @@ export default function SpendingScreen() {
   useEffect(() => {
     setCategoryAmountInputs(getCategoryAmountInputValues(expenseCategories, savedCategoryAmounts));
   }, [expenseCategories, savedCategoryAmounts]);
+
+  useEffect(() => {
+    if (!isEditingCategories) {
+      setSelectedExpenseCategories(expenseCategories);
+    }
+  }, [expenseCategories, isEditingCategories]);
+
+  const toggleExpenseCategory = (category: string) => {
+    setSelectedExpenseCategories((currentCategories) =>
+      currentCategories.includes(category)
+        ? currentCategories.filter((currentCategory) => currentCategory !== category)
+        : [...currentCategories, category]
+    );
+  };
+
+  const cancelCategoryEditing = () => {
+    setSelectedExpenseCategories(expenseCategories);
+    setIsEditingCategories(false);
+  };
+
+  const saveExpenseCategories = () => {
+    if (selectedExpenseCategories.length === 0) {
+      return;
+    }
+
+    const syncedExpenseData = syncDebtExpenseCategory({
+      debts: onboarding.debts,
+      expenseCategories: selectedExpenseCategories,
+      expenseCategoryAmounts: onboarding.expenseCategoryAmounts,
+      preserveExistingReference: true
+    });
+
+    updateOnboarding(syncedExpenseData);
+    setCategoryAmountFeedback(null);
+    setIsEditingCategories(false);
+  };
 
   const updateCategoryAmountInput = (category: string, value: string) => {
     setCategoryAmountFeedback(null);
@@ -928,7 +1007,7 @@ export default function SpendingScreen() {
               <View style={styles.heroTopRow}>
                 <Chip label={getExpenseSourceLabel(snapshot.sourceMap.monthlyExpenses)} tone={hasExactMonthlyExpenses ? "support" : snapshot.sourceMap.monthlyExpenses === "missing" ? "neutral" : "primary"} />
               </View>
-              <Text style={styles.heroKicker}>Gastos principales</Text>
+              <Text style={styles.heroKicker}>{monthlyExpensesLabel}</Text>
               <Text style={styles.heroAmount}>
                 {getAmountLabel(metrics.expenseMidpoint, hasExactMonthlyExpenses)}
               </Text>
@@ -954,7 +1033,7 @@ export default function SpendingScreen() {
                   <FinancialEducationStory
                     calculationItems={[
                       {
-                        label: "Gastos principales",
+                        label: monthlyExpensesLabel,
                         value:
                           metrics.expenseMidpoint !== null
                             ? formatCOP(metrics.expenseMidpoint)
@@ -962,7 +1041,9 @@ export default function SpendingScreen() {
                       },
                       {
                         label: "Gastos pequeños",
-                        operator: "+",
+                        operator: snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
+                          ? undefined
+                          : "+",
                         value: getSmallExpensesComparisonValue(metrics)
                       },
                       {
@@ -997,14 +1078,20 @@ export default function SpendingScreen() {
                       }
                     ]}
                     calculationTitle="Cómo obtenemos el porcentaje"
-                    definition="Esta relación suma gastos principales, gastos pequeños y cuotas de deuda para mostrar qué parte de tus ingresos ya está comprometida."
+                    definition={
+                      snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
+                        ? "Esta relación usa tus gastos mensuales —que ya incluyen los gastos pequeños— y suma las cuotas de deuda."
+                        : "Esta relación suma gastos principales, gastos pequeños y cuotas de deuda para mostrar qué parte de tus ingresos ya está comprometida."
+                    }
                     guidanceMode={guidanceMode}
                     plainLanguage={
                       metrics.expensePercentage !== null
                         ? `De cada $100 que ingresan, aproximadamente $${Math.round(
                             metrics.expensePercentage
                           )} se destinan a salidas mensuales.`
-                        : "Necesitamos ingresos, gastos principales y gastos pequeños para calcular esta relación."
+                        : snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
+                          ? "Necesitamos ingresos y gastos mensuales para calcular esta relación."
+                          : "Necesitamos ingresos, gastos principales y gastos pequeños para calcular esta relación."
                     }
                     plainLanguageBadge={
                       metrics.expensePercentage !== null
@@ -1062,7 +1149,7 @@ export default function SpendingScreen() {
             </View>
             <View style={styles.comparisonMetrics}>
               <ComparisonMetric
-                label="Gastos principales"
+                label={monthlyExpensesLabel}
                 tone={expensesAreHigh ? "warning" : "primary"}
                 value={getAmountLabel(metrics.expenseMidpoint, hasExactMonthlyExpenses)}
               />
@@ -1117,17 +1204,81 @@ export default function SpendingScreen() {
 
           <SectionCard
             compact={isPhone}
-            actionLabel="Ver todas"
+            actionLabel={
+              expenseCategories.length > 0
+                ? isEditingCategories
+                  ? "Cancelar"
+                  : "Administrar"
+                : undefined
+            }
             icon={<ReceiptText color={colors.primary} size={20} strokeWidth={2.4} />}
-            onActionPress={() => router.push({ pathname: "/expenses", params: { source: "spending" } })}
+            onActionPress={
+              isEditingCategories
+                ? cancelCategoryEditing
+                : () => setIsEditingCategories(true)
+            }
+            subtitle={
+              expenseCategories.length === 0
+                ? "Elige las categorías que forman parte de un mes habitual."
+                : undefined
+            }
             title="Categorías principales"
           >
-            {expenseCategories.length > 0 ? (
+            {expenseCategories.length === 0 || isEditingCategories ? (
+              <View style={styles.categorySelectionSection}>
+                <Text style={styles.text}>
+                  Esto nos ayudará a organizar tus gastos cuando quieras detallarlos. No necesitas
+                  ingresar montos ahora.
+                </Text>
+                <View style={styles.categorySelectionGrid}>
+                  {selectableExpenseCategories.map((category) => {
+                    const visual = getCategoryVisual(category);
+
+                    return (
+                      <CategoryChip
+                        key={category}
+                        backgroundColor={visual.backgroundColor}
+                        color={visual.color}
+                        icon={visual.icon}
+                        label={category}
+                        onPress={() => toggleExpenseCategory(category)}
+                        selected={selectedExpenseCategories.includes(category)}
+                        style={styles.categorySelectionChip}
+                      />
+                    );
+                  })}
+                </View>
+                <View style={styles.categorySaveRow}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: selectedExpenseCategories.length === 0 }}
+                    disabled={selectedExpenseCategories.length === 0}
+                    onPress={saveExpenseCategories}
+                    style={({ pressed }) => [
+                      styles.categorySaveButton,
+                      selectedExpenseCategories.length === 0 && styles.categorySaveButtonDisabled,
+                      pressed && selectedExpenseCategories.length > 0 && styles.pressed
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.categorySaveButtonText,
+                        selectedExpenseCategories.length === 0 &&
+                          styles.categorySaveButtonTextDisabled
+                      ]}
+                    >
+                      Guardar categorías
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
               <View style={styles.categoryAmountSection}>
                 <CategoryCoverageSummary
                   categorizedAmount={categorizedAmountTotal}
                   isExactMonthlyExpense={hasExactMonthlyExpenses}
                   totalExpenses={metrics.expenseMidpoint}
+                  totalExpensesLabel={monthlyExpensesLabel}
                 />
                 <View style={styles.categoryAmountList}>
                   {prioritizedExpenseCategories.map((category) => (
@@ -1140,6 +1291,7 @@ export default function SpendingScreen() {
                       onManagePress={() => router.push("/debts")}
                       onChangeText={(value) => updateCategoryAmountInput(category, value)}
                       totalExpenses={metrics.expenseMidpoint}
+                      totalExpensesLabel={monthlyExpensesLabel}
                     />
                   ))}
                 </View>
@@ -1166,12 +1318,6 @@ export default function SpendingScreen() {
                   </Pressable>
                 </View>
               </View>
-            ) : (
-              <EmptyState
-                actionLabel="Agregar categorías"
-                onPress={() => router.push({ pathname: "/expenses", params: { source: "spending" } })}
-                text="Aún no hay categorías de gasto seleccionadas. Puedes agregarlas sin registrar compras una por una."
-              />
             )}
           </SectionCard>
 
@@ -1192,13 +1338,6 @@ export default function SpendingScreen() {
               </Text>
             </View>
             <Text style={styles.text}>{getSmallExpensesText(data, metrics)}</Text>
-            {data.smallExpenseCategories.length > 0 ? (
-              <View style={styles.tagRow}>
-                {data.smallExpenseCategories.map((category) => (
-                  <Chip key={category} label={category} tone="warning" />
-                ))}
-              </View>
-            ) : null}
           </SectionCard>
 
           </SpendingSectionContent>
@@ -1504,6 +1643,17 @@ const styles = StyleSheet.create({
   categoryAmountSection: {
     gap: spacing.md
   },
+  categorySelectionSection: {
+    gap: spacing.md
+  },
+  categorySelectionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  categorySelectionChip: {
+    flexBasis: 150
+  },
   categorySummaryCard: {
     backgroundColor: "#F8FBFF",
     borderColor: colors.border,
@@ -1731,32 +1881,6 @@ const styles = StyleSheet.create({
     fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.sectionTitle
-  },
-  tagRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  emptyState: {
-    backgroundColor: colors.surfaceMuted,
-    borderColor: "#D7E7FF",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: spacing.sm,
-    padding: spacing.md
-  },
-  inlineButton: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    gap: spacing.xs,
-    minHeight: 42
-  },
-  inlineButtonText: {
-    color: colors.primary,
-    fontSize: typography.body,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
   },
   iconBubble: {
     alignItems: "center",

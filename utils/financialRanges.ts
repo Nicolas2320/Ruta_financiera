@@ -13,6 +13,13 @@ export type FinancialRangeEstimate = {
   label: string;
 };
 
+const planPrecisionValueKeys = [
+  "monthlyIncome",
+  "monthlyExpenses",
+  "currentSavings",
+  "smallExpenses"
+] as const;
+
 const unavailableRange: FinancialRangeEstimate = {
   min: null,
   max: null,
@@ -170,6 +177,39 @@ const savingsRanges: Record<string, FinancialRangeEstimate> = {
   }
 };
 
+const debtMonthlyPaymentRanges: Record<string, FinancialRangeEstimate> = {
+  "Menos de $250.000": {
+    min: 0,
+    max: 250000,
+    midpoint: 125000,
+    label: "Menos de $250.000"
+  },
+  "$250.000 – $500.000": {
+    min: 250000,
+    max: 500000,
+    midpoint: 375000,
+    label: "$250.000 – $500.000"
+  },
+  "$500.000 – $1.000.000": {
+    min: 500000,
+    max: 1000000,
+    midpoint: 750000,
+    label: "$500.000 – $1.000.000"
+  },
+  "$1.000.000 – $2.000.000": {
+    min: 1000000,
+    max: 2000000,
+    midpoint: 1500000,
+    label: "$1.000.000 – $2.000.000"
+  },
+  "Más de $2.000.000": {
+    min: 2000000,
+    max: null,
+    midpoint: 2500000,
+    label: "Más de $2.000.000"
+  }
+};
+
 const goalAmountRanges: Record<string, FinancialRangeEstimate> = {
   "Menos de $1.000.000": {
     min: 0,
@@ -260,6 +300,10 @@ export function getSavingsRangeEstimate(savingsRange: string | null) {
   return getRangeEstimate(savingsRange, savingsRanges);
 }
 
+export function getDebtMonthlyPaymentRangeEstimate(range: string | null) {
+  return getRangeEstimate(range, debtMonthlyPaymentRanges);
+}
+
 export function getGoalAmountRangeEstimate(goalAmountRange: string | null) {
   return getRangeEstimate(goalAmountRange, goalAmountRanges);
 }
@@ -347,7 +391,7 @@ export function normalizeExactValues(
 }
 
 export function getExactValuesCount(exactValues: ExactFinancialValues | null | undefined) {
-  return exactFinancialValueKeys.filter((key) => hasExactFinancialValue(exactValues?.[key]))
+  return planPrecisionValueKeys.filter((key) => hasExactFinancialValue(exactValues?.[key]))
     .length;
 }
 
@@ -362,7 +406,7 @@ export function getPlanPrecisionStatus(exactValues: ExactFinancialValues | null 
     };
   }
 
-  if (count < exactFinancialValueKeys.length) {
+  if (count < planPrecisionValueKeys.length) {
     return {
       count,
       state: "Mejorado",
@@ -433,13 +477,30 @@ export function getMonthlyIncomeDisplay(profile: FinancialValueProfile): Financi
 }
 
 export function getMonthlyExpensesDisplay(profile: FinancialValueProfile): FinancialValueDisplay {
+  const includesSmallExpenses =
+    profile.onboarding?.monthlyExpensesIncludesSmallExpenses === true;
+
   return (
     getExactDisplay(
-      "Gastos principales al mes",
+      includesSmallExpenses ? "Gastos mensuales" : "Gastos principales al mes",
       getProfileExactValues(profile).monthlyExpenses,
-      "No incluye cuotas de deuda ni gastos pequeños."
-    ) ?? getRangeDisplay("Rango de gastos principales", profile.onboarding?.expensesRange)
+      includesSmallExpenses
+        ? "Incluye gastos pequeños habituales; no incluye cuotas de deuda."
+        : "No incluye cuotas de deuda ni gastos pequeños."
+    ) ??
+    getRangeDisplay(
+      includesSmallExpenses ? "Rango de gastos mensuales" : "Rango de gastos principales",
+      profile.onboarding?.expensesRange
+    )
   );
+}
+
+export function getDebtMonthlyPaymentRangeForAmount(value: number) {
+  if (value < 250_000) return "Menos de $250.000";
+  if (value < 500_000) return "$250.000 – $500.000";
+  if (value < 1_000_000) return "$500.000 – $1.000.000";
+  if (value < 2_000_000) return "$1.000.000 – $2.000.000";
+  return "Más de $2.000.000";
 }
 
 export function getCurrentSavingsDisplay(profile: FinancialValueProfile): FinancialValueDisplay {

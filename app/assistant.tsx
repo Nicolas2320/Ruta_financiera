@@ -395,7 +395,10 @@ function buildAssistantFinancialContext({
       debtToIncomeRatio: snapshot.debt.debtToIncomeRatio,
       label: snapshot.debt.label,
       level: snapshot.debt.level,
+      isPaymentEstimated: snapshot.debt.isPaymentEstimated,
       monthlyPaymentTotal: snapshot.debt.monthlyPaymentTotal,
+      reportedMonthlyPaymentRange: snapshot.debt.reportedMonthlyPaymentRange,
+      reportedPaymentKind: snapshot.debt.reportedPaymentKind,
       reportedPaymentShare: snapshot.debt.reportedPaymentShare,
       shouldPrioritizeDebt: snapshot.debt.shouldPrioritizeDebt,
       source: snapshot.debt.source
@@ -417,7 +420,6 @@ function buildAssistantFinancialContext({
       estimatedMonthsToGoal:
         primaryGoalAllocation?.estimatedMonthsToGoal ?? snapshot.goal.estimatedMonthsToGoal,
       name: primaryGoalAllocation?.goal.title ?? snapshot.goal.name,
-      priority: primaryGoalAllocation?.goal.priority ?? onboarding.goalPriority,
       progressPercentage:
         primaryGoalAllocation?.progressPercentage ?? snapshot.goal.progressPercentage,
       remainingAmount: primaryGoalAllocation?.remainingAmount ?? snapshot.goal.remainingAmount,
@@ -442,9 +444,6 @@ function buildAssistantFinancialContext({
       monthlyContributionTotal: goalPlan.monthlyContributionTotal,
       primaryGoalMonthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
       remainingBudget: goalPlan.remainingBudget
-    },
-    investment: {
-      situation: onboarding.investmentSituation
     },
     monthlyPlan: {
       actions: actionContexts,

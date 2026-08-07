@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../lib/supabase", () => ({ supabase: null }));
 
 import {
+  createFinancialGoal,
   hasCompletedOnboarding,
   normalizeDebtRecords,
   normalizeFinancialGoals,
@@ -14,52 +15,137 @@ import { makeGoal, makeOnboarding } from "./fixtures/financial";
 function makeCompletedOnboarding(overrides: Partial<OnboardingData> = {}) {
   return makeOnboarding({
     firstName: "Ana",
-    ageRange: "31–35",
-    country: "Colombia",
     incomeRange: "$3.000.000 – $5.000.000",
-    incomeType: "Empleo",
-    incomeFrequency: "Mensual",
     expensesRange: "$2.000.000 – $4.000.000",
-    expenseCategories: ["Vivienda"],
+    expenseCategories: [],
     expensesFeeling: "A veces son difíciles de controlar",
-    hasSmallExpenses: "No",
-    smallExpenseCategories: [],
-    smallExpensesRange: null,
-    smallExpensesIntention: null,
     savingsRange: "Prefiero no responder",
-    emergencyCoverage: "No estoy seguro",
-    debtSituation: "Prefiero no responder",
-    debtPaymentShare: "Prefiero no responder",
-    investmentSituation: "Prefiero no responder",
+    hasDebts: false,
     goals: [makeGoal()],
     ...overrides
   });
 }
 
 describe("onboarding completion", () => {
-  it("allows a truthful No answer without forcing a small-expense amount or intention", () => {
+  it("does not require small-expense answers in the initial diagnosis", () => {
     expect(hasCompletedOnboarding(makeCompletedOnboarding())).toBe(true);
   });
 
-  it("still requires details when small expenses may exist", () => {
+  it("does not require legacy demographic fields for a new profile", () => {
+    expect(
+      hasCompletedOnboarding(
+        makeCompletedOnboarding({
+          ageRange: null,
+          country: null,
+          city: "",
+          lastName: ""
+        })
+      )
+    ).toBe(true);
+  });
+
+  it("still requires a name or nickname", () => {
+    expect(hasCompletedOnboarding(makeCompletedOnboarding({ firstName: "" }))).toBe(false);
+  });
+
+  it("does not require legacy income type or frequency fields", () => {
+    expect(
+      hasCompletedOnboarding(
+        makeCompletedOnboarding({ incomeType: null, incomeFrequency: null })
+      )
+    ).toBe(true);
+  });
+
+  it("keeps legacy small-expense answers optional for completion", () => {
     expect(
       hasCompletedOnboarding(
         makeCompletedOnboarding({
           hasSmallExpenses: "Sí",
-          smallExpenseCategories: ["Cafés, snacks y salidas"]
+          smallExpenseCategories: [],
+          smallExpensesRange: null,
+          smallExpensesIntention: null
         })
       )
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("does not treat the managed debt category as a selected recurring expense", () => {
+  it("does not require expense categories before entering the spending screen", () => {
     expect(
       hasCompletedOnboarding(
         makeCompletedOnboarding({
-          expenseCategories: ["Deudas"]
+          expenseCategories: []
+        })
+      )
+    ).toBe(true);
+  });
+
+  it("does not require declared emergency coverage or investments", () => {
+    expect(
+      hasCompletedOnboarding(
+        makeCompletedOnboarding({
+          emergencyCoverage: null,
+          investmentSituation: null
+        })
+      )
+    ).toBe(true);
+  });
+
+  it("requires a monthly payment answer when the person has debts", () => {
+    expect(
+      hasCompletedOnboarding(
+        makeCompletedOnboarding({
+          hasDebts: true,
+          debtMonthlyPaymentRange: null
         })
       )
     ).toBe(false);
+
+    expect(
+      hasCompletedOnboarding(
+        makeCompletedOnboarding({
+          hasDebts: true,
+          debtMonthlyPaymentRange: "$250.000 \u2013 $500.000"
+        })
+      )
+    ).toBe(true);
+  });
+
+  it("keeps legacy debt answers valid for existing profiles", () => {
+    expect(
+      hasCompletedOnboarding(
+        makeCompletedOnboarding({
+          hasDebts: null,
+          debtSituation: "Prefiero no responder",
+          debtPaymentShare: "Prefiero no responder"
+        })
+      )
+    ).toBe(true);
+  });
+
+  it("does not require goal importance for the initial diagnosis", () => {
+    expect(
+      hasCompletedOnboarding(
+        makeCompletedOnboarding({
+          goalPriority: null,
+          goals: [makeGoal({ priority: null })]
+        })
+      )
+    ).toBe(true);
+  });
+
+  it("creates new goals without an importance value", () => {
+    expect(
+      createFinancialGoal({
+        amountRange: "$1.000.000 \u2013 $5.000.000",
+        isPrimary: true,
+        targetMonth: "2027-03",
+        title: "Ahorrar para estudiar"
+      })
+    ).toMatchObject({
+      isPrimary: true,
+      priority: null,
+      targetMonth: "2027-03"
+    });
   });
 });
 

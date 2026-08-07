@@ -20,16 +20,19 @@ La base y la primera integración en `/simulation` ya están implementadas. La p
 | Dato | Fuente de verdad | Edición | Uso futuro |
 | --- | --- | --- | --- |
 | Ingreso mensual | `exactValues.monthlyIncome` o rango | `/income` y `/improve-plan` | Entrada de caja mensual |
-| Gastos principales al mes | `exactValues.monthlyExpenses` o rango | `/expenses` y `/improve-plan` | Gastos habituales sin deudas ni gastos pequeños |
-| Gastos pequeños | `exactValues.smallExpenses` o rango | `/small-expenses` y `/improve-plan` | Componente separado del flujo mensual |
+| Gastos mensuales | `exactValues.monthlyExpenses` o rango | `/expenses` y `/improve-plan` | Todos los gastos habituales; nunca incluye cuotas de deuda |
+| Gastos pequeños | `exactValues.smallExpenses` o rango | `/small-expenses` y `/improve-plan` | Desglose opcional; en perfiles nuevos ya está incluido en el gasto mensual |
 | Ahorro disponible general | `exactValues.currentSavings` o rango | `/savings-debts` y `/improve-plan` | Respaldo actual no asignado a metas |
-| Categorías de gasto | `onboarding.expenseCategories` | `/expenses` | Distribución de los gastos principales |
+| Existencia de deudas | `onboarding.hasDebts` | `/savings-debts` | Distinguir entre ausencia de deuda y pago todavía desconocido |
+| Pago mensual total de deudas sin detalle | `exactValues.monthlyDebtPayments` o `onboarding.debtMonthlyPaymentRange` | `/savings-debts` | Restar las cuotas del flujo aunque la persona aún no registre cada obligación |
+| Categorías de gasto | `onboarding.expenseCategories` | `/spending`, desde la primera visita | Distribución de los gastos principales |
 | Saldo, tasa, estado y día de pago | `onboarding.debts` | `/debts` | Evolución de cada obligación |
 | Pago mensual planeado | `DebtRecord.monthlyPayment` | `/debts` | Escenario que conserva la decisión actual |
 | Naturaleza del pago | `DebtRecord.monthlyPaymentType` | `/debts` | Distinguir mínimo, acuerdo, decisión propia o dato desconocido |
 | Pago requerido calculado | Tipo del pago y `DebtRecord.monthlyPayment` | `/debts` | Piso que no puede reasignarse sin incumplir; el campo separado anterior queda solo por compatibilidad |
 | Flexibilidad de un acuerdo | `DebtRecord.paymentFlexibility` | `/debts` | Identificar valores potencialmente negociables |
 | Pagos reales y saldo reportado | `DebtRecord.payments` y `remainingAmount` | `/debts` | Recalibrar el siguiente período |
+| Meta principal actual | `FinancialGoal.isPrimary` | `/goals` y `/goals-overview` | Objetivo que orienta dashboard, diagnóstico, simulación y reparto recomendado |
 | Monto que quiere reunir y ahorro actual | `FinancialGoal` | `/goals` y `/goals-overview` | Brecha y progreso real sin suponer la parte que será financiada |
 | Mes objetivo | `FinancialGoal.targetMonth` | `/goals` y `/goals-overview` | Única referencia temporal para calcular los períodos disponibles |
 | Margen libre mensual deseado | Supuesto visible de `/simulation` | `/simulation`; persistencia pendiente | Dinero que la persona decide no comprometer ese mes; nunca usa un monto fijo global |
@@ -64,15 +67,29 @@ La simulación no debe leer directamente campos dispersos de `onboarding`. Debe 
 
 ## Cálculo del margen actual
 
-`monthlyExpenses` representa únicamente gastos principales. Las cuotas activas se obtienen desde las deudas y los gastos pequeños desde su propia respuesta. La cifra deja de depender de que el usuario recuerde corregirla cuando una deuda termina.
+En perfiles nuevos, `monthlyExpenses` representa todos los gastos habituales y `monthlyExpensesIncludesSmallExpenses` vale `true`. Las cuotas activas se obtienen siempre desde las deudas. Un eventual detalle de gastos pequeños es analítico y no vuelve a sumarse al flujo.
 
-Las preguntas monetarias de ingreso, gastos principales, gastos pequeños y ahorro permiten elegir un rango o ingresar una cifra exacta. Si se ingresa una cifra, la app guarda también el rango compatible para conservar una estimación de respaldo y completa automáticamente el mismo valor que aparece en `/improve-plan`.
+Los perfiles anteriores conservan `monthlyExpensesIncludesSmallExpenses = null`: para ellos el motor mantiene la semántica histórica y suma el monto separado de gastos pequeños cuando existe.
+
+Las preguntas monetarias de ingreso, gastos mensuales y ahorro permiten elegir un rango o ingresar una cifra exacta. Si se ingresa una cifra, la app guarda también el rango compatible para conservar una estimación de respaldo y completa automáticamente el mismo valor que aparece en `/improve-plan`.
+
+La deuda inicial sigue el mismo principio: primero se pregunta si existen deudas o préstamos por pagar y, solo cuando la respuesta es afirmativa, se solicita el total de cuotas mensuales mediante rango o cifra exacta. No se solicita el saldo total. El motor resuelve la fuente del pago mensual en este orden para evitar duplicados:
+
+1. cuotas de deudas activas detalladas en `/debts`;
+2. referencia de la categoría `Deudas` en gastos;
+3. cifra mensual exacta informada en el diagnóstico;
+4. punto medio del rango mensual informado;
+5. porcentaje de ingresos conservado únicamente para perfiles anteriores.
+
+La cobertura de emergencia no se declara. Se calcula como `ahorro disponible ÷ gastos mensuales`, siempre que ambos datos estén disponibles. La situación de inversiones tampoco forma parte del diagnóstico inicial ni decide la prioridad del motor.
+
+La importancia declarada de una meta tampoco se solicita. Elegir cuál es la meta principal ya expresa el foco actual de la persona. Cuando existen varias metas, el reparto recomendado considera esa marca principal, el mes objetivo, el tipo de meta y su viabilidad; un aporte manual continúa teniendo precedencia. `FinancialGoal.priority` y `goalPriority` se conservan solo para leer perfiles anteriores y dejan de influir en el motor.
 
 El motor usará como mínimo:
 
-`disponible planeado = ingreso - gastos principales - gastos pequeños - pagos de deuda planeados`
+`disponible planeado = ingreso - gastos mensuales - pagos de deuda planeados`
 
-`disponible obligatorio = ingreso - gastos principales - gastos pequeños - pagos mínimos o acordados`
+`disponible obligatorio = ingreso - gastos mensuales - pagos mínimos o acordados`
 
 El segundo valor queda sin calcular si falta algún mínimo. Así se evita presentar dinero potencialmente comprometido como disponible.
 
@@ -82,6 +99,9 @@ Los datos de metas y deudas siguen dentro de `financial_profiles.onboarding`, qu
 
 - no se necesita agregar columnas; una migración de datos limpia las claves temporales heredadas dentro del JSONB;
 - los perfiles existentes siguen funcionando;
+- `hasDebts`, `debtMonthlyPaymentRange` y `monthlyDebtPayments` son opcionales para perfiles anteriores y se normalizan al cargar;
+- `emergencyCoverage`, `investmentSituation`, `debtSituation` y `debtPaymentShare` se conservan solo para leer perfiles anteriores; ya no se solicitan ni gobiernan el diagnóstico nuevo;
+- `FinancialGoal.priority` y `goalPriority` se conservan para compatibilidad, pero las metas nuevas se guardan sin importancia declarada y el reparto no usa esos valores;
 - las deudas antiguas se clasifican como `unknown` hasta que la persona las confirme;
 - una fecha con día se convierte a mes y año, descartando el día;
 - un horizonte aproximado antiguo se convierte una sola vez a un mes objetivo determinista;
@@ -104,12 +124,12 @@ Si el historial o la edición concurrente crecen, se evaluará normalizar pagos 
 Todas las comparaciones deben partir del mismo orden. Una estrategia solo puede decidir sobre el dinero que queda después de respetar estas capas:
 
 1. Ingreso mensual disponible.
-2. Gastos principales y gastos pequeños.
+2. Gastos mensuales habituales, incluidos los pequeños.
 3. Cuotas obligatorias, acuerdos fijos y mínimos exigidos de las deudas.
 4. Monto mensual que la persona decide dejar sin comprometer.
 5. Dinero distribuible entre pagos voluntarios de deuda y metas.
 
-`dinero distribuible = máximo(0, ingreso - gastos principales - gastos pequeños - obligaciones de deuda - margen protegido)`
+`dinero distribuible = máximo(0, ingreso - gastos mensuales - obligaciones de deuda - margen protegido)`
 
 El dinero distribuible no es dinero adicional. Se desglosa en el margen que aún no tenía destino, pagos voluntarios de deuda que pueden reasignarse y aportes voluntarios a metas. Un pago `self_selected` mantiene su valor en “Así estás hoy”, pero su piso obligatorio continúa siendo `$0`; convertirlo en obligación impediría que los escenarios compararan otras decisiones.
 

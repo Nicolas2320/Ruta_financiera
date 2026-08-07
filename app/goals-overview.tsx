@@ -239,8 +239,6 @@ const customGoalIconOptions: GoalVisualOption[] = [
   }
 ];
 const allGoalVisualOptions = [...goalVisualOptions, ...customGoalIconOptions];
-const goalPriorities = ["Baja", "Media", "Alta", "Muy alta"];
-
 function toPercentWidth(value: number): `${number}%` {
   return `${Math.max(0, Math.min(value, 100))}%`;
 }
@@ -579,33 +577,6 @@ function StatCard({
   );
 }
 
-function ChoicePill({
-  label,
-  selected,
-  onPress
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.choicePill,
-        selected && styles.choicePillSelected,
-        pressed && styles.pressed
-      ]}
-    >
-      <Text style={[styles.choicePillText, selected && styles.choicePillTextSelected]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 function BottomNavItem({
   title,
   route,
@@ -791,7 +762,6 @@ function GoalCard({
     remainingAmount: number;
   } | null>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [selectedPriority, setSelectedPriority] = useState(allocation.goal.priority ?? "");
   const viabilityTone = getViabilityTone(allocation.viability);
   const goalVisual = getGoalVisual(allocation.goal);
   const GoalIcon = goalVisual.icon;
@@ -853,7 +823,6 @@ function GoalCard({
     );
     setTargetMonth(allocation.goal.targetMonth ?? null);
     setCurrentInput(getCurrencyInputValue(allocation.currentAmount));
-    setSelectedPriority(allocation.goal.priority ?? "");
   };
 
   useEffect(() => {
@@ -862,7 +831,6 @@ function GoalCard({
   }, [
     allocation.currentAmount,
     allocation.goal.iconKey,
-    allocation.goal.priority,
     allocation.goal.targetMonth,
     allocation.goal.targetAmount,
     allocation.goal.title,
@@ -936,7 +904,6 @@ function GoalCard({
       title: cleanTitle,
       iconKey: nextIconKey,
       type: getGoalTypeFromTitle(cleanTitle),
-      priority: selectedPriority || null,
       targetAmount,
       targetMonth,
       currentAmount,
@@ -1421,19 +1388,6 @@ function GoalCard({
                   <Text style={styles.editNoticeText}>{reactivationMessage}</Text>
                 </View>
               ) : null}
-              <View style={styles.editGroup}>
-                <Text style={styles.inputLabel}>Prioridad frente a tus otras metas</Text>
-                <View style={styles.choiceRow}>
-                  {goalPriorities.map((priority) => (
-                    <ChoicePill
-                      key={priority}
-                      label={priority}
-                      onPress={() => setSelectedPriority(priority)}
-                      selected={selectedPriority === priority}
-                    />
-                  ))}
-                </View>
-              </View>
               <View style={styles.editSummary}>
                 <View style={styles.editSummaryIcon}>
                   <Sparkles color={colors.support} size={18} strokeWidth={2.4} />
@@ -1442,8 +1396,8 @@ function GoalCard({
                   <Text style={styles.editSummaryTitle}>Qué pasará al guardar</Text>
                   <Text style={styles.editSummaryText}>
                     Recalcularemos el aporte recomendado y el tiempo estimado. Si
-                    tienes varias metas, el tipo y la prioridad pueden cambiar cómo
-                    se reparte la bolsa. No moveremos dinero.
+                    tienes varias metas, cuál es la principal, su fecha y su tipo pueden
+                    cambiar cómo se reparte la bolsa. No moveremos dinero.
                   </Text>
                 </View>
               </View>
@@ -1863,7 +1817,7 @@ export default function GoalsOverviewScreen() {
     confirmGoalAction({
       confirmLabel: "Hacer principal",
       message:
-        "Dashboard, simulación y plan mensual se enfocarán en esta meta como prioridad principal.",
+        "Dashboard, simulación y plan mensual se enfocarán en esta como tu meta principal.",
       onConfirm: () => setPrimaryGoal(allocation.goal.id),
       title: `Hacer principal ${allocation.goal.title}`
     });
@@ -2196,7 +2150,7 @@ export default function GoalsOverviewScreen() {
             <View style={styles.quickCreateCopy}>
               <Text style={styles.quickCreateTitle}>Agregar otra meta</Text>
               <Text style={styles.quickCreateText}>
-                Crea otro objetivo y la app ajustará la bolsa mensual según su prioridad, horizonte y avance actual.
+                Crea otro objetivo y la app ajustará la bolsa mensual según cuál sea tu meta principal, sus fechas y su avance actual.
               </Text>
             </View>
             <Pressable
@@ -3254,34 +3208,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.caption,
     lineHeight: typography.lineHeight.caption
-  },
-  choiceRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.xs
-  },
-  choicePill: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    minHeight: 36,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs
-  },
-  choicePillSelected: {
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.primary
-  },
-  choicePillText: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.caption
-  },
-  choicePillTextSelected: {
-    color: colors.primary,
-    fontWeight: typography.weight.black
   },
   saveButton: {
     alignItems: "center",

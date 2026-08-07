@@ -26,18 +26,17 @@ export type MonthlyPlanData = {
   expensesRange: string | null;
   expenseCategoryAmounts: ExpenseCategoryAmounts;
   expensesFeeling: string | null;
+  monthlyExpensesIncludesSmallExpenses: boolean | null;
   smallExpensesRange: string | null;
   smallExpensesIntention: string | null;
   hasSmallExpenses: string | null;
-  smallExpenseCategories: string[];
   savingsRange: string | null;
-  emergencyCoverage: string | null;
+  hasDebts: boolean | null;
+  debtMonthlyPaymentRange: string | null;
   debtSituation: string | null;
   debtPaymentShare: string | null;
   debts: DebtRecord[];
-  investmentSituation: string | null;
   financialGoal: string | null;
-  goalPriority: string | null;
   goalAmountRange: string | null;
 };
 
@@ -327,18 +326,17 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
     expensesRange = null,
     expenseCategoryAmounts = {},
     expensesFeeling = null,
+    monthlyExpensesIncludesSmallExpenses = null,
     smallExpensesRange = null,
     smallExpensesIntention = null,
     hasSmallExpenses = null,
-    smallExpenseCategories = [],
     savingsRange = null,
-    emergencyCoverage = null,
+    hasDebts = null,
+    debtMonthlyPaymentRange = null,
     debtSituation = null,
     debtPaymentShare = null,
     debts = [],
-    investmentSituation = null,
     financialGoal = null,
-    goalPriority = null,
     goalAmountRange = null
   } = data;
 
@@ -353,18 +351,17 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
         ? expenseCategoryAmounts
         : {},
     expensesFeeling,
+    monthlyExpensesIncludesSmallExpenses,
     smallExpensesRange,
     smallExpensesIntention,
     hasSmallExpenses,
-    smallExpenseCategories: Array.isArray(smallExpenseCategories) ? smallExpenseCategories : [],
     savingsRange,
-    emergencyCoverage,
+    hasDebts,
+    debtMonthlyPaymentRange,
     debtSituation,
     debtPaymentShare,
     debts: Array.isArray(debts) ? debts : [],
-    investmentSituation,
     financialGoal,
-    goalPriority,
     goalAmountRange
   };
 }
@@ -403,10 +400,6 @@ export function getMonthlyPlanMetrics(
       (snapshot.smallExpenses.opportunityAmount ?? 0),
     snapshot
   };
-}
-
-export function hasLowEmergencyCoverage(emergencyCoverage: string | null) {
-  return emergencyCoverage === "No podría cubrirlos" || emergencyCoverage === "Menos de 1 mes";
 }
 
 export function goalNeedsAmount(goalAmountRange: string | null) {

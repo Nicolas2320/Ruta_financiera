@@ -98,4 +98,29 @@ describe("monthly debt plan", () => {
     expect(getPriorityDebt([paidDebt, activeDebt])?.id).toBe("active");
     expect(getPriorityDebt([paidDebt])).toBeNull();
   });
+
+  it("carries the new onboarding debt payment into monthly plan metrics", () => {
+    const data = getMonthlyPlanData(
+      makeOnboarding({
+        hasDebts: true,
+        debtMonthlyPaymentRange: "$250.000 \u2013 $500.000",
+        monthlyExpensesIncludesSmallExpenses: true
+      })
+    );
+    const metrics = getMonthlyPlanMetrics(data, {
+      monthlyDebtPayments: 400_000,
+      monthlyExpenses: 2_000_000,
+      monthlyIncome: 4_000_000
+    });
+
+    expect(data).toMatchObject({
+      hasDebts: true,
+      debtMonthlyPaymentRange: "$250.000 \u2013 $500.000"
+    });
+    expect(metrics.snapshot.debt).toMatchObject({
+      monthlyPaymentTotal: 400_000,
+      reportedPaymentKind: "exact"
+    });
+    expect(metrics.estimatedMargin).toBe(1_600_000);
+  });
 });
