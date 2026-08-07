@@ -33,25 +33,17 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
-  getLegacyFieldsFromGoal,
-  getOnboardingGoals,
   normalizeActionProgressRecord,
   type ActionProgressEvidence,
   type ActionProgressPatch,
   type ActionProgressStatus,
-  type ActionProgressValue,
-  type FinancialGoal
+  type ActionProgressValue
 } from "../types/financial";
 import { formatCOP } from "../utils/financialRanges";
 import {
   formatGoalContribution,
-  getGoalPlanFromOnboarding,
-  isEmergencyGoal
+  getGoalPlanFromOnboarding
 } from "../utils/goalPlanning";
-import {
-  applyGoalContribution,
-  removeGoalContributionBySource
-} from "../utils/goalContributions";
 import {
   getActionImpactMessage,
   getActionProgressImpactItem,
@@ -247,12 +239,12 @@ const detailEvidenceByActionId: Record<string, Omit<EvidenceConfig, "type"> & { 
     type: "decision"
   },
   "compare-goal-contribution": {
-    title: "Elige un escenario",
-    prompt: "¿Qué escenario prefieres?",
+    title: "Registra la estrategia revisada",
+    prompt: "¿Qué forma de repartir el dinero revisaste?",
     placeholder: "Selecciona una opción",
-    resultLabel: "Escenario preferido",
+    resultLabel: "Estrategia revisada",
     type: "decision",
-    options: ["Actual", "Equilibrado", "Intensivo", "Ninguno"]
+    options: ["Sin repartición", "Solo deudas", "Solo metas", "Deudas y metas"]
   },
   "learn-risk-time": {
     title: "Registra el concepto",
@@ -466,6 +458,7 @@ function ActionCard({
   impactItem,
   onOpenDebts,
   onOpenGoals,
+  onOpenGoalsOverview,
   onOpenSimulation,
   onProgressChange,
   onToggleExpanded,
@@ -478,6 +471,7 @@ function ActionCard({
   impactItem: MonthlyActionImpactItem | null;
   onOpenDebts: () => void;
   onOpenGoals: () => void;
+  onOpenGoalsOverview: () => void;
   onOpenSimulation: () => void;
   onProgressChange: (patch: ActionProgressPatch) => void;
   onToggleExpanded: () => void;
@@ -508,6 +502,7 @@ function ActionCard({
   const isScenarioComparisonAction = action.id === "compare-goal-contribution";
   const isDebtDetailsAction = action.id === "debt-monthly-payment";
   const isCreateEmergencyGoalAction = action.id === "create-emergency-goal";
+  const isGoalContributionAction = isGoalContributionActionId(action.id);
   const hasSavedProgress = Boolean(
     progressRecord && (progressRecord.status !== "pending" || progressRecord.evidence)
   );
@@ -634,12 +629,12 @@ function ActionCard({
             accessibilityRole="button"
             onPress={onOpenSimulation}
             style={({ pressed }) => [
-              styles.cardSecondaryActionButton,
+              styles.cardActionButton,
               pressed && styles.checkboxPressed
             ]}
           >
-            <Text style={styles.cardSecondaryActionButtonText}>Ver simulación</Text>
-            <ArrowRight color={colors.primary} size={17} strokeWidth={2.6} />
+            <Text style={styles.cardActionButtonText}>Ver simulación</Text>
+            <ArrowRight color={colors.surface} size={17} strokeWidth={2.6} />
           </Pressable>
         ) : null}
         {isDebtDetailsAction ? (
@@ -648,12 +643,12 @@ function ActionCard({
             accessibilityRole="button"
             onPress={onOpenDebts}
             style={({ pressed }) => [
-              styles.cardSecondaryActionButton,
+              styles.cardActionButton,
               pressed && styles.checkboxPressed
             ]}
           >
-            <Text style={styles.cardSecondaryActionButtonText}>Ver mis deudas</Text>
-            <ArrowRight color={colors.primary} size={17} strokeWidth={2.6} />
+            <Text style={styles.cardActionButtonText}>Ver mis deudas</Text>
+            <ArrowRight color={colors.surface} size={17} strokeWidth={2.6} />
           </Pressable>
         ) : null}
         {isCreateEmergencyGoalAction ? (
@@ -662,25 +657,43 @@ function ActionCard({
             accessibilityRole="button"
             onPress={onOpenGoals}
             style={({ pressed }) => [
-              styles.cardSecondaryActionButton,
+              styles.cardActionButton,
               pressed && styles.checkboxPressed
             ]}
           >
-            <Text style={styles.cardSecondaryActionButtonText}>Crear en Metas</Text>
-            <ArrowRight color={colors.primary} size={17} strokeWidth={2.6} />
+            <Text style={styles.cardActionButtonText}>Crear en Metas</Text>
+            <ArrowRight color={colors.surface} size={17} strokeWidth={2.6} />
           </Pressable>
         ) : null}
-        <Pressable
-          accessibilityLabel={`${registrationButtonLabel} de ${action.title}`}
-          accessibilityRole="button"
-          onPress={onToggleExpanded}
-          style={({ pressed }) => [
-            styles.cardActionButton,
-            pressed && styles.checkboxPressed
-          ]}
-        >
-          <Text style={styles.cardActionButtonText}>{registrationButtonLabel}</Text>
-        </Pressable>
+        {isGoalContributionAction ? (
+          <Pressable
+            accessibilityLabel={`Registrar aporte de ${action.title} en Metas`}
+            accessibilityRole="button"
+            onPress={onOpenGoalsOverview}
+            style={({ pressed }) => [
+              styles.cardActionButton,
+              pressed && styles.checkboxPressed
+            ]}
+          >
+            <Text style={styles.cardActionButtonText}>
+              {completed ? "Ver en Metas" : "Registrar en Metas"}
+            </Text>
+          </Pressable>
+        ) : !isScenarioComparisonAction &&
+          !isDebtDetailsAction &&
+          !isCreateEmergencyGoalAction ? (
+          <Pressable
+            accessibilityLabel={`${registrationButtonLabel} de ${action.title}`}
+            accessibilityRole="button"
+            onPress={onToggleExpanded}
+            style={({ pressed }) => [
+              styles.cardActionButton,
+              pressed && styles.checkboxPressed
+            ]}
+          >
+            <Text style={styles.cardActionButtonText}>{registrationButtonLabel}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <AppModal
@@ -837,12 +850,11 @@ function ActionCard({
 export default function ActionPlanScreen() {
   const router = useRouter();
   const { isPhone, screenPadding } = useResponsiveLayout();
-  const { exactValues, onboarding, updateOnboarding } = useOnboarding();
+  const { exactValues, onboarding } = useOnboarding();
   const { completedActions, planSyncError, planSyncStatus, updateActionProgress } = usePlan();
   const [expandedActionId, setExpandedActionId] = useState<string | null>(null);
   const data = useMemo(() => getMonthlyPlanData(onboarding), [onboarding]);
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
-  const goals = useMemo(() => getOnboardingGoals(onboarding), [onboarding]);
   const periodKey = getMonthlyPlanPeriodKey();
   const planPreference = useMemo(
     () => resolvePlanPreference({ exactValues, onboarding }),
@@ -878,13 +890,15 @@ export default function ActionPlanScreen() {
     () => ({
       title: primaryGoalAllocation?.goal.title ?? data.financialGoal,
       monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
-      estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null
+      estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null,
+      hasRegisteredContribution: (primaryGoalAllocation?.currentAmount ?? 0) > 0
     }),
     [
       data.financialGoal,
       primaryGoalAllocation?.estimatedMonthsToGoal,
       primaryGoalAllocation?.goal.title,
-      primaryGoalAllocation?.monthlyContribution
+      primaryGoalAllocation?.monthlyContribution,
+      primaryGoalAllocation?.currentAmount
     ]
   );
   const completedActionsForPlanSelection = useMemo(
@@ -957,58 +971,6 @@ export default function ActionPlanScreen() {
     impactSummary.realContributionTotal > 0 ? formatCOP(impactSummary.realContributionTotal) : "$0";
   const isPlanNavigationPending =
     planSyncStatus === "loading" || planSyncStatus === "saving";
-  const persistGoals = (nextGoals: FinancialGoal[]) => {
-    const hasPrimaryGoal = nextGoals.some((goal) => goal.isPrimary);
-    const normalizedGoals = nextGoals.map((goal, index) => ({
-      ...goal,
-      isPrimary: hasPrimaryGoal ? goal.isPrimary : index === 0,
-      updatedAt: new Date().toISOString()
-    }));
-    const primaryGoal = normalizedGoals.find((goal) => goal.isPrimary) ?? normalizedGoals[0] ?? null;
-
-    updateOnboarding({
-      goals: normalizedGoals,
-      ...getLegacyFieldsFromGoal(primaryGoal)
-    });
-  };
-  const syncGoalContributionFromPlan = (
-    action: MonthlyAction,
-    actionProgressId: string,
-    patch: ActionProgressPatch
-  ) => {
-    if (!isGoalContributionActionId(action.id)) {
-      return;
-    }
-
-    if (
-      action.id === "initial-emergency-contribution" &&
-      !isEmergencyGoal(primaryGoalAllocation?.goal)
-    ) {
-      return;
-    }
-
-    const goalId = primaryGoalAllocation?.goal.id;
-
-    if (!goalId) {
-      return;
-    }
-
-    if (patch.status === "completed" && typeof patch.evidence?.amount === "number") {
-      persistGoals(
-        applyGoalContribution(goals, goalId, {
-          amount: patch.evidence.amount,
-          source: "monthly_plan",
-          sourceProgressId: actionProgressId
-        })
-      );
-      return;
-    }
-
-    if (patch.clearEvidence || patch.status === "pending" || patch.status === "skipped") {
-      persistGoals(removeGoalContributionBySource(goals, goalId, actionProgressId));
-    }
-  };
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -1175,11 +1137,9 @@ export default function ActionPlanScreen() {
                       }
                     })
                   }
+                  onOpenGoalsOverview={() => router.push("/goals-overview")}
                   onOpenSimulation={() => router.push("/simulation")}
-                  onProgressChange={(patch) => {
-                    updateActionProgress(actionProgressId, patch);
-                    syncGoalContributionFromPlan(action, actionProgressId, patch);
-                  }}
+                  onProgressChange={(patch) => updateActionProgress(actionProgressId, patch)}
                   onToggleExpanded={() =>
                     setExpandedActionId((currentActionId) =>
                       currentActionId === actionProgressId ? null : actionProgressId

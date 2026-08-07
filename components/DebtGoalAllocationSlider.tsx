@@ -115,7 +115,7 @@ export function DebtGoalAllocationSlider({
 
       <View style={styles.footer}>
         <Text style={styles.helper}>
-          Desliza para repartir el 100% en pasos de 5%. El margen protegido no cambia.
+          Desliza para repartir el 100% en pasos de 5%. El dinero libre del mes no cambia.
         </Text>
         {normalizedDebtPercent !== 50 ? (
           <Pressable

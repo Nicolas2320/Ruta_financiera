@@ -131,14 +131,13 @@ describe("resolved monthly distribution", () => {
     expect(updated.goalContributionTotal).toBeGreaterThan(first.goalContributionTotal);
   });
 
-  it("leaves the remainder unassigned after a manual goal contribution", () => {
+  it("does not turn a registered goal contribution into a recurring allocation", () => {
     const onboarding = makeOnboarding({
       debtPaymentShare: "No pago deudas",
       debtSituation: "No tengo deudas",
       goals: [
         makeGoal({
           id: "investment-goal",
-          manualMonthlyContribution: 600_000,
           title: "Empezar a invertir",
           type: "investment"
         })
@@ -154,10 +153,9 @@ describe("resolved monthly distribution", () => {
     });
     const distribution = resolveMonthlyDistribution({ exactValues, onboarding });
 
-    expect(distribution.goalContributionTotal).toBe(600_000);
+    expect(distribution.goalContributionTotal).toBe(0);
+    expect(distribution.goalAllocations).toEqual([]);
     expect(distribution.extraDebtPaymentsTotal).toBe(0);
-    expect(distribution.unassignedAmount).toBe(
-      distribution.distributableAmount - 600_000
-    );
+    expect(distribution.unassignedAmount).toBe(distribution.distributableAmount);
   });
 });

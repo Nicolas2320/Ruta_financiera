@@ -7,9 +7,14 @@ import {
   hasCompletedOnboarding,
   normalizeDebtRecords,
   normalizeFinancialGoals,
+  type LegacyOnboardingFields,
   type OnboardingData
 } from "../types/financial";
-import { normalizeOnboardingData } from "../lib/financialProfile";
+import {
+  getPersistedOnboardingData,
+  normalizeOnboardingData
+} from "../lib/financialProfile";
+import { normalizeExactValues } from "../utils/financialRanges";
 import { makeGoal, makeOnboarding } from "./fixtures/financial";
 
 function makeCompletedOnboarding(overrides: Partial<OnboardingData> = {}) {
@@ -27,21 +32,94 @@ function makeCompletedOnboarding(overrides: Partial<OnboardingData> = {}) {
 }
 
 describe("onboarding completion", () => {
+  it("persists only the active profile schema", () => {
+    const persisted = getPersistedOnboardingData({
+      ...makeCompletedOnboarding(),
+      ageRange: "25 a 34",
+      city: "Bogotá",
+      country: "Colombia",
+      emergencyCoverage: "Tres meses",
+      financialGoal: "Viajar",
+      goalAmountRange: "$1.000.000 – $5.000.000",
+      goalHorizon: "Menos de 6 meses",
+      goalMonthlyBudget: 300_000,
+      goalPriority: "Alta",
+      incomeFrequency: "Mensual",
+      incomeType: "Salario",
+      investmentSituation: "No invierto",
+      lastName: "Pérez",
+      monthlyExpensesExcludingDebt: 1_500_000,
+      paymentPlan: "legacy",
+      goals: [
+        {
+          ...makeGoal(),
+          horizon: "Menos de 6 meses",
+          manualMonthlyContribution: 200_000,
+          minimumInitialAmount: 1_000_000,
+          priority: "Alta",
+          targetDate: "2027-02-15"
+        }
+      ]
+    } as unknown as OnboardingData);
+
+    [
+      "ageRange",
+      "city",
+      "country",
+      "emergencyCoverage",
+      "financialGoal",
+      "goalAmountRange",
+      "goalHorizon",
+      "goalMonthlyBudget",
+      "goalPriority",
+      "incomeFrequency",
+      "incomeType",
+      "investmentSituation",
+      "lastName",
+      "monthlyExpensesExcludingDebt",
+      "paymentPlan"
+    ].forEach((key) => expect(persisted).not.toHaveProperty(key));
+
+    [
+      "horizon",
+      "manualMonthlyContribution",
+      "minimumInitialAmount",
+      "priority",
+      "targetDate"
+    ].forEach((key) => expect(persisted.goals[0]).not.toHaveProperty(key));
+  });
+
+  it("persists only active exact financial values", () => {
+    expect(
+      normalizeExactValues({
+        monthlyIncome: 4_000_000,
+        monthlyExpenses: 1_500_000,
+        goalTargetAmount: 12_500_000
+      })
+    ).toEqual({
+      monthlyIncome: 4_000_000,
+      monthlyExpenses: 1_500_000
+    });
+  });
+
   it("does not require small-expense answers in the initial diagnosis", () => {
     expect(hasCompletedOnboarding(makeCompletedOnboarding())).toBe(true);
   });
 
   it("does not require legacy demographic fields for a new profile", () => {
-    expect(
-      hasCompletedOnboarding(
-        makeCompletedOnboarding({
-          ageRange: null,
-          country: null,
-          city: "",
-          lastName: ""
-        })
-      )
-    ).toBe(true);
+    const normalized = normalizeOnboardingData({
+      ...makeCompletedOnboarding(),
+      ageRange: null,
+      country: null,
+      city: "",
+      lastName: ""
+    });
+
+    expect(hasCompletedOnboarding(normalized)).toBe(true);
+    expect(normalized).not.toHaveProperty("ageRange");
+    expect(normalized).not.toHaveProperty("country");
+    expect(normalized).not.toHaveProperty("city");
+    expect(normalized).not.toHaveProperty("lastName");
   });
 
   it("still requires a name or nickname", () => {
@@ -49,11 +127,15 @@ describe("onboarding completion", () => {
   });
 
   it("does not require legacy income type or frequency fields", () => {
-    expect(
-      hasCompletedOnboarding(
-        makeCompletedOnboarding({ incomeType: null, incomeFrequency: null })
-      )
-    ).toBe(true);
+    const normalized = normalizeOnboardingData({
+      ...makeCompletedOnboarding(),
+      incomeType: null,
+      incomeFrequency: null
+    });
+
+    expect(hasCompletedOnboarding(normalized)).toBe(true);
+    expect(normalized).not.toHaveProperty("incomeType");
+    expect(normalized).not.toHaveProperty("incomeFrequency");
   });
 
   it("keeps legacy small-expense answers optional for completion", () => {
@@ -80,14 +162,15 @@ describe("onboarding completion", () => {
   });
 
   it("does not require declared emergency coverage or investments", () => {
-    expect(
-      hasCompletedOnboarding(
-        makeCompletedOnboarding({
-          emergencyCoverage: null,
-          investmentSituation: null
-        })
-      )
-    ).toBe(true);
+    const normalized = normalizeOnboardingData({
+      ...makeCompletedOnboarding(),
+      emergencyCoverage: null,
+      investmentSituation: null
+    });
+
+    expect(hasCompletedOnboarding(normalized)).toBe(true);
+    expect(normalized).not.toHaveProperty("emergencyCoverage");
+    expect(normalized).not.toHaveProperty("investmentSituation");
   });
 
   it("requires a monthly payment answer when the person has debts", () => {
@@ -123,29 +206,27 @@ describe("onboarding completion", () => {
   });
 
   it("does not require goal importance for the initial diagnosis", () => {
-    expect(
-      hasCompletedOnboarding(
-        makeCompletedOnboarding({
-          goalPriority: null,
-          goals: [makeGoal({ priority: null })]
-        })
-      )
-    ).toBe(true);
+    const normalized = normalizeOnboardingData({
+      ...makeCompletedOnboarding(),
+      goalPriority: null,
+      goals: [{ ...makeGoal(), priority: "Alta" }]
+    } as unknown as Partial<OnboardingData> & LegacyOnboardingFields);
+
+    expect(hasCompletedOnboarding(normalized)).toBe(true);
+    expect(normalized).not.toHaveProperty("goalPriority");
+    expect(normalized.goals[0]).not.toHaveProperty("priority");
   });
 
   it("creates new goals without an importance value", () => {
-    expect(
-      createFinancialGoal({
-        amountRange: "$1.000.000 \u2013 $5.000.000",
-        isPrimary: true,
-        targetMonth: "2027-03",
-        title: "Ahorrar para estudiar"
-      })
-    ).toMatchObject({
+    const goal = createFinancialGoal({
+      amountRange: "$1.000.000 \u2013 $5.000.000",
       isPrimary: true,
-      priority: null,
-      targetMonth: "2027-03"
+      targetMonth: "2027-03",
+      title: "Ahorrar para estudiar"
     });
+
+    expect(goal).toMatchObject({ isPrimary: true, targetMonth: "2027-03" });
+    expect(goal).not.toHaveProperty("priority");
   });
 });
 

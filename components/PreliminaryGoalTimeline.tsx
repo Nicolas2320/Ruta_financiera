@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
 import type { ProjectionGoalInput } from "../utils/financialProjectionInput";
 import { formatCOP } from "../utils/financialRanges";
-import { buildGoalOnlyTimeline } from "../utils/financialTimeline";
+import { buildGoalsOnlyTimeline } from "../utils/financialTimeline";
 import { formatTargetMonth } from "../utils/monthYear";
 import { FinancialTimelineChart } from "./FinancialTimelineChart";
 
@@ -18,77 +19,78 @@ function ProjectionMetric({ label, value }: { label: string; value: string }) {
 
 export function PreliminaryGoalTimeline({
   asOfDate,
-  goal,
+  goals,
   hasReportedDebt,
-  isEmergencyReference,
-  monthlyContribution
+  monthlyBudget
 }: {
   asOfDate: string;
-  goal: ProjectionGoalInput;
+  goals: ProjectionGoalInput[];
   hasReportedDebt: boolean;
-  isEmergencyReference: boolean;
-  monthlyContribution: number;
+  monthlyBudget: number;
 }) {
-  const timeline = buildGoalOnlyTimeline({
+  const timeline = buildGoalsOnlyTimeline({
     asOfDate,
-    goal,
-    monthlyContribution
+    goals,
+    monthlyBudget
   });
+  const [selectedGoalId, setSelectedGoalId] = useState(
+    timeline?.trackedGoal?.goalId ?? timeline?.trackedGoals[0]?.goalId ?? ""
+  );
 
-  if (!timeline || goal.targetAmount === null) {
+  if (!timeline) {
     return null;
   }
 
-  const targetLabel =
-    goal.targetAmountSource === "range" && goal.amountRange
-      ? goal.amountRange
-      : formatCOP(goal.targetAmount);
-  const title = timeline.goalCompletionMonth
-    ? `${isEmergencyReference ? "Alcanzarías esta base" : "Completarías esta meta"} en ${formatTargetMonth(
-        timeline.goalCompletionMonth
-      )}`
-    : "La proyección supera los próximos 10 años";
+  const firstMonth = timeline.months[0];
+  const selectedGoal =
+    timeline.trackedGoals.find((goal) => goal.goalId === selectedGoalId) ??
+    timeline.trackedGoal ??
+    timeline.trackedGoals[0] ??
+    null;
+  const selectedFirstContribution = selectedGoal
+    ? firstMonth?.goalContributions.find(
+        (contribution) => contribution.goalId === selectedGoal.goalId
+      )?.amount ?? 0
+    : 0;
+  const selectedCompletionMonth = selectedGoal
+    ? timeline.goalCompletionMonths[selectedGoal.goalId] ?? null
+    : null;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>
-          {isEmergencyReference ? "PROYECCIÓN DEL FONDO" : "PROYECCIÓN DE META"}
-        </Text>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.eyebrow}>PROYECCIÓN DE TUS METAS</Text>
+        <Text style={styles.title}>Fechas estimadas con el reparto mensual</Text>
         <Text style={styles.description}>
-          {isEmergencyReference
-            ? "La línea parte de tus ahorros disponibles y usa como objetivo una base equivalente a tres meses de gastos."
-            : `La línea muestra cómo avanzaría ${goal.title} con el aporte del escenario seleccionado.`}
+          El aporte se pondera por el dinero pendiente, el tiempo disponible y la prioridad de la
+          meta principal. Cuando completas una, el plan se recalcula desde el mes siguiente.
         </Text>
       </View>
 
-      <View style={styles.metrics}>
-        <ProjectionMetric
-          label={isEmergencyReference ? "Ahorro disponible reportado" : "Reunido al comenzar"}
-          value={formatCOP(goal.currentAmount)}
-        />
-        <ProjectionMetric label="Aporte mensual" value={formatCOP(monthlyContribution)} />
-        <ProjectionMetric
-          label={isEmergencyReference ? "Base sugerida" : "Valor de la meta"}
-          value={targetLabel}
-        />
-      </View>
-
-      <FinancialTimelineChart focus="goal" timeline={timeline} />
-
-      {goal.targetAmountSource === "range" && goal.amountRange ? (
-        <Text style={styles.note}>
-          Elegiste {goal.amountRange}. Para trazar esta referencia usamos {formatCOP(
-            goal.targetAmount
-          )}, el punto medio del rango.
-        </Text>
+      {selectedGoal ? (
+        <View style={styles.metrics}>
+          <ProjectionMetric
+            label={`${selectedGoal.title} · ${formatCOP(selectedFirstContribution)} al mes`}
+            value={
+              selectedCompletionMonth
+                ? formatTargetMonth(selectedCompletionMonth)
+                : "Más de 10 años"
+            }
+          />
+        </View>
       ) : null}
+
+      <FinancialTimelineChart
+        focus="goal"
+        onSelectedGoalChange={setSelectedGoalId}
+        selectedGoalId={selectedGoalId}
+        timeline={timeline}
+      />
+
       {hasReportedDebt ? (
         <Text style={styles.note}>
-          La cuota estimada ya reduce el aporte disponible. Esta gráfica proyecta la meta, no una
-          fecha de pago de deuda; para calcular esa fecha necesitamos saldo, tasa y cuota de cada
-          deuda.
+          La cuota estimada ya reduce el aporte disponible. Estas líneas proyectan tus metas; para
+          calcular fechas de deuda necesitamos saldo, tasa y cuota de cada una.
         </Text>
       ) : null}
     </View>

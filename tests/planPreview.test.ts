@@ -9,7 +9,6 @@ describe("getPlanPreviewData", () => {
       makeOnboarding({
         debtPaymentShare: "No pago deudas",
         debtSituation: "No tengo deudas",
-        financialGoal: "Fondo de emergencia",
         goals: [makeGoal()]
       }),
       {

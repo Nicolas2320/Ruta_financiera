@@ -271,20 +271,17 @@ export default function SimulationScreen() {
     protectedMarginMode === "custom"
       ? { amount: customProtectedMargin, mode: "custom" }
       : { mode: protectedMarginMode };
-  const selectedProjectionGoal =
-    projectionInput.goals.find((goal) => goal.isPrimary) ??
-    projectionInput.goals[0] ??
-    null;
-  const selectedGoalId = selectedProjectionGoal?.id ?? null;
+  const activeProjectionGoals = projectionInput.goals.filter(
+    (goal) => goal.status !== "completed" && goal.status !== "paused"
+  );
   const distributionScenarioSet = useMemo(
     () =>
       buildDistributionScenarios({
         input: projectionInput,
         protectedMarginPreference,
-        selectedGoalId,
         splitDebtShare: splitDebtPercent / 100
       }),
-    [projectionInput, protectedMarginPreference, selectedGoalId, splitDebtPercent]
+    [projectionInput, protectedMarginPreference, splitDebtPercent]
   );
   const distributionScenarios = useMemo(
     () =>
@@ -325,10 +322,36 @@ export default function SimulationScreen() {
       ? null
       : Math.max(0, surplusBeforeProtection - protectedAmount);
   const canSelectPreliminaryGoal = Boolean(
-    selectedProjectionGoal &&
+    activeProjectionGoals.length > 0 &&
       distributableAmount !== null &&
       distributableAmount > 0 &&
       simulationExperience.planningMonthlyMargin !== null
+  );
+  const selectedDetailedScenario = distributionScenarios.find(
+    (scenario) => scenario.id === selectedDistributionId
+  );
+  const strategyToSave: SimulationPlanStrategy = isDetailedDebtMode
+    ? selectedDetailedScenario?.status === "ready"
+      ? selectedDistributionId
+      : "current_reference"
+    : selectedPlanStrategy === "prioritize_goal" && canSelectPreliminaryGoal
+      ? "accelerate_goal"
+      : "diagnosis_recommended";
+  const debtShareToSave =
+    strategyToSave === "split_debt_goal" ? splitDebtPercent / 100 : null;
+  const customProtectedMarginToSave =
+    protectedMarginMode === "custom" ? customProtectedMargin : null;
+  const storedPreference = onboarding.simulationPlanPreference;
+  const normalizedStoredStrategy =
+    storedPreference?.strategy === "prioritize_goal"
+      ? "accelerate_goal"
+      : storedPreference?.strategy;
+  const storedSelectionMatches = Boolean(
+    storedPreference &&
+      normalizedStoredStrategy === strategyToSave &&
+      storedPreference.debtShare === debtShareToSave &&
+      storedPreference.protectedMarginMode === protectedMarginMode &&
+      storedPreference.customProtectedMargin === customProtectedMarginToSave
   );
   const monthlyOperatingCosts = simulationExperience.monthlyOperatingCosts;
   const cashflowIssueRoute =
@@ -372,12 +395,11 @@ export default function SimulationScreen() {
     }
     setSelectedPlanStrategy(
       (preference.strategy === "prioritize_goal" ||
-        preference.strategy === "accelerate_goal") &&
-        preference.goalId === selectedGoalId
+        preference.strategy === "accelerate_goal")
         ? "prioritize_goal"
         : "diagnosis_recommended"
     );
-  }, [onboarding.simulationPlanPreference?.selectedAt, selectedGoalId]);
+  }, [onboarding.simulationPlanPreference?.selectedAt]);
 
   useEffect(() => {
     if (canSelectPreliminaryGoal && selectedPlanStrategy !== "prioritize_goal") {
@@ -390,48 +412,21 @@ export default function SimulationScreen() {
     }
   }, [canSelectPreliminaryGoal, selectedPlanStrategy]);
 
+  const saveStrategyPreference = (strategy: SimulationPlanStrategy) => {
+    updateOnboarding({
+      simulationPlanPreference: {
+        strategy,
+        goalId: null,
+        debtShare: strategy === "split_debt_goal" ? splitDebtPercent / 100 : null,
+        protectedMarginMode,
+        customProtectedMargin: customProtectedMarginToSave,
+        selectedAt: new Date().toISOString()
+      }
+    });
+  };
+
   const handleContinue = () => {
-    if (isDetailedDebtMode) {
-      const selectedScenario = distributionScenarios.find(
-        (scenario) => scenario.id === selectedDistributionId
-      );
-      const strategy =
-        selectedScenario?.status === "ready"
-          ? selectedDistributionId
-          : "current_reference";
-
-      updateOnboarding({
-        simulationPlanPreference: {
-          strategy,
-          goalId:
-            strategy === "accelerate_goal" || strategy === "split_debt_goal"
-              ? selectedGoalId
-              : null,
-          debtShare: strategy === "split_debt_goal" ? splitDebtPercent / 100 : null,
-          protectedMarginMode,
-          customProtectedMargin:
-            protectedMarginMode === "custom" ? customProtectedMargin : null,
-          selectedAt: new Date().toISOString()
-        }
-      });
-    } else {
-      const preliminaryStrategy =
-        selectedPlanStrategy === "prioritize_goal" && canSelectPreliminaryGoal
-          ? "accelerate_goal"
-          : "diagnosis_recommended";
-
-      updateOnboarding({
-        simulationPlanPreference: {
-          strategy: preliminaryStrategy,
-          goalId: preliminaryStrategy === "accelerate_goal" ? selectedGoalId : null,
-          debtShare: null,
-          protectedMarginMode,
-          customProtectedMargin:
-            protectedMarginMode === "custom" ? customProtectedMargin : null,
-          selectedAt: new Date().toISOString()
-        }
-      });
-    }
+    saveStrategyPreference(strategyToSave);
 
     session ? router.push("/action-plan") : router.push("/plan-preview");
   };
@@ -460,7 +455,7 @@ export default function SimulationScreen() {
     [exactValues, onboarding]
   );
   const debtMetricLabel = isDetailedDebtMode
-    ? "Cuotas requeridas"
+    ? "Cuotas de deuda"
     : simulationExperience.mode === "reported_debt"
       ? snapshot.debt.isPaymentEstimated
         ? "Pagos de deuda estimados"
@@ -490,7 +485,7 @@ export default function SimulationScreen() {
       ? snapshot.debt.reportedPaymentKind === "exact"
         ? "Explora tu capacidad mensual con el pago total que informaste, sin inventar saldos ni intereses."
         : "Explora tu capacidad mensual sin registrar cada deuda. Trabajamos con el rango que compartiste y evitamos inventar saldos o intereses."
-      : "Explora cuánto podrías dirigir a tu meta y cómo cambia el resultado al proteger una parte del margen.";
+      : "Explora cuánto podrías dirigir a tus metas y cómo cambia el resultado al proteger una parte del margen.";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -547,10 +542,10 @@ export default function SimulationScreen() {
             <SummaryMetric
               helper={
                 isDetailedDebtMode
-                  ? "Margen libre y decisiones voluntarias, después de proteger"
+                  ? "Después de dejar una parte libre para el mes"
                   : simulationExperience.planningMonthlyMargin === null
                     ? "No lo calculamos sin una referencia prudente"
-                    : "Calculado desde la referencia prudente, después de proteger"
+                    : "Calculado después de dejar una parte libre para el mes"
               }
               icon={<TrendingUp color={colors.primary} size={22} strokeWidth={2.4} />}
               label="Para repartir"
@@ -565,7 +560,7 @@ export default function SimulationScreen() {
           <SectionCard
             compact={isPhone}
             icon={<ShieldCheck color={colors.primary} size={22} strokeWidth={2.4} />}
-            title="Antes de distribuir"
+            title="Antes de repartir"
           >
             <ProtectedMarginControl
               customAmountInput={customProtectedMarginInput}
@@ -573,7 +568,6 @@ export default function SimulationScreen() {
               mode={protectedMarginMode}
               onCustomAmountChange={handleCustomProtectedMarginChange}
               onModeChange={handleProtectedMarginModeChange}
-              poolBreakdown={isDetailedDebtMode ? strategyBaseScenario.poolBreakdown : null}
               protectedAmount={protectedAmount}
               surplusBeforeProtection={surplusBeforeProtection}
             />
@@ -582,32 +576,36 @@ export default function SimulationScreen() {
           <SectionCard
             compact={isPhone}
             icon={<Target color={colors.primary} size={22} strokeWidth={2.4} />}
-            title="Meta"
+            title="Metas"
           >
-            {selectedProjectionGoal ? (
-              <View style={styles.valueGrid}>
-                <ValuePill label="Meta" tone="primary" value={selectedProjectionGoal.title} />
-                <ValuePill
-                  label="Quieres reunir"
-                  tone="support"
-                  value={
-                    selectedProjectionGoal.targetAmountSource === "range" &&
-                    selectedProjectionGoal.amountRange
-                      ? selectedProjectionGoal.amountRange
-                      : selectedProjectionGoal.targetAmount === null
-                      ? "Por definir"
-                      : formatCOP(selectedProjectionGoal.targetAmount)
-                  }
-                />
-                <ValuePill
-                  label="Mes objetivo"
-                  value={formatTargetMonth(selectedProjectionGoal.targetMonth)}
-                />
+            {activeProjectionGoals.length > 0 ? (
+              <View style={styles.goalsSummaryList}>
+                {activeProjectionGoals.map((goal) => (
+                  <View key={goal.id} style={styles.goalSummaryRow}>
+                    <View style={styles.goalSummaryTitleRow}>
+                      <Text style={styles.goalSummaryTitle}>{goal.title}</Text>
+                      {goal.isPrimary ? (
+                        <View style={styles.primaryGoalChip}>
+                          <Text style={styles.primaryGoalChipText}>Meta principal</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text style={styles.goalSummaryText}>
+                      {goal.targetAmountSource === "range" && goal.amountRange
+                        ? goal.amountRange
+                        : goal.targetAmount === null
+                          ? "Monto por definir"
+                          : formatCOP(goal.targetAmount)}
+                      {" · "}
+                      {formatTargetMonth(goal.targetMonth)}
+                    </Text>
+                  </View>
+                ))}
               </View>
             ) : (
               <View style={styles.emptyState}>
                 <Text style={styles.text}>
-                  Crea o elige una meta principal para comparar estrategias que le asignen dinero.
+                  Crea una meta activa para proyectar cómo se repartiría el aporte mensual.
                 </Text>
                 <Pressable
                   accessibilityRole="button"
@@ -659,19 +657,30 @@ export default function SimulationScreen() {
                           ? () => setSelectedDistributionId(scenario.id)
                           : undefined
                       }
+                      onSave={
+                        scenario.status === "ready" &&
+                        selectedDistributionId === scenario.id &&
+                        !storedSelectionMatches
+                          ? () => saveStrategyPreference(scenario.id)
+                          : undefined
+                      }
                       onToggle={() =>
                         setExpandedDistributionId((current) =>
                           current === scenario.id ? "" : scenario.id
                         )
                       }
                       scenario={scenario}
+                      saved={
+                        selectedDistributionId === scenario.id && storedSelectionMatches
+                      }
                       selected={selectedDistributionId === scenario.id}
                     />
                   ))}
                 </View>
                 <Text style={styles.disclaimerText}>
-                  La estrategia elegida se guardará como referencia al continuar. No registra
-                  pagos, no separa dinero y no crea una deuda nueva.
+                  Selecciona una estrategia y usa Guardar para aplicarla. Si cambias el
+                  porcentaje entre deudas y metas, vuelve a guardarla. Esto no registra pagos
+                  ni separa dinero.
                 </Text>
               </SectionCard>
             </>
@@ -679,13 +688,13 @@ export default function SimulationScreen() {
             <SectionCard
               compact={isPhone}
               icon={<TrendingUp color={colors.primary} size={22} strokeWidth={2.4} />}
-              title="Proyección de tu meta"
+              title="Proyección de tus metas"
             >
               <PreliminarySimulationComparison
                 asOfDate={projectionInput.asOfDate}
                 distributableAmount={distributableAmount}
                 experience={simulationExperience}
-                goal={selectedProjectionGoal}
+                goals={activeProjectionGoals}
                 onSelect={setSelectedPlanStrategy}
                 selectedStrategy={selectedPlanStrategy}
               />
@@ -885,6 +894,48 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
+  },
+  goalsSummaryList: {
+    gap: spacing.sm
+  },
+  goalSummaryRow: {
+    backgroundColor: "#F8FBFF",
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.md
+  },
+  goalSummaryTitleRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  goalSummaryTitle: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  goalSummaryText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
+  },
+  primaryGoalChip: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3
+  },
+  primaryGoalChipText: {
+    color: colors.primary,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.small
   },
   valuePill: {
     backgroundColor: "#F8FBFF",

@@ -221,8 +221,6 @@ export function getPlanPreferenceGoalPlanOptions(
       preference.usesResolvedDistribution && preference.isApplicable
       ? preference.goalContributions
       : null,
-    preferredGoalId,
-    useStoredManualBudget:
-      !preference.usesResolvedDistribution || !preference.isApplicable
+    preferredGoalId
   };
 }

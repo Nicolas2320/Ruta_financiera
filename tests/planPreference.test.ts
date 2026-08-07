@@ -70,7 +70,7 @@ describe("simulation plan preference", () => {
     );
   });
 
-  it("falls back safely when the selected goal no longer exists", () => {
+  it("continues with the active goals when a legacy selected goal no longer exists", () => {
     const onboarding = makeOnboarding({
       debtPaymentShare: "No pago deudas",
       debtSituation: "No tengo deudas",
@@ -80,8 +80,8 @@ describe("simulation plan preference", () => {
     const preference = resolvePlanPreference({ exactValues, onboarding });
 
     expect(preference).toMatchObject({
-      goalId: "deleted-goal",
-      isApplicable: false,
+      goalId: "goal-1",
+      isApplicable: true,
       strategy: "prioritize_goal"
     });
     expect(
@@ -89,7 +89,7 @@ describe("simulation plan preference", () => {
         fallbackMonthlyBudget: 450_000,
         preference
       })
-    ).toBe(450_000);
+    ).toBe(1_800_000);
   });
 
   it("does not assign an emergency-fund recommendation to another goal", () => {
@@ -196,13 +196,15 @@ describe("simulation plan preference", () => {
     ).toBe(0);
   });
 
-  it("preserves a manual goal budget while the diagnosis prioritizes emergencies", () => {
-    const onboarding = makeOnboarding({
+  it("ignores the retired stored goal budget", () => {
+    const onboarding = {
+      ...makeOnboarding({
       debtPaymentShare: "No pago deudas",
       debtSituation: "No tengo deudas",
-      goalMonthlyBudget: 300_000,
       goals: [makeGoal({ title: "Empezar a invertir", type: "investment" })]
-    });
+      }),
+      goalMonthlyBudget: 300_000
+    };
     const preference = resolvePlanPreference({ exactValues, onboarding });
     const automaticBudget = getPlanPreferenceGoalBudget({
       fallbackMonthlyBudget: 950_000,
@@ -211,23 +213,25 @@ describe("simulation plan preference", () => {
     const plan = getGoalPlanFromOnboarding(onboarding, automaticBudget, exactValues);
 
     expect(automaticBudget).toBe(0);
-    expect(plan.monthlyGoalBudgetMode).toBe("manual");
-    expect(plan.monthlyGoalBudget).toBe(300_000);
-    expect(plan.allocations[0]?.monthlyContribution).toBe(300_000);
+    expect(plan.monthlyGoalBudgetMode).toBe("recommended");
+    expect(plan.monthlyGoalBudget).toBe(0);
+    expect(plan.allocations[0]?.monthlyContribution).toBe(0);
   });
 
-  it("preserves a manual goal contribution without turning it into a recommendation", () => {
+  it("ignores a retired recurring contribution stored inside a goal", () => {
     const onboarding = makeOnboarding({
       debtPaymentShare: "No pago deudas",
       debtSituation: "No tengo deudas",
       goals: [
-        makeGoal({
-          manualMonthlyContribution: 200_000,
+        {
+          ...makeGoal({
           title: "Empezar a invertir",
           type: "investment"
-        })
+          }),
+          manualMonthlyContribution: 200_000
+        }
       ]
-    });
+    } as unknown as Parameters<typeof makeOnboarding>[0]);
     const preference = resolvePlanPreference({ exactValues, onboarding });
     const automaticBudget = getPlanPreferenceGoalBudget({
       fallbackMonthlyBudget: 950_000,
@@ -237,21 +241,20 @@ describe("simulation plan preference", () => {
 
     expect(automaticBudget).toBe(0);
     expect(plan.allocations[0]).toMatchObject({
-      contributionMode: "manual",
-      monthlyContribution: 200_000
+      contributionMode: "recommended",
+      monthlyContribution: 0
     });
   });
 
-  it("directs the recommended budget to the selected goal while preserving manual values", () => {
+  it("directs the current recommended budget to the selected goal", () => {
     const selectedGoal = makeGoal({
       id: "goal-2",
       isPrimary: false,
       title: "Especialización"
     });
     const onboarding = makeOnboarding({
-      goalMonthlyBudget: 600_000,
       goals: [
-        makeGoal({ manualMonthlyContribution: 200_000 }),
+        makeGoal(),
         selectedGoal
       ]
     });
@@ -259,10 +262,10 @@ describe("simulation plan preference", () => {
       preferredGoalId: selectedGoal.id
     });
 
-    expect(plan.monthlyGoalBudget).toBe(600_000);
+    expect(plan.monthlyGoalBudget).toBe(1_000_000);
     expect(plan.allocations.find((item) => item.goal.id === "goal-1")?.monthlyContribution)
-      .toBe(200_000);
+      .toBe(0);
     expect(plan.allocations.find((item) => item.goal.id === "goal-2")?.monthlyContribution)
-      .toBe(600_000);
+      .toBe(1_000_000);
   });
 });

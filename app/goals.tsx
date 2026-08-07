@@ -36,7 +36,6 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   createFinancialGoal,
-  getLegacyFieldsFromGoal,
   getOnboardingGoals,
   getPrimaryFinancialGoal,
   type FinancialGoal
@@ -376,11 +375,8 @@ export default function GoalsScreen() {
           isPrimary: !hasPrimaryGoal && goals.length === 0
         }
       ];
-      const nextPrimaryGoal = nextGoals.find((goal) => goal.isPrimary) ?? nextGoals[0] ?? null;
-
       updateOnboarding({
-        goals: nextGoals,
-        ...getLegacyFieldsFromGoal(nextPrimaryGoal)
+        goals: nextGoals
       });
       router.push("/goals-overview");
       return;
@@ -390,7 +386,6 @@ export default function GoalsScreen() {
       ...nextGoal,
       id: primaryGoal?.id ?? nextGoal.id,
       isPrimary: true,
-      manualMonthlyContribution: primaryGoal?.manualMonthlyContribution ?? null,
       createdAt: primaryGoal?.createdAt ?? nextGoal.createdAt
     };
     const nextGoals = [
@@ -401,8 +396,7 @@ export default function GoalsScreen() {
     ];
 
     updateOnboarding({
-      goals: nextGoals,
-      ...getLegacyFieldsFromGoal(nextPrimaryGoal)
+      goals: nextGoals
     });
     router.push("/summary");
   };

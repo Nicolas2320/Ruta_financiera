@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Check, ChevronDown, ChevronUp } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -26,7 +27,7 @@ function getHeadline(scenario: DistributionScenarioPresentation) {
 
   if (scenario.id === "current_reference") {
     return scenario.unassignedAmount > 0
-      ? `${formatCOP(scenario.unassignedAmount)} todavía no tienen un destino registrado.`
+      ? `${formatCOP(scenario.unassignedAmount)} quedan sin repartir.`
       : "Todo el dinero disponible ya tiene un destino registrado.";
   }
 
@@ -39,13 +40,13 @@ function getHeadline(scenario: DistributionScenarioPresentation) {
 
   if (scenario.id === "accelerate_goal") {
     return scenario.goalContribution > 0
-      ? `En el primer mes: ${formatCOP(scenario.goalContribution)} para la meta.`
-      : "No se pudo asignar dinero a una meta activa.";
+      ? `En el primer mes: ${formatCOP(scenario.goalContribution)} entre tus metas.`
+      : "No se pudo asignar dinero a tus metas activas.";
   }
 
   return `En el primer mes: ${formatCOP(scenario.extraDebtPayment)} adicionales a deuda y ${formatCOP(
     scenario.goalContribution
-  )} a la meta.`;
+  )} a tus metas.`;
 }
 
 function AllocationValue({ label, value }: { label: string; value: string }) {
@@ -87,48 +88,60 @@ function GoalProgressSummary({
 }: {
   scenario: DistributionScenarioPresentation;
 }) {
-  const goal = scenario.timeline.trackedGoal;
+  const goals = scenario.timeline.trackedGoals.filter(
+    (goal) => goal.targetAmount !== null
+  );
 
-  if (!goal || goal.targetAmount === null) {
+  if (goals.length === 0) {
     return null;
   }
-
-  const progress = Math.min(
-    100,
-    Math.max(0, (goal.currentAmount / Math.max(1, goal.targetAmount)) * 100)
-  );
-  const hasContribution = scenario.timeline.months.some(
-    (month) => month.goalContributionTotal > 0
-  );
   const explanation =
     scenario.id === "reduce_interest"
-      ? "Esta estrategia dirige el dinero disponible a las deudas; por eso la meta se resume y no ocupa una gráfica vacía."
-      : "No hay un aporte mensual registrado para esta meta en este escenario.";
+      ? "Esta estrategia dirige el dinero disponible a las deudas; por eso no se reparte entre las metas."
+      : "El dinero disponible no se reparte entre estas metas en este escenario.";
 
   return (
     <View style={styles.goalSummary}>
-      <View style={styles.goalSummaryCopy}>
-        <Text style={styles.goalSummaryTitle}>{goal.title}</Text>
-        <Text style={styles.goalSummaryStatus}>
-          {hasContribution ? "Meta en movimiento" : "Sin aportes en este escenario"}
-        </Text>
-      </View>
-      <View style={styles.goalSummaryProgress}>
-        <View style={styles.goalSummaryValues}>
-          <Text style={styles.goalSummaryValue}>{formatCOP(goal.currentAmount)} reunidos</Text>
-          <Text style={styles.goalSummaryValue}>de {formatCOP(goal.targetAmount)}</Text>
-        </View>
-        <View style={styles.goalProgressTrack}>
-          <View style={[styles.goalProgressFill, { width: `${progress}%` }]} />
-        </View>
-        {!hasContribution ? <Text style={styles.goalSummaryExplanation}>{explanation}</Text> : null}
-      </View>
+      {goals.map((goal) => {
+        const targetAmount = goal.targetAmount ?? 0;
+        const progress = Math.min(
+          100,
+          Math.max(0, (goal.currentAmount / Math.max(1, targetAmount)) * 100)
+        );
+        const hasContribution = scenario.timeline.months.some((month) =>
+          month.goalContributions.some((contribution) => contribution.goalId === goal.goalId)
+        );
+
+        return (
+          <View key={goal.goalId} style={styles.goalSummaryItem}>
+            <View style={styles.goalSummaryCopy}>
+              <Text style={styles.goalSummaryTitle}>{goal.title}</Text>
+              <Text style={styles.goalSummaryStatus}>
+                {hasContribution ? "Meta en movimiento" : "Dinero no repartido a esta meta"}
+              </Text>
+            </View>
+            <View style={styles.goalSummaryProgress}>
+              <View style={styles.goalSummaryValues}>
+                <Text style={styles.goalSummaryValue}>{formatCOP(goal.currentAmount)} reunidos</Text>
+                <Text style={styles.goalSummaryValue}>de {formatCOP(targetAmount)}</Text>
+              </View>
+              <View style={styles.goalProgressTrack}>
+                <View style={[styles.goalProgressFill, { width: `${progress}%` }]} />
+              </View>
+              {!hasContribution ? <Text style={styles.goalSummaryExplanation}>{explanation}</Text> : null}
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }
 
 function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentation }) {
   const timeline = scenario.timeline;
+  const [selectedGoalId, setSelectedGoalId] = useState(
+    timeline.trackedGoal?.goalId ?? timeline.trackedGoals[0]?.goalId ?? ""
+  );
 
   if (timeline.months.length === 0) {
     return null;
@@ -141,7 +154,25 @@ function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentat
     0
   );
   const firstDebtPayment = firstMonth.baseDebtPayments + firstMonth.extraDebtPayments;
-  const goal = timeline.trackedGoal;
+  const trackedGoals = timeline.trackedGoals;
+  const selectedGoal =
+    trackedGoals.find((goal) => goal.goalId === selectedGoalId) ??
+    timeline.trackedGoal ??
+    trackedGoals[0] ??
+    null;
+  const selectedGoalProjection = selectedGoal
+    ? scenario.goalProjections.find(
+        (projection) => projection.goalId === selectedGoal.goalId
+      ) ?? null
+    : null;
+  const selectedGoalCompletionMonth = selectedGoal
+    ? timeline.goalCompletionMonths[selectedGoal.goalId] ?? null
+    : null;
+  const selectedGoalContribution = selectedGoal
+    ? firstMonth.goalContributions.find(
+        (contribution) => contribution.goalId === selectedGoal.goalId
+      )?.amount ?? 0
+    : 0;
   const payoffEvents = timeline.months
     .filter((month) => month.newlyPaidDebtIds.length > 0)
     .slice(0, 4);
@@ -153,47 +184,65 @@ function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentat
           )}`
         : "Así cambiaría tu deuda durante la proyección"
       : focus === "goal"
-        ? timeline.goalCompletionMonth
-          ? `Con este plan alcanzas tu meta en ${formatSentenceMonth(
-              timeline.goalCompletionMonth
-            )}`
-          : `Así avanzaría ${goal?.title ?? "tu meta"}`
-        : "Así avanzan tu deuda y tu meta con el mismo dinero";
+        ? trackedGoals.length > 1
+          ? "Fechas estimadas con el reparto mensual"
+          : selectedGoalCompletionMonth
+            ? `Con este plan alcanzas tu meta en ${formatSentenceMonth(
+                selectedGoalCompletionMonth
+              )}`
+            : `Así avanzaría ${selectedGoal?.title ?? "tu meta"}`
+        : trackedGoals.length > 1
+          ? "Así avanzan tus deudas y metas con el mismo dinero"
+          : "Así avanzan tu deuda y tu meta con el mismo dinero";
   const description =
-    focus === "debt"
+    focus === "combined" && selectedGoal
+      ? `El ${100 - (scenario.debtSharePercent ?? 50)}% destinado a metas se reparte según su saldo pendiente, fecha objetivo y prioridad. Aquí ves cuánto recibe ${selectedGoal.title}.`
+      : focus === "debt"
       ? "El saldo conocido baja con los pagos previstos en esta estrategia."
-      : scenario.goalProjection?.targetMonth
+      : selectedGoalProjection?.targetMonth
         ? `Para ${formatTargetMonth(
-            scenario.goalProjection.targetMonth
+            selectedGoalProjection.targetMonth
           )} reunirías aproximadamente ${formatCOP(
-            scenario.goalProjection.amountAtTargetMonth
-          )} de ${formatCOP(scenario.goalProjection.targetAmount)}.`
+            selectedGoalProjection.amountAtTargetMonth
+          )} de ${formatCOP(selectedGoalProjection.targetAmount)}.`
         : focus === "goal"
-          ? "Mira cómo crece el dinero reunido con los aportes previstos."
-          : "Deuda y meta comparten los mismos meses, pero conservan escalas independientes.";
+          ? "El aporte se pondera por saldo pendiente, fecha objetivo y prioridad principal."
+          : "Deudas y metas comparten los mismos meses, pero conservan escalas independientes.";
   const metrics =
     focus === "debt"
       ? [
           { label: "Saldo al comenzar", value: formatCOP(startingKnownDebtBalance) },
           { label: "Pago del primer mes", value: formatCOP(firstDebtPayment) },
-          { label: "Intereses estimados", value: formatCOP(timeline.totalInterestCharged) }
+          {
+            label: "Intereses estimados",
+            value: formatCOP(timeline.totalInterestCharged)
+          }
         ]
       : focus === "goal"
         ? [
-            { label: "Reunido al comenzar", value: formatCOP(goal?.currentAmount ?? 0) },
-            { label: "Aporte del primer mes", value: formatCOP(firstMonth.goalContributionTotal) },
+            { label: "Meta seleccionada", value: selectedGoal?.title ?? "Por seleccionar" },
+            { label: "Aporte mensual", value: formatCOP(selectedGoalContribution) },
             {
-              label: "Valor de la meta",
-              value:
-                goal?.targetAmount === null
-                  ? "Por definir"
-                  : formatCOP(goal?.targetAmount ?? 0)
+              label: "Fecha estimada",
+              value: selectedGoalCompletionMonth
+                ? formatTargetMonth(selectedGoalCompletionMonth)
+                : "Por proyectar"
             }
           ]
         : [
             { label: "Deuda al comenzar", value: formatCOP(startingKnownDebtBalance) },
-            { label: "Aporte inicial a meta", value: formatCOP(firstMonth.goalContributionTotal) },
-            { label: "Intereses estimados", value: formatCOP(timeline.totalInterestCharged) }
+            {
+              label: selectedGoal
+                ? `Aporte a ${selectedGoal.title}`
+                : "Aporte a metas",
+              value: formatCOP(selectedGoalContribution)
+            },
+            {
+              label: "Fecha estimada de meta",
+              value: selectedGoalCompletionMonth
+                ? formatTargetMonth(selectedGoalCompletionMonth)
+                : "Por proyectar"
+            }
           ];
 
   return (
@@ -204,8 +253,8 @@ function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentat
             {focus === "debt"
               ? "PROYECCIÓN DE DEUDA"
               : focus === "goal"
-                ? "PROYECCIÓN DE META"
-                : "DEUDA Y META"}
+                ? "PROYECCIÓN DE METAS"
+                : "DEUDAS Y METAS"}
           </Text>
           <Text style={styles.timelineTitle}>{title}</Text>
           <Text style={styles.timelineDescription}>{description}</Text>
@@ -218,10 +267,12 @@ function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentat
               </Text>
             </View>
           ) : null}
-          {focus !== "debt" && timeline.goalCompletionMonth ? (
+          {focus !== "debt" && selectedGoal ? (
             <View style={[styles.timelineBadge, styles.timelineGoalBadge]}>
               <Text style={[styles.timelineBadgeText, styles.timelineGoalBadgeText]}>
-                La completas: {formatTargetMonth(timeline.goalCompletionMonth)}
+                {selectedGoal.title}: {selectedGoalCompletionMonth
+                  ? formatTargetMonth(selectedGoalCompletionMonth)
+                  : "Por proyectar"}
               </Text>
             </View>
           ) : null}
@@ -234,7 +285,12 @@ function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentat
         ))}
       </View>
 
-      <FinancialTimelineChart focus={focus} timeline={timeline} />
+      <FinancialTimelineChart
+        focus={focus}
+        onSelectedGoalChange={setSelectedGoalId}
+        selectedGoalId={selectedGoalId}
+        timeline={timeline}
+      />
 
       {focus === "debt" ? <GoalProgressSummary scenario={scenario} /> : null}
 
@@ -266,11 +322,6 @@ function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentat
           </View>
         </View>
       ) : null}
-      {timeline.hasUnknownInterestRates ? (
-        <Text style={styles.timelineWarning}>
-          Alguna tasa está sin definir; las fechas y los intereses pueden cambiar.
-        </Text>
-      ) : null}
     </View>
   );
 }
@@ -278,18 +329,22 @@ function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentat
 export function DistributionScenarioCard({
   expanded,
   onResolve,
+  onSave,
   onSelect,
   onSplitDebtPercentChange,
   onToggle,
   scenario,
+  saved = false,
   selected = false
 }: {
   expanded: boolean;
   onResolve?: () => void;
+  onSave?: () => void;
   onSelect?: () => void;
   onSplitDebtPercentChange?: (value: number) => void;
   onToggle: () => void;
   scenario: DistributionScenarioPresentation;
+  saved?: boolean;
   selected?: boolean;
 }) {
   const unavailable = scenario.status !== "ready";
@@ -333,35 +388,55 @@ export function DistributionScenarioCard({
       </View>
 
       {!unavailable && onSelect ? (
-        <Pressable
-          accessibilityRole="radio"
-          accessibilityState={{ selected }}
-          onPress={onSelect}
-          style={({ pressed }) => [
-            styles.selectButton,
-            selected && styles.selectButtonSelected,
-            pressed && styles.pressed
-          ]}
-        >
-          <View
-            style={[
-              styles.selectIndicator,
-              selected && styles.selectIndicatorSelected
+        <View style={styles.selectionActions}>
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            onPress={onSelect}
+            style={({ pressed }) => [
+              styles.selectButton,
+              selected && styles.selectButtonSelected,
+              pressed && styles.pressed
             ]}
           >
-            {selected ? (
-              <Check color={colors.surface} size={14} strokeWidth={3} />
-            ) : null}
-          </View>
-          <Text
-            style={[
-              styles.selectButtonText,
-              selected && styles.selectButtonTextSelected
-            ]}
-          >
-            {selected ? "Estrategia elegida" : "Elegir esta estrategia"}
-          </Text>
-        </Pressable>
+            <View
+              style={[
+                styles.selectIndicator,
+                selected && styles.selectIndicatorSelected
+              ]}
+            >
+              {selected ? (
+                <Check color={colors.surface} size={14} strokeWidth={3} />
+              ) : null}
+            </View>
+            <Text
+              style={[
+                styles.selectButtonText,
+                selected && styles.selectButtonTextSelected
+              ]}
+            >
+              {selected ? "Seleccionada" : "Seleccionar"}
+            </Text>
+          </Pressable>
+          {selected ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: saved }}
+              disabled={saved}
+              onPress={onSave}
+              style={({ pressed }) => [
+                styles.saveButton,
+                saved && styles.saveButtonSaved,
+                pressed && !saved && styles.pressed
+              ]}
+            >
+              {saved ? <Check color={colors.support} size={17} strokeWidth={3} /> : null}
+              <Text style={[styles.saveButtonText, saved && styles.saveButtonTextSaved]}>
+                {saved ? "Guardado" : "Guardar"}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
 
       {scenario.issueMessages.length > 1 ? (
@@ -410,7 +485,7 @@ export function DistributionScenarioCard({
                 label={
                   scenario.id === "current_reference"
                     ? "Cuotas registradas"
-                    : "Cuotas requeridas"
+                    : "Cuotas de deuda"
                 }
                 value={formatCOP(scenario.baseDebtPayments)}
               />
@@ -420,7 +495,7 @@ export function DistributionScenarioCard({
               />
               <AllocationValue label="A metas" value={formatCOP(scenario.goalContribution)} />
               <AllocationValue
-                label="Sin asignar"
+                label="Sin repartir"
                 value={formatCOP(scenario.unassignedAmount)}
               />
             </View>
@@ -538,6 +613,12 @@ const styles = StyleSheet.create({
   headlineUnavailable: {
     color: "#B45309"
   },
+  selectionActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
   selectButton: {
     alignItems: "center",
     alignSelf: "flex-start",
@@ -573,6 +654,30 @@ const styles = StyleSheet.create({
   },
   selectButtonTextSelected: {
     color: colors.primary
+  },
+  saveButton: {
+    alignItems: "center",
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  saveButtonSaved: {
+    backgroundColor: colors.supportSoft,
+    borderColor: colors.supportBorder
+  },
+  saveButtonText: {
+    color: colors.surface,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  saveButtonTextSaved: {
+    color: colors.support
   },
   issueList: {
     gap: spacing.xs
@@ -763,9 +868,12 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.option
   },
   goalSummary: {
-    alignItems: "center",
     borderTopColor: colors.border,
     borderTopWidth: 1,
+    gap: spacing.sm
+  },
+  goalSummaryItem: {
+    alignItems: "center",
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.md
@@ -862,11 +970,6 @@ const styles = StyleSheet.create({
   },
   timelineMilestoneText: {
     color: colors.textMuted,
-    fontSize: typography.small,
-    lineHeight: typography.lineHeight.small
-  },
-  timelineWarning: {
-    color: "#B45309",
     fontSize: typography.small,
     lineHeight: typography.lineHeight.small
   },

@@ -707,11 +707,13 @@ export default function DashboardScreen() {
     () => ({
       title: primaryGoalTitle,
       monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
-      estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null
+      estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null,
+      hasRegisteredContribution: (primaryGoalAllocation?.currentAmount ?? 0) > 0
     }),
     [
       primaryGoalAllocation?.estimatedMonthsToGoal,
       primaryGoalAllocation?.monthlyContribution,
+      primaryGoalAllocation?.currentAmount,
       primaryGoalTitle
     ]
   );

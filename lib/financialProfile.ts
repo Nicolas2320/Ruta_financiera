@@ -1,18 +1,16 @@
 import { supabase } from "./supabase";
 import {
-  getLegacyFieldsFromGoal,
   getLegacyGoalFromOnboarding,
-  getPrimaryFinancialGoal,
   initialOnboarding,
   normalizeCompletedActionsState,
   normalizeDebtRecords,
   normalizeExpenseCategoryAmounts,
   normalizeFinancialGuidanceMode,
   normalizeFinancialGoals,
-  normalizeGoalMonthlyBudget,
   normalizeSimulationPlanPreference,
   type CompletedActionsState,
   type ExactFinancialValues,
+  type LegacyOnboardingFields,
   type OnboardingData
 } from "../types/financial";
 import { syncDebtExpenseCategory } from "../utils/debtCalculations";
@@ -21,7 +19,7 @@ import { normalizeExactValues } from "../utils/financialRanges";
 const FINANCIAL_PROFILES_TABLE = "financial_profiles";
 
 type FinancialProfileRow = {
-  onboarding: (Partial<OnboardingData> & { goalHorizon?: unknown }) | null;
+  onboarding: (Partial<OnboardingData> & LegacyOnboardingFields) | null;
   completed_actions: CompletedActionsState | null;
   exact_values: ExactFinancialValues | null;
 };
@@ -43,13 +41,11 @@ function getSupabaseClient() {
 
 export function normalizeOnboardingData(
   onboarding:
-    | (Partial<OnboardingData> & { goalHorizon?: unknown })
+    | (Partial<OnboardingData> & LegacyOnboardingFields)
     | null
     | undefined,
   referenceDate = new Date()
 ) {
-  const { goalHorizon: legacyGoalHorizon, ...onboardingWithoutLegacyHorizon } =
-    onboarding ?? {};
   const debts = normalizeDebtRecords(onboarding?.debts);
   const expenseData = syncDebtExpenseCategory({
     debts,
@@ -63,10 +59,11 @@ export function normalizeOnboardingData(
   });
   const normalizedBase: OnboardingData = {
     ...initialOnboarding,
-    ...onboardingWithoutLegacyHorizon,
     firstName: typeof onboarding?.firstName === "string" ? onboarding.firstName : "",
-    lastName: typeof onboarding?.lastName === "string" ? onboarding.lastName : "",
     financialGuidanceMode: normalizeFinancialGuidanceMode(onboarding?.financialGuidanceMode),
+    incomeRange: typeof onboarding?.incomeRange === "string" ? onboarding.incomeRange : null,
+    expensesRange:
+      typeof onboarding?.expensesRange === "string" ? onboarding.expensesRange : null,
     monthlyExpensesIncludesSmallExpenses:
       typeof onboarding?.monthlyExpensesIncludesSmallExpenses === "boolean"
         ? onboarding.monthlyExpensesIncludesSmallExpenses
@@ -78,11 +75,28 @@ export function normalizeOnboardingData(
         : null,
     expenseCategories: expenseData.expenseCategories,
     expenseCategoryAmounts: expenseData.expenseCategoryAmounts,
+    expensesFeeling:
+      typeof onboarding?.expensesFeeling === "string" ? onboarding.expensesFeeling : null,
+    hasSmallExpenses:
+      typeof onboarding?.hasSmallExpenses === "string" ? onboarding.hasSmallExpenses : null,
     debts,
     smallExpenseCategories: Array.isArray(onboarding?.smallExpenseCategories)
       ? onboarding.smallExpenseCategories
       : [],
-    goalMonthlyBudget: normalizeGoalMonthlyBudget(onboarding?.goalMonthlyBudget),
+    smallExpensesRange:
+      typeof onboarding?.smallExpensesRange === "string"
+        ? onboarding.smallExpensesRange
+        : null,
+    smallExpensesIntention:
+      typeof onboarding?.smallExpensesIntention === "string"
+        ? onboarding.smallExpensesIntention
+        : null,
+    savingsRange:
+      typeof onboarding?.savingsRange === "string" ? onboarding.savingsRange : null,
+    debtSituation:
+      typeof onboarding?.debtSituation === "string" ? onboarding.debtSituation : null,
+    debtPaymentShare:
+      typeof onboarding?.debtPaymentShare === "string" ? onboarding.debtPaymentShare : null,
     simulationPlanPreference: normalizeSimulationPlanPreference(
       onboarding?.simulationPlanPreference
     ),
@@ -90,26 +104,19 @@ export function normalizeOnboardingData(
   };
 
   const legacyGoal = getLegacyGoalFromOnboarding(
-    {
-      financialGoal: normalizedBase.financialGoal,
-      goalAmountRange: normalizedBase.goalAmountRange,
-      goalHorizon: legacyGoalHorizon,
-      goalPriority: normalizedBase.goalPriority
-    },
+    onboarding ?? {},
     referenceDate
   );
   const goals =
     normalizedBase.goals.length > 0 ? normalizedBase.goals : legacyGoal ? [legacyGoal] : [];
-  const normalizedWithGoals = {
+  return {
     ...normalizedBase,
     goals
   };
-  const primaryGoal = getPrimaryFinancialGoal(normalizedWithGoals);
+}
 
-  return {
-    ...normalizedWithGoals,
-    ...getLegacyFieldsFromGoal(primaryGoal)
-  };
+export function getPersistedOnboardingData(onboarding: OnboardingData) {
+  return normalizeOnboardingData(onboarding);
 }
 
 function normalizeCompletedActions(
@@ -143,7 +150,7 @@ export async function saveOnboardingData(userId: string, onboarding: OnboardingD
   const { error } = await client.from(FINANCIAL_PROFILES_TABLE).upsert(
     {
       user_id: userId,
-      onboarding,
+      onboarding: getPersistedOnboardingData(onboarding),
       updated_at: new Date().toISOString()
     },
     { onConflict: "user_id" }
@@ -163,7 +170,7 @@ export async function saveFinancialProfileDraft(
   const { error } = await client.from(FINANCIAL_PROFILES_TABLE).upsert(
     {
       user_id: userId,
-      onboarding,
+      onboarding: getPersistedOnboardingData(onboarding),
       exact_values: normalizeExactValues(exactValues),
       updated_at: new Date().toISOString()
     },

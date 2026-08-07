@@ -353,7 +353,7 @@ export default function SummaryScreen() {
               description="La dirección principal que guiará el diagnóstico."
               editAccessibilityLabel="Editar meta financiera"
               fields={[
-                { label: "Meta principal", value: onboarding.financialGoal },
+                { label: "Meta principal", value: primaryGoal?.title ?? null },
                 {
                   label: "Metas creadas",
                   value: goals.length > 0 ? goals.length.toString() : null,
@@ -369,7 +369,7 @@ export default function SummaryScreen() {
                   label:
                     goalAmountDisplay.source === "exact"
                       ? goalAmountDisplay.label
-                      : getGoalDetailLabel(onboarding.financialGoal),
+                      : getGoalDetailLabel(primaryGoal?.title ?? null),
                   value:
                     goalAmountDisplay.source === "empty"
                       ? primaryGoal

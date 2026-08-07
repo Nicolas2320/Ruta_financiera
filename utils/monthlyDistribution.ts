@@ -18,6 +18,7 @@ import {
 import { calculateFinancialSnapshot } from "./financialCalculations";
 import { buildFinancialProjectionInput } from "./financialProjectionInput";
 import type { FinancialProjectionInput } from "./financialProjectionInput";
+import { allocateMonthlyGoalBudget } from "./goalAllocationPolicy";
 import { isEmergencyGoal } from "./goalPlanning";
 import { buildSimulationExperience } from "./simulationExperience";
 
@@ -38,10 +39,10 @@ export type ResolvedMonthlyDistribution = {
 };
 
 const detailedStrategyLabels: Record<DistributionStrategyId, string> = {
-  current_reference: "Distribución personalizada",
-  reduce_interest: "Reducir intereses",
-  accelerate_goal: "Acelerar una meta",
-  split_debt_goal: "Avanzar en deuda y meta"
+  current_reference: "Sin repartición",
+  reduce_interest: "Repartir solo a deudas",
+  accelerate_goal: "Repartir solo a metas",
+  split_debt_goal: "Repartir a deudas y metas"
 };
 
 function getProtectedMarginPreference(
@@ -98,15 +99,10 @@ function fromDetailedScenario({
   };
 }
 
-function getSelectedGoalId(onboarding: OnboardingData) {
+function getPrimaryActiveGoalId(onboarding: OnboardingData) {
   const activeGoals = getOnboardingGoals(onboarding).filter(
     (goal) => goal.status !== "completed" && goal.status !== "paused"
   );
-  const storedGoalId = onboarding.simulationPlanPreference?.goalId;
-
-  if (storedGoalId) {
-    return storedGoalId;
-  }
 
   return (
     activeGoals.find((goal) => goal.isPrimary)?.id ??
@@ -115,34 +111,32 @@ function getSelectedGoalId(onboarding: OnboardingData) {
   );
 }
 
-function getPreliminaryGoalAllocation({
+function getPreliminaryGoalAllocations({
   amount,
-  goalId,
   projectionInput
 }: {
   amount: number;
-  goalId: string | null;
   projectionInput: FinancialProjectionInput;
 }) {
-  if (!goalId || amount <= 0) {
+  if (amount <= 0) {
     return [];
   }
 
-  const goal = projectionInput.goals.find((candidate) => candidate.id === goalId);
-
-  if (!goal || goal.targetAmount === null) {
-    return [];
-  }
-
-  const remainingAmount = Math.max(0, goal.targetAmount - goal.currentAmount);
-
-  return [
-    {
-      amount: Math.min(amount, remainingAmount),
-      goalId: goal.id,
-      title: goal.title
-    }
-  ] satisfies GoalMonthlyAllocation[];
+  return allocateMonthlyGoalBudget({
+    goals: projectionInput.goals
+      .filter((goal) => goal.targetAmount !== null)
+      .map((goal) => ({
+        currentAmount: goal.currentAmount,
+        goalId: goal.id,
+        isPrimary: goal.isPrimary,
+        status: goal.status,
+        targetAmount: goal.targetAmount,
+        targetMonth: goal.targetMonth,
+        title: goal.title
+      })),
+    monthlyBudget: amount,
+    referenceDate: projectionInput.asOfDate
+  }).allocations satisfies GoalMonthlyAllocation[];
 }
 
 function resolvePreliminaryDistribution({
@@ -164,7 +158,7 @@ function resolvePreliminaryDistribution({
     experience.planningMonthlyMargin === null
       ? 0
       : Math.max(0, experience.planningMonthlyMargin - protectedMarginResult.result.amount);
-  const primaryGoalId = getSelectedGoalId(onboarding);
+  const primaryGoalId = getPrimaryActiveGoalId(onboarding);
   const activeEmergencyGoal = getOnboardingGoals(onboarding).find(
     (goal) =>
       goal.status !== "completed" &&
@@ -180,11 +174,10 @@ function resolvePreliminaryDistribution({
   let label = "Recomendación del diagnóstico";
 
   if (normalizedStrategy === "accelerate_goal") {
-    goalId = primaryGoalId;
     requestedGoalAmount = distributableAmount;
-    label = "Acelerar una meta";
+    label = "Repartir solo a metas";
   } else if (normalizedStrategy === "current_reference") {
-    label = "Distribución personalizada";
+    label = "Sin repartición";
   } else if (selectedStrategy === "diagnosis_recommended") {
     goalId =
       snapshot.priority.key === "build_emergency_fund"
@@ -199,27 +192,21 @@ function resolvePreliminaryDistribution({
   }
 
   const projectionInput = buildFinancialProjectionInput({ exactValues, onboarding });
-  const customGoalAllocations = projectionInput.goals
-    .filter(
-      (goal) =>
-        normalizedStrategy === "current_reference" &&
-        goal.status !== "completed" &&
-        goal.status !== "paused" &&
-        (goal.manualMonthlyContribution ?? 0) > 0
-    )
-    .map((goal) => ({
-      amount: goal.manualMonthlyContribution ?? 0,
-      goalId: goal.id,
-      title: goal.title
-    }));
   const goalAllocations =
     normalizedStrategy === "current_reference"
-      ? customGoalAllocations
-      : getPreliminaryGoalAllocation({
+      ? []
+      : normalizedStrategy === "accelerate_goal"
+        ? getPreliminaryGoalAllocations({
           amount: requestedGoalAmount,
-          goalId,
           projectionInput
-        });
+        })
+        : getPreliminaryGoalAllocations({
+            amount: requestedGoalAmount,
+            projectionInput: {
+              ...projectionInput,
+              goals: projectionInput.goals.filter((goal) => goal.id === goalId)
+            }
+          });
   const goalContributionTotal = sumGoalAllocations(goalAllocations);
   const status: DistributionScenarioStatus =
     experience.planningMonthlyMargin === null
@@ -265,11 +252,9 @@ export function resolveMonthlyDistribution({
   }
 
   const projectionInput = buildFinancialProjectionInput({ exactValues, onboarding });
-  const selectedGoalId = getSelectedGoalId(onboarding);
   const scenarios = buildDistributionScenarios({
     input: projectionInput,
     protectedMarginPreference: getProtectedMarginPreference(onboarding),
-    selectedGoalId,
     splitDebtShare: preference?.debtShare ?? 0.5
   });
   const normalizedStrategy: DistributionStrategyId =

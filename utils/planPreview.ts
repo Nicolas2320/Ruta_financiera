@@ -72,7 +72,8 @@ export function getPlanPreviewData(
   const monthlyGoalContext = {
     title: goalTitle,
     monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
-    estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null
+    estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null,
+    hasRegisteredContribution: (primaryGoalAllocation?.currentAmount ?? 0) > 0
   };
   const focus = getMonthlyFocus(data, metrics, planPriorityKey, monthlyGoalContext);
   const actions = getMonthlyActions(data, metrics, planPriorityKey, monthlyGoalContext);

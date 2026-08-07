@@ -637,7 +637,7 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const estimatedMonthlyExpenses = estimateExpensesFromRange(onboarding.expensesRange);
   const estimatedCurrentSavings = estimateSavingsFromRange(onboarding.savingsRange);
   const estimatedGoalTargetAmount = estimateGoalTargetAmountFromRange(
-    primaryGoal?.amountRange ?? onboarding.goalAmountRange
+    primaryGoal?.amountRange ?? null
   );
   const estimatedSmallExpenses = estimateSmallExpensesFromRange(onboarding.smallExpensesRange);
   const reportedNoSmallExpenses = onboarding.hasSmallExpenses === "No";
@@ -795,7 +795,7 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
       label: emergencyFundLabels[emergencyFundStatus]
     },
     goal: {
-      name: primaryGoal?.title ?? onboarding.financialGoal,
+      name: primaryGoal?.title ?? null,
       targetAmount: goalTargetAmount,
       currentSavings: goalCurrentSavings,
       progressPercentage: goalProgressPercentage,

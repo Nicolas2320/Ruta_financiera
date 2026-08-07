@@ -170,7 +170,26 @@ describe("monthly emergency-fund action", () => {
     });
 
     expect(actions).toHaveLength(3);
-    expect(actions[0]?.id).toBe("set-goal-contribution");
+    expect(actions[0]).toMatchObject({
+      id: "set-goal-contribution",
+      title: "Registrar el primer aporte para Empezar a invertir"
+    });
     expect(actions[2]?.id).toBe("create-emergency-goal");
+  });
+
+  it("invites another real contribution after the goal has progress", () => {
+    const data = getMonthlyPlanData(
+      makeOnboarding({ goals: [makeGoal({ currentAmount: 300_000 })] })
+    );
+    const metrics = getMonthlyPlanMetrics(data);
+    const actions = getMonthlyActions(data, metrics, "advance_goal", {
+      title: "Viaje",
+      monthlyContribution: 500_000,
+      estimatedMonthsToGoal: 10,
+      hasRegisteredContribution: true
+    });
+
+    expect(actions[0]?.title).toBe("Registrar otro aporte para Viaje");
+    expect(actions[0]?.description).toContain("desde Metas");
   });
 });

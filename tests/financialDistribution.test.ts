@@ -117,6 +117,61 @@ describe("protected monthly margin", () => {
 });
 
 describe("monthly distribution strategies", () => {
+  it("keeps registered goal contributions out of the recurring reference scenario", () => {
+    const input = buildFinancialProjectionInput({
+      exactValues: {
+        monthlyExpenses: 1_000_000,
+        monthlyIncome: 3_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        debts: [
+          makeDebt({
+            annualInterestRate: 0,
+            monthlyPayment: 500_000,
+            monthlyPaymentType: "minimum_required",
+            remainingAmount: 5_000_000
+          })
+        ],
+        goals: [makeGoal()]
+      })
+    });
+    const reference = buildDistributionScenarios({
+      input,
+      protectedMarginPreference: { mode: "use_all" }
+    }).currentReference;
+
+    expect(reference.goalAllocations).toEqual([]);
+    expect(reference.distributableAmount).toBe(1_500_000);
+    expect(reference.unassignedAmount).toBe(1_500_000);
+  });
+
+  it("distributes the goal portion across every active goal", () => {
+    const input = buildFinancialProjectionInput({
+      exactValues: {
+        monthlyExpenses: 1_000_000,
+        monthlyIncome: 2_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        debts: [],
+        goals: [
+          makeGoal({ id: "primary", title: "Principal" }),
+          makeGoal({ id: "secondary", isPrimary: false, title: "Secundaria" })
+        ]
+      })
+    });
+    const scenario = buildDistributionScenarios({
+      input,
+      protectedMarginPreference: { mode: "use_all" }
+    }).accelerateGoal;
+
+    expect(scenario.goalAllocations).toEqual([
+      { amount: 600_000, goalId: "primary", title: "Principal" },
+      { amount: 400_000, goalId: "secondary", title: "Secundaria" }
+    ]);
+  });
+
   it("builds concrete comparisons from the example without allocating every peso", () => {
     const scenarios = buildDistributionScenarios({ input: makeExampleProjection() });
 
@@ -207,6 +262,48 @@ describe("monthly distribution strategies", () => {
       voluntaryDebtPayments: 200_000,
       unassignedMonthlyMargin: 1_600_000
     });
+  });
+
+  it("advances debts and allows a combined split when the interest rate is unknown", () => {
+    const input = buildFinancialProjectionInput({
+      asOfDate: "2026-08-02",
+      exactValues: {
+        monthlyExpenses: 1_000_000,
+        monthlyIncome: 3_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        debts: [
+          makeDebt({
+            annualInterestRate: null,
+            monthlyPayment: 300_000,
+            monthlyPaymentType: "minimum_required",
+            remainingAmount: 2_000_000
+          })
+        ],
+        goals: [makeGoal()]
+      })
+    });
+    const scenarios = buildDistributionScenarios({
+      input,
+      protectedMarginPreference: { mode: "use_all" }
+    });
+
+    expect(scenarios.reduceInterest).toMatchObject({
+      status: "ready",
+      unassignedAmount: 0
+    });
+    expect(scenarios.reduceInterest.issues).toContainEqual(
+      expect.objectContaining({ code: "unknown_interest_rate" })
+    );
+    expect(scenarios.reduceInterest.debtAllocations[0]).toMatchObject({
+      basePayment: 300_000,
+      extraPayment: 1_700_000,
+      totalPayment: 2_000_000
+    });
+    expect(scenarios.splitDebtGoal.status).toBe("ready");
+    expect(scenarios.splitDebtGoal.debtAllocations[0].extraPayment).toBe(850_000);
+    expect(scenarios.splitDebtGoal.goalAllocations[0].amount).toBe(850_000);
   });
 
   it("keeps every agreement as required and only exposes self-selected payments as movable", () => {

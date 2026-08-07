@@ -1193,7 +1193,7 @@ export default function SpendingScreen() {
               ) : null}
               <ComparisonMetric
                 label="Cuotas de deuda"
-                tone="neutral"
+                tone="warning"
                 value={getDebtPaymentsComparisonValue(metrics)}
               />
               <ComparisonMetric
@@ -1563,7 +1563,7 @@ const styles = StyleSheet.create({
     height: "100%"
   },
   debtPaymentsFill: {
-    backgroundColor: colors.textSubtle,
+    backgroundColor: "#F97316",
     height: "100%"
   },
   comparisonMetrics: {

@@ -376,7 +376,7 @@ describe("FinancialProfileProvider", () => {
 
     await act(async () => {
       getOnboarding().updateOnboarding({ firstName: "Primer cambio" });
-      getOnboarding().updateOnboarding({ lastName: "Segundo cambio" });
+      getOnboarding().updateOnboarding({ expensesFeeling: "Segundo cambio" });
       await flushEffects();
     });
 
@@ -393,7 +393,7 @@ describe("FinancialProfileProvider", () => {
       "user-1",
       expect.objectContaining({
         firstName: "Primer cambio",
-        lastName: "Segundo cambio"
+        expensesFeeling: "Segundo cambio"
       })
     );
     expect(getOnboarding().onboardingSyncStatus).toBe("saved");

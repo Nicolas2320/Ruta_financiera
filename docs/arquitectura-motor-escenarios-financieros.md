@@ -47,7 +47,7 @@ La base y la primera integración en `/simulation` ya están implementadas. La p
 
 - `minimum_required`: cuota mínima o pactada contractualmente; si no existe otro valor, `monthlyPayment` es el piso obligatorio.
 - `agreed`: compromiso acordado con una persona o entidad; se considera en el plan base y puede estar marcado como negociable.
-- `self_selected`: valor voluntario elegido por la persona y sin cuota mensual fija; el motor usa `$0` como piso requerido y conserva `monthlyPayment` únicamente en “Así estás hoy”. Si existe un mínimo bancario, debe elegirse `minimum_required`.
+- `self_selected`: valor voluntario elegido por la persona y sin cuota mensual fija; el motor usa `$0` como piso requerido y conserva `monthlyPayment` únicamente en “Sin repartición”. Si existe un mínimo bancario, debe elegirse `minimum_required`.
 - `unknown`: existe únicamente para perfiles anteriores. Ya no se ofrece al crear o editar; la persona debe clasificar el pago para guardar la deuda.
 
 `paymentFlexibility` puede ser `fixed`, `negotiable` o `unknown`. `unknown` se conserva solo para perfiles anteriores y ya no se ofrece en el formulario. La flexibilidad describe la posibilidad de cambiar un acuerdo; no lo modifica automáticamente.
@@ -83,7 +83,7 @@ La deuda inicial sigue el mismo principio: primero se pregunta si existen deudas
 
 La cobertura de emergencia no se declara. Se calcula como `ahorro disponible ÷ gastos mensuales`, siempre que ambos datos estén disponibles. La situación de inversiones tampoco forma parte del diagnóstico inicial ni decide la prioridad del motor.
 
-La importancia declarada de una meta tampoco se solicita. Elegir cuál es la meta principal ya expresa el foco actual de la persona. Cuando existen varias metas, el reparto recomendado considera esa marca principal, el mes objetivo, el tipo de meta y su viabilidad; un aporte manual continúa teniendo precedencia. `FinancialGoal.priority` y `goalPriority` se conservan solo para leer perfiles anteriores y dejan de influir en el motor.
+La importancia declarada de una meta tampoco se solicita. Elegir cuál es la meta principal ya expresa el foco actual de la persona. Cuando existen varias metas, el reparto recomendado considera esa marca principal, el mes objetivo, el saldo pendiente y su viabilidad. Los aportes registrados actualizan lo reunido, pero no se convierten en una recurrencia mensual. `FinancialGoal.priority` y `goalPriority` solo se leen al migrar perfiles anteriores y se omiten en la siguiente escritura.
 
 El motor usará como mínimo:
 
@@ -100,13 +100,15 @@ Los datos de metas y deudas siguen dentro de `financial_profiles.onboarding`, qu
 - no se necesita agregar columnas; una migración de datos limpia las claves temporales heredadas dentro del JSONB;
 - los perfiles existentes siguen funcionando;
 - `hasDebts`, `debtMonthlyPaymentRange` y `monthlyDebtPayments` son opcionales para perfiles anteriores y se normalizan al cargar;
-- `emergencyCoverage`, `investmentSituation`, `debtSituation` y `debtPaymentShare` se conservan solo para leer perfiles anteriores; ya no se solicitan ni gobiernan el diagnóstico nuevo;
-- `FinancialGoal.priority` y `goalPriority` se conservan para compatibilidad, pero las metas nuevas se guardan sin importancia declarada y el reparto no usa esos valores;
+- `emergencyCoverage` e `investmentSituation` solo se aceptan al leer un perfil anterior y se omiten en la siguiente escritura; `debtSituation` y `debtPaymentShare` siguen temporalmente activos para compatibilidad con el flujo de deuda;
+- `FinancialGoal.priority` y `goalPriority` solo se aceptan durante la migración en memoria; las metas se guardan sin importancia declarada y el reparto no usa esos valores;
 - las deudas antiguas se clasifican como `unknown` hasta que la persona las confirme;
 - una fecha con día se convierte a mes y año, descartando el día;
 - un horizonte aproximado antiguo se convierte una sola vez a un mes objetivo determinista;
 - al normalizar y volver a guardar el perfil, `FinancialGoal.targetMonth` queda como única fecha de la meta y los campos de horizonte heredados dejan de persistirse.
 - el campo anterior `minimumInitialAmount` se descarta al normalizar. La parte que la persona ya sabe que financiará no se registra como ahorro ni como deuda hasta que el crédito exista.
+
+Cada escritura reconstruye una lista blanca del perfil activo. Así se eliminan también los datos demográficos, las preguntas retiradas del diagnóstico y los aportes mensuales heredados, sin depender de que todas las filas hayan sido limpiadas previamente en la base de datos.
 
 ## Margen libre mensual y fondo de emergencia
 
@@ -131,7 +133,7 @@ Todas las comparaciones deben partir del mismo orden. Una estrategia solo puede 
 
 `dinero distribuible = máximo(0, ingreso - gastos mensuales - obligaciones de deuda - margen protegido)`
 
-El dinero distribuible no es dinero adicional. Se desglosa en el margen que aún no tenía destino, pagos voluntarios de deuda que pueden reasignarse y aportes voluntarios a metas. Un pago `self_selected` mantiene su valor en “Así estás hoy”, pero su piso obligatorio continúa siendo `$0`; convertirlo en obligación impediría que los escenarios compararan otras decisiones.
+El dinero distribuible no es dinero adicional. Parte del margen que aún no tenía destino y de pagos voluntarios de deuda que pueden reasignarse. Un pago `self_selected` mantiene su valor en “Sin repartición”, pero su piso obligatorio continúa siendo `$0`; convertirlo en obligación impediría que los escenarios compararan otras decisiones. Un aporte registrado a una meta solo modifica su saldo reunido y no reduce este monto como si fuera un compromiso recurrente.
 
 El margen protegido no usa un valor universal. Será un supuesto visible del escenario hasta que la persona decida guardarlo como preferencia. Si falta el mínimo de alguna deuda, el motor puede mostrar la referencia actual, pero no debe afirmar cuánto dinero es redistribuible.
 
@@ -143,50 +145,49 @@ Los acuerdos marcados como negociables no se reducen automáticamente. Una compa
 
 ## Comparaciones v1
 
-### Referencia: Así estás hoy
+### Referencia: Sin repartición
 
 No es una recomendación. Sirve como punto de comparación y conserva:
 
 - el pago mensual planeado de cada deuda;
-- los aportes de meta definidos manualmente por la persona;
 - el resto del margen como dinero sin asignar.
 
-Si una meta solo tiene un aporte sugerido por la aplicación, ese valor no se presenta como parte del plan actual. Debe quedar claro qué fue decidido por la persona y qué fue calculado por el sistema.
+Las metas conservan el saldo reunido con los aportes reales registrados, pero no reciben un aporte mensual ni una fecha proyectada en esta referencia. Una recurrencia para metas solo existe al guardar “Repartir solo a metas” o “Repartir a deudas y metas”.
 
-### Estrategia: Reducir intereses
+### Estrategia: Repartir solo a deudas
 
-Después de pagar todas las obligaciones y proteger el margen elegido, dirige el dinero distribuible a la deuda activa con mayor tasa efectiva anual. Cuando termina, redirige el monto completo a la siguiente deuda más costosa.
+Después de pagar todas las obligaciones y dejar libre el monto elegido, dirige el dinero distribuible a las deudas activas. Cuando una termina, redirige el monto disponible a la siguiente.
 
-- Las deudas con tasa desconocida generan una advertencia y no se ordenan como si tuvieran tasa cero.
-- Las deudas al 0% conservan sus acuerdos, pero no reciben pagos adicionales mientras exista una deuda con interés mayor.
+- Las deudas con tasa desconocida pueden proyectarse si tienen saldo y cuota. El motor usa 0% internamente y las deja fuera de la comparación de cuál estrategia genera menos intereses; la ausencia de la tasa ya se comunica en Deudas y no se repite en Simulación.
+- Las tasas conocidas ayudan a ordenar los pagos; no son un requisito para adelantar una deuda.
 - Un atraso se muestra como riesgo separado; no se inventa el valor necesario para ponerse al día.
 
-Nombre visible recomendado: **Reducir intereses**.
+Nombre visible recomendado: **Repartir solo a deudas**.
 
-### Estrategia: Acelerar una meta
+### Estrategia: Repartir solo a metas
 
-Después de cubrir obligaciones y margen protegido, dirige el dinero distribuible a una meta activa elegida por la persona.
+Después de cubrir obligaciones y margen protegido, distribuye el dinero disponible entre todas las metas activas según su saldo pendiente, fecha objetivo y prioridad principal.
 
 - El hito es el único monto que la persona indicó que quiere reunir. Si una parte será financiada, esa parte no se suma a la meta de ahorro.
 - La estrategia no supone que el dinero restante será financiado ni que la meta generará una deuda.
 - Si existen varias metas, la persona elige cuál acelerar; la aplicación no cambia silenciosamente la meta principal.
 
-Nombre visible recomendado: **Acelerar una meta**.
+Nombre visible recomendado: **Repartir solo a metas**.
 
-### Estrategia: Avanzar en deuda y meta
+### Estrategia: Repartir a deudas y metas
 
 Después de cubrir obligaciones y margen protegido, divide el dinero distribuible en dos partes visibles y ajustables:
 
-- una proporción para el pago adicional a la deuda con mayor tasa conocida;
+- una proporción para pagos adicionales a las deudas activas;
 - la proporción restante para la meta seleccionada.
 
-El reparto comienza en 50/50 como punto de comparación, no como regla óptima. La persona puede moverlo entre 10/90 y 90/10 en pasos de cinco puntos porcentuales. La comparación solo se habilita cuando existen tanto una deuda con interés conocido como una meta con monto definido; cuando falta alguno, se muestra como “No aplica” junto con el dato que debe completarse. Si uno de los dos objetivos termina durante la proyección, su parte pasa al otro.
+El reparto comienza en 50/50 como punto de comparación, no como regla óptima. La persona puede moverlo entre 10/90 y 90/10 en pasos de cinco puntos porcentuales. La comparación se habilita cuando existen una deuda con saldo conocido y una meta con monto definido; una tasa faltante limita la comparación de intereses, pero no bloquea la proyección. Si uno de los dos objetivos termina durante la proyección, su parte pasa al otro.
 
-Nombre visible recomendado: **Avanzar en deuda y meta**. Evita el nombre genérico “Plan equilibrado”, que no explica qué se está repartiendo.
+Nombre visible recomendado: **Repartir a deudas y metas**. Evita el nombre genérico “Plan equilibrado”, que no explica qué se está repartiendo.
 
 ## Financiación como hipótesis
 
-**Probar financiación** no es una estrategia de distribución independiente. Es un supuesto opcional que puede aplicarse, por ejemplo, sobre “Acelerar una meta”.
+**Probar financiación** no es una estrategia de distribución independiente. Es un supuesto opcional que puede aplicarse, por ejemplo, sobre “Repartir solo a metas”.
 
 Para compararla responsablemente se necesita al menos:
 
@@ -205,13 +206,12 @@ Completado:
 
 1. Entrada financiera canónica con rutas propietarias para los datos faltantes.
 2. Margen protegido automático, uso explícito de todo el margen y monto personalizado.
-3. Motor puro para la referencia actual y las estrategias “Reducir intereses”, “Acelerar una meta” y “Avanzar en deuda y meta”.
+3. Motor puro para la referencia actual y las estrategias “Repartir solo a deudas”, “Repartir solo a metas” y “Repartir a deudas y metas”.
 4. Integración de `/simulation` con una base mensual común, estados incompletos y proyección de la meta hasta su mes objetivo.
 5. Proyección mes a mes que calcula intereses con la tasa E.A. registrada, libera cuotas cuando una deuda termina y redistribuye el dinero desde el período siguiente.
-6. Desglose visible del origen de “Para repartir”, separando margen sin destino, pagos voluntarios de deuda y aportes voluntarios a metas.
+6. Guardado explícito de la estrategia y de su porcentaje desde Simulación, sin obligar a abrir el plan mensual.
 
 Siguiente:
 
 1. Añadir la financiación como hipótesis temporal sobre esa proyección, con sus condiciones incompletas claramente visibles.
-2. Permitir guardar un escenario como referencia del plan mensual sin alterar los hechos originales.
-3. Comparar lo planeado con pagos y aportes reales para recalibrar el mes siguiente.
+2. Comparar lo planeado con pagos y aportes reales para recalibrar el mes siguiente.

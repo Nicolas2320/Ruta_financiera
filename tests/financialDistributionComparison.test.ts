@@ -80,5 +80,13 @@ describe("financial distribution comparison", () => {
     const comparison = buildDistributionComparison(makeComparisonScenarios(null));
 
     expect(comparison.every((row) => !row.bestCriteria.includes("interest"))).toBe(true);
+    expect(comparison.find((row) => row.id === "reduce_interest")).toMatchObject({
+      hasUnknownInterestRates: true,
+      status: "ready"
+    });
+    expect(comparison.find((row) => row.id === "split_debt_goal")?.status).toBe("ready");
+    expect(
+      comparison.find((row) => row.id === "reduce_interest")?.debtFreeMonth
+    ).not.toBeNull();
   });
 });

@@ -1,7 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
-import type { DistributionPoolBreakdown } from "../utils/financialDistribution";
 import { formatCOP } from "../utils/financialRanges";
 import { ExactAmountField } from "./ui/ExactAmountField";
 
@@ -13,7 +12,7 @@ const options: Array<{
   mode: ProtectedMarginMode;
 }> = [
   {
-    description: "Deja libre el 10% del margen positivo.",
+    description: "Deja libre el 10% del dinero disponible.",
     label: "Automático",
     mode: "automatic"
   },
@@ -35,7 +34,6 @@ export function ProtectedMarginControl({
   mode,
   onCustomAmountChange,
   onModeChange,
-  poolBreakdown,
   protectedAmount,
   surplusBeforeProtection
 }: {
@@ -44,7 +42,6 @@ export function ProtectedMarginControl({
   mode: ProtectedMarginMode;
   onCustomAmountChange: (value: string) => void;
   onModeChange: (mode: ProtectedMarginMode) => void;
-  poolBreakdown: DistributionPoolBreakdown | null;
   protectedAmount: number | null;
   surplusBeforeProtection: number | null;
 }) {
@@ -58,10 +55,10 @@ export function ProtectedMarginControl({
   return (
     <View style={styles.container}>
       <View style={styles.copy}>
-        <Text style={styles.title}>Margen protegido mensual</Text>
+        <Text style={styles.title}>Dinero libre del mes</Text>
         <Text style={styles.description}>
-          Como no necesitas inventar una cifra, usamos una protección automática. Puedes
-          cambiarla solo para explorar otra simulación.
+          Es la parte que no se destina a deudas ni metas. Puedes dejar el valor automático,
+          repartir todo o elegir cuánto conservar libre.
         </Text>
       </View>
 
@@ -107,7 +104,7 @@ export function ProtectedMarginControl({
 
       <View style={styles.values}>
         <View style={styles.valueItem}>
-          <Text style={styles.valueLabel}>Antes de proteger</Text>
+          <Text style={styles.valueLabel}>Disponible al comenzar</Text>
           <Text style={styles.valueText}>{getValueLabel(surplusBeforeProtection)}</Text>
         </View>
         <View style={styles.valueItem}>
@@ -122,47 +119,6 @@ export function ProtectedMarginControl({
         </View>
       </View>
 
-      {poolBreakdown ? (
-        <View style={styles.breakdown}>
-          <View style={styles.breakdownHeader}>
-            <Text style={styles.breakdownTitle}>¿De dónde sale “Para repartir”?</Text>
-            <Text style={styles.breakdownTotal}>{formatCOP(poolBreakdown.total)}</Text>
-          </View>
-          <Text style={styles.breakdownDescription}>
-            No es dinero adicional: es el mismo monto mensual disponible para comparar
-            decisiones distintas.
-          </Text>
-          <View style={styles.breakdownRows}>
-            <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>Margen que todavía no tenía destino</Text>
-              <Text style={styles.breakdownValue}>
-                {formatCOP(poolBreakdown.unassignedMonthlyMargin)}
-              </Text>
-            </View>
-            <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>Pagos voluntarios de deuda que puedes mover</Text>
-              <Text style={styles.breakdownValue}>
-                {formatCOP(poolBreakdown.voluntaryDebtPayments)}
-              </Text>
-            </View>
-            {poolBreakdown.voluntaryGoalContributions > 0 ? (
-              <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Aportes voluntarios a metas que puedes mover</Text>
-                <Text style={styles.breakdownValue}>
-                  {formatCOP(poolBreakdown.voluntaryGoalContributions)}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-          {poolBreakdown.overcommittedAmount > 0 ? (
-            <Text style={styles.breakdownWarning}>
-              Tus decisiones voluntarias superan este monto por {formatCOP(
-                poolBreakdown.overcommittedAmount
-              )}; algún monto tendría que ajustarse.
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -250,68 +206,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
-  },
-  breakdown: {
-    backgroundColor: "#F8FBFF",
-    borderColor: colors.primaryBorder,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: spacing.sm,
-    padding: spacing.md
-  },
-  breakdownHeader: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    justifyContent: "space-between"
-  },
-  breakdownTitle: {
-    color: colors.text,
-    fontSize: typography.option,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.option
-  },
-  breakdownTotal: {
-    color: colors.primary,
-    fontSize: typography.option,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.option
-  },
-  breakdownDescription: {
-    color: colors.textMuted,
-    fontSize: typography.small,
-    lineHeight: typography.lineHeight.small
-  },
-  breakdownRows: {
-    gap: spacing.xs
-  },
-  breakdownRow: {
-    alignItems: "center",
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-    flexDirection: "row",
-    gap: spacing.sm,
-    justifyContent: "space-between",
-    paddingTop: spacing.sm
-  },
-  breakdownLabel: {
-    color: colors.textMuted,
-    flex: 1,
-    fontSize: typography.caption,
-    lineHeight: typography.lineHeight.caption
-  },
-  breakdownValue: {
-    color: colors.text,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  breakdownWarning: {
-    color: "#B45309",
-    fontSize: typography.small,
-    fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.small
   },
   valueItem: {
     backgroundColor: colors.surface,

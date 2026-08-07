@@ -544,6 +544,6 @@ export function getGoalTargetAmountDisplay(
       "Monto objetivo de la meta",
       primaryGoal?.targetAmount ?? undefined,
       "Dato ingresado para estimar tu avance hacia la meta."
-    ) ?? getRangeDisplay("Cifra aproximada", primaryGoal?.amountRange ?? profile.onboarding?.goalAmountRange)
+    ) ?? getRangeDisplay("Cifra aproximada", primaryGoal?.amountRange ?? null)
   );
 }

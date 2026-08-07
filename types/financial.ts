@@ -87,14 +87,8 @@ export type SimulationPlanPreference = {
 
 export type OnboardingData = {
   firstName: string;
-  lastName: string;
   financialGuidanceMode: FinancialGuidanceMode;
-  ageRange: string | null;
-  country: string | null;
-  city: string;
   incomeRange: string | null;
-  incomeType: string | null;
-  incomeFrequency: string | null;
   expensesRange: string | null;
   expenseCategories: string[];
   expenseCategoryAmounts: ExpenseCategoryAmounts;
@@ -105,19 +99,31 @@ export type OnboardingData = {
   smallExpensesRange: string | null;
   smallExpensesIntention: string | null;
   savingsRange: string | null;
-  emergencyCoverage: string | null;
   hasDebts: boolean | null;
   debtMonthlyPaymentRange: string | null;
   debtSituation: string | null;
   debtPaymentShare: string | null;
   debts: DebtRecord[];
-  investmentSituation: string | null;
-  financialGoal: string | null;
-  goalPriority: string | null;
-  goalAmountRange: string | null;
-  goalMonthlyBudget: number | null;
   simulationPlanPreference: SimulationPlanPreference | null;
   goals: FinancialGoal[];
+};
+
+export type LegacyOnboardingFields = {
+  ageRange?: unknown;
+  city?: unknown;
+  country?: unknown;
+  emergencyCoverage?: unknown;
+  financialGoal?: unknown;
+  goalAmountRange?: unknown;
+  goalHorizon?: unknown;
+  goalMonthlyBudget?: unknown;
+  goalPriority?: unknown;
+  incomeFrequency?: unknown;
+  incomeType?: unknown;
+  investmentSituation?: unknown;
+  lastName?: unknown;
+  monthlyExpensesExcludingDebt?: unknown;
+  paymentPlan?: unknown;
 };
 
 export type ExpenseCategoryAmounts = Record<string, number>;
@@ -137,12 +143,10 @@ export type FinancialGoal = {
   title: string;
   type: string;
   iconKey?: string | null;
-  priority: string | null;
   amountRange: string | null;
   targetAmount?: number | null;
   targetMonth?: string | null;
   currentAmount?: number | null;
-  manualMonthlyContribution?: number | null;
   status?: FinancialGoalStatus;
   contributions?: FinancialGoalContribution[];
   isPrimary?: boolean;
@@ -289,14 +293,8 @@ export type ExactFinancialValues = Partial<Record<ExactFinancialValueKey, number
 
 export const initialOnboarding: OnboardingData = {
   firstName: "",
-  lastName: "",
   financialGuidanceMode: "brief",
-  ageRange: null,
-  country: null,
-  city: "",
   incomeRange: null,
-  incomeType: null,
-  incomeFrequency: null,
   expensesRange: null,
   expenseCategories: [],
   expenseCategoryAmounts: {},
@@ -307,17 +305,11 @@ export const initialOnboarding: OnboardingData = {
   smallExpensesRange: null,
   smallExpensesIntention: null,
   savingsRange: null,
-  emergencyCoverage: null,
   hasDebts: null,
   debtMonthlyPaymentRange: null,
   debtSituation: null,
   debtPaymentShare: null,
   debts: [],
-  investmentSituation: null,
-  financialGoal: null,
-  goalPriority: null,
-  goalAmountRange: null,
-  goalMonthlyBudget: null,
   simulationPlanPreference: null,
   goals: []
 };
@@ -337,10 +329,6 @@ function normalizeGoalAmount(value: unknown) {
   }
 
   return null;
-}
-
-export function normalizeGoalMonthlyBudget(value: unknown) {
-  return normalizeGoalAmount(value);
 }
 
 export function normalizeSimulationPlanPreference(
@@ -751,12 +739,10 @@ export function createFinancialGoal({
     title,
     type: getGoalTypeFromTitle(title),
     iconKey: iconKey ?? getGoalIconKeyFromTitle(title),
-    priority: null,
     amountRange,
     targetAmount: targetAmount ?? null,
     targetMonth: normalizedTargetMonth,
     currentAmount: 0,
-    manualMonthlyContribution: null,
     status: "active",
     contributions: [],
     isPrimary,
@@ -795,12 +781,10 @@ export function normalizeFinancialGoals(goals: unknown, referenceDate = new Date
       title,
       type: normalizeGoalString(rawGoal.type) ?? getGoalTypeFromTitle(title),
       iconKey: normalizeGoalString(rawGoal.iconKey) ?? getGoalIconKeyFromTitle(title),
-      priority: normalizeGoalString(rawGoal.priority),
       amountRange: normalizeGoalString(rawGoal.amountRange),
       targetAmount: normalizeGoalAmount(rawGoal.targetAmount),
       targetMonth,
       currentAmount: normalizeGoalAmount(rawGoal.currentAmount) ?? 0,
-      manualMonthlyContribution: normalizeGoalAmount(rawGoal.manualMonthlyContribution),
       status: normalizeGoalStatus(rawGoal.status),
       contributions: normalizeGoalContributions(rawGoal.contributions),
       isPrimary: rawGoal.isPrimary === true || (index === 0 && rawGoal.isPrimary !== false),
@@ -813,26 +797,24 @@ export function normalizeFinancialGoals(goals: unknown, referenceDate = new Date
 }
 
 export function getLegacyGoalFromOnboarding(
-  onboarding: Pick<OnboardingData, "financialGoal" | "goalPriority" | "goalAmountRange"> & {
-    goalHorizon?: unknown;
-  },
+  onboarding: LegacyOnboardingFields,
   referenceDate = new Date()
 ): FinancialGoal | null {
-  if (!onboarding.financialGoal) {
+  const title = normalizeGoalString(onboarding.financialGoal);
+
+  if (!title) {
     return null;
   }
 
   return {
     id: "primary-goal",
-    title: onboarding.financialGoal,
-    type: getGoalTypeFromTitle(onboarding.financialGoal),
-    iconKey: getGoalIconKeyFromTitle(onboarding.financialGoal),
-    priority: onboarding.goalPriority,
-    amountRange: onboarding.goalAmountRange,
+    title,
+    type: getGoalTypeFromTitle(title),
+    iconKey: getGoalIconKeyFromTitle(title),
+    amountRange: normalizeGoalString(onboarding.goalAmountRange),
     targetAmount: null,
     targetMonth: getTargetMonthFromLegacyHorizon(onboarding.goalHorizon, referenceDate),
     currentAmount: 0,
-    manualMonthlyContribution: null,
     status: "active",
     contributions: [],
     isPrimary: true
@@ -842,27 +824,14 @@ export function getLegacyGoalFromOnboarding(
 export function getOnboardingGoals(onboarding: OnboardingData): FinancialGoal[] {
   const goals = normalizeFinancialGoals(onboarding.goals);
 
-  if (goals.length > 0) {
-    return goals.some((goal) => goal.isPrimary)
-      ? goals
-      : goals.map((goal, index) => ({ ...goal, isPrimary: index === 0 }));
-  }
-
-  const legacyGoal = getLegacyGoalFromOnboarding(onboarding);
-  return legacyGoal ? [legacyGoal] : [];
+  return goals.some((goal) => goal.isPrimary)
+    ? goals
+    : goals.map((goal, index) => ({ ...goal, isPrimary: index === 0 }));
 }
 
 export function getPrimaryFinancialGoal(onboarding: OnboardingData) {
   const goals = getOnboardingGoals(onboarding);
   return goals.find((goal) => goal.isPrimary) ?? goals[0] ?? null;
-}
-
-export function getLegacyFieldsFromGoal(goal: FinancialGoal | null) {
-  return {
-    financialGoal: goal?.title ?? null,
-    goalPriority: goal?.priority ?? null,
-    goalAmountRange: goal?.amountRange ?? null
-  };
 }
 
 export function hasCompletedOnboarding(onboarding: OnboardingData) {

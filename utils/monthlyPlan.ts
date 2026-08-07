@@ -21,9 +21,6 @@ import { isDebtPaid } from "./debtPayments";
 import { isEmergencyGoal } from "./goalPlanning";
 
 export type MonthlyPlanData = {
-  ageRange: string | null;
-  country: string | null;
-  city: string | null;
   incomeRange: string | null;
   expensesRange: string | null;
   expenseCategoryAmounts: ExpenseCategoryAmounts;
@@ -74,6 +71,7 @@ export type MonthlyGoalContext = {
   title: string | null;
   monthlyContribution: number | null;
   estimatedMonthsToGoal: number | null;
+  hasRegisteredContribution?: boolean;
 };
 
 const monthlyPlanProgressVersion = "monthly-plan-v0.2";
@@ -130,10 +128,10 @@ function getGoalContributionImpact(goalContext?: MonthlyGoalContext) {
   const contribution = goalContext?.monthlyContribution ?? null;
 
   if (contribution !== null && contribution > 0) {
-    return `Aporte asignado a esta meta: ${formatCOP(contribution)} aprox.`;
+    return `Referencia mensual de tu estrategia: ${formatCOP(contribution)} aprox.`;
   }
 
-  return "Esta meta aún no tiene un aporte mensual asignado.";
+  return "La estrategia actual no reparte un monto mensual a esta meta.";
 }
 
 function getGoalAwareFocus(
@@ -153,8 +151,8 @@ function getGoalAwareFocus(
     title: `Meta del mes: ${goalTitle}`,
     text:
       contribution !== null && contribution > 0
-        ? `Tu plan puede enfocarse en separar ${formatCOP(contribution)} aprox. para esta meta.`
-        : `Tu plan puede enfocarse en definir un aporte mensual sostenible para ${goalTitle}.`
+        ? `Tu estrategia reparte ${formatCOP(contribution)} aprox. al mes a esta meta. Registra en Metas los aportes que realmente hagas.`
+        : `Tu plan puede enfocarse en registrar un aporte real para ${goalTitle} desde Metas.`
   };
 }
 
@@ -173,8 +171,12 @@ function getGoalAwareActions(
     if (action.id === "set-goal-contribution") {
       return {
         ...action,
-        title: `Separar aporte para ${goalTitle}`,
-        description: "Usa el aporte asignado como referencia. Puedes ajustarlo.",
+        title: goalContext?.hasRegisteredContribution
+          ? `Registrar otro aporte para ${goalTitle}`
+          : `Registrar el primer aporte para ${goalTitle}`,
+        description:
+          "Hazlo desde Metas para actualizar el avance real y la fecha proyectada.",
+        why: "Registrar solo lo que realmente aportas mantiene el plan alineado con tu avance.",
         estimatedImpact: getGoalContributionImpact(goalContext)
       };
     }
@@ -183,7 +185,7 @@ function getGoalAwareActions(
       return {
         ...action,
         title: `Revisar el objetivo de ${goalTitle}`,
-        description: "Compara el monto objetivo con el aporte mensual asignado.",
+        description: "Compara el monto objetivo con la distribución mensual actual.",
         why: "Ajustar monto, plazo o aporte puede hacer la meta más sostenible."
       };
     }
@@ -192,7 +194,8 @@ function getGoalAwareActions(
       return {
         ...action,
         title: "Comparar escenarios en Simulación",
-        description: "Revisa el aporte actual, equilibrado e intensivo antes de elegir uno.",
+        description:
+          "Compara cómo cambia la fecha al repartir el dinero entre deudas y metas.",
         estimatedImpact:
           goalContext?.estimatedMonthsToGoal !== null &&
           goalContext?.estimatedMonthsToGoal !== undefined
@@ -322,9 +325,6 @@ const noConcreteGoalAmountValues = [
 
 export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanData {
   const {
-    ageRange = null,
-    country = null,
-    city = null,
     incomeRange = null,
     expensesRange = null,
     expenseCategoryAmounts = {},
@@ -339,15 +339,13 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
     debtSituation = null,
     debtPaymentShare = null,
     debts = [],
-    financialGoal = null,
-    goalAmountRange = null,
     goals = []
   } = data;
+  const normalizedGoals = Array.isArray(goals) ? goals : [];
+  const primaryGoal =
+    normalizedGoals.find((goal) => goal.isPrimary) ?? normalizedGoals[0] ?? null;
 
   return {
-    ageRange,
-    country,
-    city,
     incomeRange,
     expensesRange,
     expenseCategoryAmounts:
@@ -365,9 +363,9 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
     debtSituation,
     debtPaymentShare,
     debts: Array.isArray(debts) ? debts : [],
-    financialGoal,
-    goalAmountRange,
-    goals: Array.isArray(goals) ? goals : []
+    financialGoal: primaryGoal?.title ?? null,
+    goalAmountRange: primaryGoal?.amountRange ?? null,
+    goals: normalizedGoals
   };
 }
 
@@ -383,8 +381,7 @@ export function getMonthlyPlanMetrics(
 ): MonthlyPlanMetrics {
   const onboarding: OnboardingData = {
     ...initialOnboarding,
-    ...data,
-    city: data.city ?? ""
+    ...data
   };
   const snapshot = calculateFinancialSnapshot({ onboarding, exactValues });
   const expensePercentage =
@@ -444,9 +441,9 @@ export function getMonthlyActions(
     id: "create-emergency-goal",
     title: "Crear fondo de emergencia en Metas",
     description:
-      "Crea la meta para definir su monto, fecha y aporte sin mezclarla con tus otros objetivos.",
+      "Crea la meta para definir su monto, fecha y registrar su avance sin mezclarla con tus otros objetivos.",
     why:
-      "Tenerla como meta permite que la simulación y el plan mensual usen el mismo aporte.",
+      "Tenerla como meta permite que la simulación y el plan mensual usen el mismo objetivo.",
     estimatedImpact:
       "La app podrá seguir su avance y ajustar la proyección con tus datos actuales.",
     difficulty: "Baja",

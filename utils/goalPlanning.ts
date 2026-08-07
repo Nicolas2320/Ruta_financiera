@@ -8,7 +8,7 @@ import {
   type FinancialGoal,
   type OnboardingData
 } from "../types/financial";
-import { roundDownToNearest } from "./financialCalculations";
+import { allocateMonthlyGoalBudget } from "./goalAllocationPolicy";
 import { getMonthsUntilTargetMonth } from "./monthYear";
 
 export type GoalViability =
@@ -200,43 +200,33 @@ function getGoalScore({
 }
 
 function distributeRecommendedContributions(
-  goalsWithScores: Array<{ goalId: string; score: number }>,
-  monthlyGoalBudget: number
+  goals: Array<{
+    currentAmount: number;
+    goal: FinancialGoal;
+    remainingAmount: number | null;
+    targetAmount: number | null;
+  }>,
+  monthlyGoalBudget: number,
+  asOfDate: Date
 ) {
-  if (goalsWithScores.length === 0 || monthlyGoalBudget <= 0) {
-    return new Map<string, number>();
-  }
-
-  const totalScore = goalsWithScores.reduce((total, goal) => total + goal.score, 0);
-  const allocations = new Map<string, number>();
-  let assignedBudget = 0;
-
-  goalsWithScores.forEach((goalWithScore) => {
-    const rawAmount =
-      totalScore > 0 ? monthlyGoalBudget * (goalWithScore.score / totalScore) : 0;
-    const recommendedAmount = roundDownToNearest(rawAmount, 10000);
-    allocations.set(goalWithScore.goalId, recommendedAmount);
-    assignedBudget += recommendedAmount;
+  const result = allocateMonthlyGoalBudget({
+    goals: goals.map((goalMetric) => ({
+      currentAmount: goalMetric.currentAmount,
+      goalId: goalMetric.goal.id,
+      isPrimary: goalMetric.goal.isPrimary,
+      remainingAmount: goalMetric.remainingAmount,
+      status: goalMetric.goal.status,
+      targetAmount: goalMetric.targetAmount,
+      targetMonth: goalMetric.goal.targetMonth,
+      title: goalMetric.goal.title
+    })),
+    monthlyBudget: monthlyGoalBudget,
+    referenceDate: asOfDate
   });
 
-  let remainingBudget = monthlyGoalBudget - assignedBudget;
-  const sortedGoals = [...goalsWithScores].sort((a, b) => b.score - a.score);
-
-  for (const goalWithScore of sortedGoals) {
-    if (remainingBudget < 10000) {
-      break;
-    }
-
-    allocations.set(goalWithScore.goalId, (allocations.get(goalWithScore.goalId) ?? 0) + 10000);
-    remainingBudget -= 10000;
-  }
-
-  if (assignedBudget === 0 && monthlyGoalBudget > 0) {
-    const primaryGoal = sortedGoals[0];
-    allocations.set(primaryGoal.goalId, monthlyGoalBudget);
-  }
-
-  return allocations;
+  return new Map(
+    result.allocations.map((allocation) => [allocation.goalId, allocation.amount])
+  );
 }
 
 function getViability({
@@ -394,30 +384,24 @@ export function getGoalAllocationPlan({
       ? new Map([[preferredGoal.goal.id, safeBudget]])
       : distributeRecommendedContributions(
           goalMetrics
-            .filter((goalMetric) => goalMetric.score > 0)
-            .map((goalMetric) => ({
-              goalId: goalMetric.goal.id,
-              score: goalMetric.score
-            })),
-          safeBudget
+            .filter((goalMetric) => goalMetric.score > 0),
+          safeBudget,
+          asOfDate
         );
   const allocations = goalMetrics.map((goalMetric) => {
     const goalIsInactive =
       goalMetric.goal.status === "completed" || goalMetric.goal.status === "paused";
     const recommendedMonthlyContribution =
       recommendedContributions.get(goalMetric.goal.id) ?? 0;
-    const manualContribution = safeNonNegative(goalMetric.goal.manualMonthlyContribution);
     const monthlyContribution = goalIsInactive
       ? 0
-      : monthlyContributions
-        ? recommendedMonthlyContribution
-        : manualContribution ?? recommendedMonthlyContribution;
+      : recommendedMonthlyContribution;
     const estimatedMonthsToGoal =
       goalMetric.remainingAmount !== null && monthlyContribution > 0
         ? Math.ceil(goalMetric.remainingAmount / monthlyContribution)
         : null;
     const contributionMode: GoalAllocation["contributionMode"] =
-      !goalIsInactive && manualContribution !== null ? "manual" : "recommended";
+      monthlyGoalBudgetMode === "manual" ? "manual" : "recommended";
     const viability = getViability({
       estimatedMonthsToGoal,
       horizonMonths: goalMetric.horizonMonths,
@@ -473,20 +457,14 @@ export function getGoalPlanFromOnboarding(
   options: {
     monthlyContributions?: Record<string, number> | null;
     preferredGoalId?: string | null;
-    useStoredManualBudget?: boolean;
   } = {}
 ) {
-  const manualGoalBudget =
-    options.useStoredManualBudget === false
-      ? null
-      : safeNonNegative(onboarding.goalMonthlyBudget);
-
   return getGoalAllocationPlan({
     exactValues,
     goals: getOnboardingGoals(onboarding),
     monthlyContributions: options.monthlyContributions,
-    monthlyGoalBudget: manualGoalBudget ?? monthlyGoalBudget,
-    monthlyGoalBudgetMode: manualGoalBudget !== null ? "manual" : "recommended",
+    monthlyGoalBudget,
+    monthlyGoalBudgetMode: "recommended",
     preferredGoalId: options.preferredGoalId
   });
 }

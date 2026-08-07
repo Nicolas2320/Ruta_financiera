@@ -9,6 +9,7 @@ import type {
   ProjectionDebtInput,
   ProjectionGoalInput
 } from "./financialProjectionInput";
+import { allocateMonthlyGoalBudget } from "./goalAllocationPolicy";
 
 export type TimelineDebtPayment = {
   annualInterestRate: number | null;
@@ -39,6 +40,7 @@ export type FinancialTimelineMonth = {
   extraDebtPayments: number;
   goalContributions: TimelineGoalContribution[];
   goalContributionTotal: number;
+  goalAmounts: Record<string, number>;
   index: number;
   interestCharged: number;
   month: string;
@@ -63,11 +65,13 @@ export type FinancialScenarioTimeline = {
   allKnownDebtsPaidMonth: string | null;
   asOfMonth: string;
   goalCompletionMonth: string | null;
+  goalCompletionMonths: Record<string, string>;
   hasUnknownInterestRates: boolean;
   months: FinancialTimelineMonth[];
   status: DistributionScenarioStatus;
   totalInterestCharged: number;
   trackedGoal: TimelineTrackedGoal | null;
+  trackedGoals: TimelineTrackedGoal[];
 };
 
 export function getFinancialTimelineDisplayMonths(
@@ -99,6 +103,9 @@ export function getFinancialTimelineDisplayMonths(
     extraDebtPayments: 0,
     goalContributions: [],
     goalContributionTotal: 0,
+    goalAmounts: Object.fromEntries(
+      timeline.trackedGoals.map((goal) => [goal.goalId, goal.currentAmount])
+    ),
     index: 0,
     interestCharged: 0,
     month: timeline.asOfMonth,
@@ -222,6 +229,7 @@ export function buildGoalOnlyTimeline({
         }
       ],
       goalContributionTotal: amount,
+      goalAmounts: { [goal.id]: currentAmount },
       index,
       interestCharged: 0,
       month,
@@ -243,11 +251,117 @@ export function buildGoalOnlyTimeline({
     allKnownDebtsPaidMonth: null,
     asOfMonth,
     goalCompletionMonth,
+    goalCompletionMonths: goalCompletionMonth ? { [goal.id]: goalCompletionMonth } : {},
     hasUnknownInterestRates: false,
     months,
     status: "ready",
     totalInterestCharged: 0,
-    trackedGoal
+    trackedGoal,
+    trackedGoals: [trackedGoal]
+  };
+}
+
+export function buildGoalsOnlyTimeline({
+  asOfDate,
+  goals,
+  maxMonths = 120,
+  monthlyBudget
+}: {
+  asOfDate: string;
+  goals: ProjectionGoalInput[];
+  maxMonths?: number;
+  monthlyBudget: number;
+}): FinancialScenarioTimeline | null {
+  const activeGoals = getActiveGoals(goals).filter(
+    (goal) => goal.targetAmount !== null && goal.targetAmount > goal.currentAmount
+  );
+  const safeMonthlyBudget = safeNonNegative(monthlyBudget);
+
+  if (activeGoals.length === 0 || safeMonthlyBudget === null || safeMonthlyBudget <= 0) {
+    return null;
+  }
+
+  const asOfMonth = getProjectionMonth(asOfDate, 0);
+  const trackedGoals = activeGoals.map<TimelineTrackedGoal>((goal) => ({
+    currentAmount: goal.currentAmount,
+    goalId: goal.id,
+    targetAmount: goal.targetAmount,
+    targetMonth: goal.targetMonth,
+    title: goal.title
+  }));
+  const trackedGoal = trackedGoals[0] ?? null;
+  const goalStates = new Map(
+    activeGoals.map((goal) => [
+      goal.id,
+      { amount: Math.max(0, goal.currentAmount), goal } satisfies TimelineGoalState
+    ])
+  );
+  const goalCompletionMonths: Record<string, string> = {};
+  const months: FinancialTimelineMonth[] = [];
+
+  for (let index = 1; index <= Math.max(1, Math.floor(maxMonths)); index += 1) {
+    const month = getProjectionMonth(asOfDate, index);
+    const result = allocateToGoalStates({
+      amount: safeMonthlyBudget,
+      goalStates,
+      referenceDate: `${getProjectionMonth(asOfDate, index - 1)}-01`
+    });
+    const goalContributionTotal = result.contributions.reduce(
+      (total, contribution) => total + contribution.amount,
+      0
+    );
+
+    result.contributions.forEach((contribution) => {
+      if (contribution.reached && !goalCompletionMonths[contribution.goalId]) {
+        goalCompletionMonths[contribution.goalId] = month;
+      }
+    });
+
+    const goalAmounts = Object.fromEntries(
+      trackedGoals.map((goal) => [
+        goal.goalId,
+        goalStates.get(goal.goalId)?.amount ?? goal.currentAmount
+      ])
+    );
+
+    months.push({
+      baseDebtPayments: 0,
+      debtPayments: [],
+      endingKnownDebtBalance: 0,
+      extraDebtPayments: 0,
+      goalAmounts,
+      goalContributions: result.contributions,
+      goalContributionTotal,
+      index,
+      interestCharged: 0,
+      month,
+      monthlyBalance: result.unallocatedAmount,
+      newlyPaidDebtIds: [],
+      protectedMargin: 0,
+      releasedPaymentNextMonth: 0,
+      trackedGoalAmount: trackedGoal ? goalAmounts[trackedGoal.goalId] ?? null : null,
+      unassignedAmount: result.unallocatedAmount
+    });
+
+    if (Object.keys(goalCompletionMonths).length === trackedGoals.length) {
+      break;
+    }
+  }
+
+  return {
+    allDebtBalancesKnown: false,
+    allKnownDebtsPaidMonth: null,
+    asOfMonth,
+    goalCompletionMonth: trackedGoal
+      ? goalCompletionMonths[trackedGoal.goalId] ?? null
+      : null,
+    goalCompletionMonths,
+    hasUnknownInterestRates: false,
+    months,
+    status: "ready",
+    totalInterestCharged: 0,
+    trackedGoal,
+    trackedGoals
   };
 }
 
@@ -287,6 +401,17 @@ function getActiveGoal(
   );
 }
 
+function getActiveGoals(goals: ProjectionGoalInput[]) {
+  const activeGoals = goals.filter(
+    (goal) => goal.status !== "completed" && goal.status !== "paused"
+  );
+  const primaryGoal = activeGoals.find((goal) => goal.isPrimary) ?? activeGoals[0] ?? null;
+
+  return primaryGoal
+    ? [primaryGoal, ...activeGoals.filter((goal) => goal.id !== primaryGoal.id)]
+    : [];
+}
+
 function allocateToGoal({
   amount,
   goalState
@@ -305,6 +430,65 @@ function allocateToGoal({
   return {
     allocatedAmount,
     unallocatedAmount: Math.max(0, amount - allocatedAmount)
+  };
+}
+
+function allocateToGoalStates({
+  amount,
+  goalStates,
+  referenceDate
+}: {
+  amount: number;
+  goalStates: Map<string, TimelineGoalState>;
+  referenceDate: string;
+}) {
+  const result = allocateMonthlyGoalBudget({
+    goals: [...goalStates.values()].map((state) => ({
+      currentAmount: state.amount,
+      goalId: state.goal.id,
+      isPrimary: state.goal.isPrimary,
+      status: state.goal.status,
+      targetAmount: state.goal.targetAmount,
+      targetMonth: state.goal.targetMonth,
+      title: state.goal.title
+    })),
+    monthlyBudget: amount,
+    referenceDate
+  });
+  const contributions: TimelineGoalContribution[] = [];
+
+  result.allocations.forEach((allocation) => {
+    const goalState = goalStates.get(allocation.goalId);
+
+    if (!goalState) {
+      return;
+    }
+
+    const startingAmount = goalState.amount;
+    const allocationResult = allocateToGoal({
+      amount: allocation.amount,
+      goalState
+    });
+
+    if (allocationResult.allocatedAmount <= 0) {
+      return;
+    }
+
+    contributions.push({
+      amount: allocationResult.allocatedAmount,
+      endingAmount: goalState.amount,
+      goalId: goalState.goal.id,
+      reached:
+        goalState.goal.targetAmount !== null &&
+        goalState.amount >= goalState.goal.targetAmount,
+      startingAmount,
+      title: goalState.goal.title
+    });
+  });
+
+  return {
+    contributions,
+    unallocatedAmount: result.unassignedAmount
   };
 }
 
@@ -388,7 +572,8 @@ export function buildFinancialScenarioTimeline({
   const hasUnknownInterestRates = input.debts.some(
     (debt) => debt.annualInterestRate === null
   );
-  const trackedGoal = getActiveGoal(input.goals, scenario);
+  const activeGoals = getActiveGoals(input.goals);
+  const trackedGoal = activeGoals[0] ?? getActiveGoal(input.goals, scenario);
   const trackedGoalSummary = trackedGoal
     ? {
         currentAmount: trackedGoal.currentAmount,
@@ -398,6 +583,13 @@ export function buildFinancialScenarioTimeline({
         title: trackedGoal.title
       }
     : null;
+  const trackedGoalSummaries = activeGoals.map((goal) => ({
+    currentAmount: goal.currentAmount,
+    goalId: goal.id,
+    targetAmount: goal.targetAmount,
+    targetMonth: goal.targetMonth,
+    title: goal.title
+  }));
 
   if (scenario.status !== "ready" || monthlyIncome === null || operatingCosts === null) {
     return {
@@ -405,11 +597,13 @@ export function buildFinancialScenarioTimeline({
       allKnownDebtsPaidMonth: null,
       asOfMonth,
       goalCompletionMonth: null,
+      goalCompletionMonths: {},
       hasUnknownInterestRates,
       months: [],
       status: scenario.status,
       totalInterestCharged: 0,
-      trackedGoal: trackedGoalSummary
+      trackedGoal: trackedGoalSummary,
+      trackedGoals: trackedGoalSummaries
     };
   }
 
@@ -423,22 +617,20 @@ export function buildFinancialScenarioTimeline({
       { amount: Math.max(0, goal.currentAmount), goal } satisfies TimelineGoalState
     ])
   );
-  const activeGoal =
-    scenario.id === "accelerate_goal" || scenario.id === "split_debt_goal"
-      ? trackedGoal
-      : scenario.id === "current_reference" && scenario.goalAllocations[0]
-        ? input.goals.find((goal) => goal.id === scenario.goalAllocations[0].goalId) ?? null
-        : null;
   const selectedGoalState = trackedGoal ? goalStates.get(trackedGoal.id) ?? null : null;
-  const scenarioWaitsForGoal =
-    scenario.id === "accelerate_goal" ||
-    scenario.id === "split_debt_goal" ||
-    (scenario.id === "current_reference" && activeGoal !== null);
+  const scenarioGoalIds = new Set(
+    scenario.id === "accelerate_goal" || scenario.id === "split_debt_goal"
+      ? activeGoals.map((goal) => goal.id)
+      : scenario.id === "current_reference"
+        ? scenario.goalAllocations.map((allocation) => allocation.goalId)
+        : []
+  );
   const preference = getProtectedMarginPreference(scenario);
   const paidDebtIds = new Set<string>();
   const months: FinancialTimelineMonth[] = [];
   let allKnownDebtsPaidMonth: string | null = null;
   let goalCompletionMonth: string | null = null;
+  const goalCompletionMonths: Record<string, string> = {};
   let totalInterestCharged = 0;
 
   for (let index = 1; index <= Math.max(1, maxMonths); index += 1) {
@@ -485,25 +677,24 @@ export function buildFinancialScenarioTimeline({
     const goalContributions: TimelineGoalContribution[] = [];
 
     if (scenario.id === "current_reference") {
-      input.goals.forEach((goal) => {
-        if (goal.status === "completed" || goal.status === "paused") {
-          return;
-        }
-
-        const goalState = goalStates.get(goal.id);
-        const requestedAmount = Math.max(0, goal.manualMonthlyContribution ?? 0);
-        const startingAmount = goalState?.amount ?? goal.currentAmount;
-        const result = allocateToGoal({ amount: requestedAmount, goalState: goalState ?? null });
+      scenario.goalAllocations.forEach((allocation) => {
+        const goalState = goalStates.get(allocation.goalId);
+        const startingAmount = goalState?.amount ?? 0;
+        const result = allocateToGoal({
+          amount: Math.max(0, allocation.amount),
+          goalState: goalState ?? null
+        });
 
         if (result.allocatedAmount > 0 && goalState) {
           goalContributions.push({
             amount: result.allocatedAmount,
             endingAmount: goalState.amount,
-            goalId: goal.id,
+            goalId: goalState.goal.id,
             reached:
-              goal.targetAmount !== null && goalState.amount >= goal.targetAmount,
+              goalState.goal.targetAmount !== null &&
+              goalState.amount >= goalState.goal.targetAmount,
             startingAmount,
-            title: goal.title
+            title: goalState.goal.title
           });
         }
       });
@@ -534,8 +725,6 @@ export function buildFinancialScenarioTimeline({
         0,
         surplusBeforeProtection - protectedMargin
       );
-      const startingGoalAmount = selectedGoalState?.amount ?? activeGoal?.currentAmount ?? 0;
-      let goalAmount = 0;
 
       if (scenario.id === "reduce_interest") {
         distributableAmount = allocateExtraToDebts({
@@ -544,11 +733,12 @@ export function buildFinancialScenarioTimeline({
           debtStates
         });
       } else if (scenario.id === "accelerate_goal") {
-        const goalResult = allocateToGoal({
+        const goalResult = allocateToGoalStates({
           amount: distributableAmount,
-          goalState: selectedGoalState
+          goalStates,
+          referenceDate: `${getProjectionMonth(input.asOfDate, index - 1)}-01`
         });
-        goalAmount = goalResult.allocatedAmount;
+        goalContributions.push(...goalResult.contributions);
         distributableAmount = goalResult.unallocatedAmount;
       } else {
         const debtShare = scenario.debtShare ?? 0.5;
@@ -559,28 +749,16 @@ export function buildFinancialScenarioTimeline({
           debtPayments,
           debtStates
         });
-        const goalResult = allocateToGoal({
+        const goalResult = allocateToGoalStates({
           amount: goalBudget + debtRemainder,
-          goalState: selectedGoalState
+          goalStates,
+          referenceDate: `${getProjectionMonth(input.asOfDate, index - 1)}-01`
         });
-        goalAmount = goalResult.allocatedAmount;
+        goalContributions.push(...goalResult.contributions);
         distributableAmount = allocateExtraToDebts({
           amount: goalResult.unallocatedAmount,
           debtPayments,
           debtStates
-        });
-      }
-
-      if (goalAmount > 0 && selectedGoalState && activeGoal) {
-        goalContributions.push({
-          amount: goalAmount,
-          endingAmount: selectedGoalState.amount,
-          goalId: activeGoal.id,
-          reached:
-            activeGoal.targetAmount !== null &&
-            selectedGoalState.amount >= activeGoal.targetAmount,
-          startingAmount: startingGoalAmount,
-          title: activeGoal.title
         });
       }
 
@@ -631,6 +809,12 @@ export function buildFinancialScenarioTimeline({
       extraDebtPayments,
       goalContributions,
       goalContributionTotal,
+      goalAmounts: Object.fromEntries(
+        trackedGoalSummaries.map((goal) => [
+          goal.goalId,
+          goalStates.get(goal.goalId)?.amount ?? goal.currentAmount
+        ])
+      ),
       index,
       interestCharged,
       month,
@@ -642,14 +826,21 @@ export function buildFinancialScenarioTimeline({
       unassignedAmount
     });
 
-    if (
-      !goalCompletionMonth &&
-      selectedGoalState?.goal.targetAmount !== null &&
-      selectedGoalState?.goal.targetAmount !== undefined &&
-      selectedGoalState.amount >= selectedGoalState.goal.targetAmount
-    ) {
-      goalCompletionMonth = month;
-    }
+    trackedGoalSummaries.forEach((goal) => {
+      const goalState = goalStates.get(goal.goalId);
+
+      if (
+        !goalCompletionMonths[goal.goalId] &&
+        goal.targetAmount !== null &&
+        goalState &&
+        goalState.amount >= goal.targetAmount
+      ) {
+        goalCompletionMonths[goal.goalId] = month;
+      }
+    });
+    goalCompletionMonth = trackedGoalSummary
+      ? goalCompletionMonths[trackedGoalSummary.goalId] ?? null
+      : null;
 
     if (
       !allKnownDebtsPaidMonth &&
@@ -660,15 +851,18 @@ export function buildFinancialScenarioTimeline({
       allKnownDebtsPaidMonth = month;
     }
 
-    const selectedGoalFinished =
-      !scenarioWaitsForGoal ||
-      !selectedGoalState ||
-      selectedGoalState.goal.targetAmount === null ||
-      selectedGoalState.amount >= selectedGoalState.goal.targetAmount;
+    const selectedGoalsFinished = [...scenarioGoalIds].every((goalId) => {
+      const goalState = goalStates.get(goalId);
+      return (
+        !goalState ||
+        goalState.goal.targetAmount === null ||
+        goalState.amount >= goalState.goal.targetAmount
+      );
+    });
     const allDebtsFinished =
       allDebtBalancesKnown && debtStates.every((state) => state.balance === 0);
 
-    if (selectedGoalFinished && allDebtsFinished) {
+    if (selectedGoalsFinished && allDebtsFinished) {
       break;
     }
   }
@@ -678,10 +872,12 @@ export function buildFinancialScenarioTimeline({
     allKnownDebtsPaidMonth,
     asOfMonth,
     goalCompletionMonth,
+    goalCompletionMonths,
     hasUnknownInterestRates,
     months,
     status: scenario.status,
     totalInterestCharged,
-    trackedGoal: trackedGoalSummary
+    trackedGoal: trackedGoalSummary,
+    trackedGoals: trackedGoalSummaries
   };
 }

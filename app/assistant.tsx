@@ -560,7 +560,8 @@ export default function AssistantScreen() {
     const monthlyGoalContext: MonthlyGoalContext = {
       title: primaryGoalAllocation?.goal.title ?? data.financialGoal,
       monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
-      estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null
+      estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null,
+      hasRegisteredContribution: (primaryGoalAllocation?.currentAmount ?? 0) > 0
     };
     const periodKey = getMonthlyPlanPeriodKey();
     const suggestedActions = getMonthlyActions(
