@@ -3,100 +3,102 @@ import { describe, expect, it } from "vitest";
 import {
   getMonthlyActions,
   getMonthlyPlanData,
-  getMonthlyPlanMetrics,
-  getPriorityDebt
+  getMonthlyPlanMetrics
 } from "../utils/monthlyPlan";
 import { makeDebt, makeGoal, makeOnboarding } from "./fixtures/financial";
 
 describe("monthly debt plan", () => {
-  it("prioritizes an overdue debt before rate and payment size", () => {
-    const overdueDebt = makeDebt({
-      id: "overdue",
-      name: "Tarjeta atrasada",
-      annualInterestRate: 18,
-      monthlyPayment: 120_000,
-      status: "overdue"
-    });
-    const expensiveDebt = makeDebt({
-      id: "expensive",
-      name: "Crédito costoso",
-      annualInterestRate: 42,
-      monthlyPayment: 500_000
-    });
-
-    expect(getPriorityDebt([expensiveDebt, overdueDebt])?.id).toBe("overdue");
-  });
-
-  it("uses the highest registered annual rate when no debt is overdue", () => {
-    const lowerRateDebt = makeDebt({
-      id: "lower",
-      annualInterestRate: 18,
-      monthlyPayment: 500_000
-    });
-    const higherRateDebt = makeDebt({
-      id: "higher",
-      annualInterestRate: 36,
-      monthlyPayment: 150_000
-    });
-
-    expect(getPriorityDebt([lowerRateDebt, higherRateDebt])?.id).toBe("higher");
-  });
-
-  it("prioritizes a payment marked as heavy before an on-track debt", () => {
-    const heavyDebt = makeDebt({
-      id: "heavy",
-      annualInterestRate: null,
-      monthlyPayment: 200_000,
-      status: "sometimes_heavy"
-    });
-    const onTrackDebt = makeDebt({
-      id: "on-track",
-      annualInterestRate: 40,
-      monthlyPayment: 350_000,
-      status: "on_track"
-    });
-
-    expect(getPriorityDebt([onTrackDebt, heavyDebt])?.id).toBe("heavy");
-  });
-
-  it("personalizes the debt action with the registered priority", () => {
+  it("asks for detailed debts when the diagnosis only has a debt reference", () => {
     const data = getMonthlyPlanData(
       makeOnboarding({
-        debts: [
-          makeDebt({
-            name: "Tarjeta principal",
-            annualInterestRate: 32,
-            status: "overdue"
-          })
-        ],
-        debtPaymentShare: "Más del 40%",
-        debtSituation: "Son una preocupación importante",
-        expensesRange: "$2.000.000 – $4.000.000",
-        incomeRange: "$3.000.000 – $5.000.000"
+        debts: [],
+        hasDebts: true,
+        debtMonthlyPaymentRange: "$250.000 – $500.000"
       })
     );
     const metrics = getMonthlyPlanMetrics(data);
     const actions = getMonthlyActions(data, metrics, "debt_pressure");
 
-    expect(actions[1]).toMatchObject({
-      id: "debt-pressure-source",
-      title: "Revisar primero: Tarjeta principal"
-    });
-    expect(actions[1].description).toContain("pagos atrasados");
-    expect(actions[1].estimatedImpact).toContain("32% E.A.");
+    expect(actions.map((action) => action.id)).toEqual(["register-debts"]);
   });
 
-  it("does not prioritize a debt whose confirmed balance is zero", () => {
-    const paidDebt = makeDebt({
-      id: "paid",
-      remainingAmount: 0,
-      status: "overdue",
-      annualInterestRate: 50
-    });
-    const activeDebt = makeDebt({ id: "active", remainingAmount: 500_000 });
+  it("does not show debt actions after an explicit no-debt answer", () => {
+    const data = getMonthlyPlanData(
+      makeOnboarding({
+        debtPaymentShare: "No pago deudas",
+        debtSituation: "No tengo deudas",
+        hasDebts: false
+      })
+    );
+    const metrics = getMonthlyPlanMetrics(data);
 
-    expect(getPriorityDebt([paidDebt, activeDebt])?.id).toBe("active");
-    expect(getPriorityDebt([paidDebt])).toBeNull();
+    expect(getMonthlyActions(data, metrics, "debt_pressure")).toEqual([]);
+  });
+
+  it("offers simulation when active debts and positive monthly margin are available", () => {
+    const data = getMonthlyPlanData(
+      makeOnboarding({
+        debts: [
+          makeDebt({
+            monthlyPayment: 900_000,
+            monthlyPaymentType: "minimum_required",
+            remainingAmount: 5_000_000
+          })
+        ],
+        hasDebts: true,
+        monthlyExpensesIncludesSmallExpenses: true
+      })
+    );
+    const metrics = getMonthlyPlanMetrics(data, {
+      monthlyExpenses: 1_500_000,
+      monthlyIncome: 4_000_000,
+      smallExpenses: 0
+    });
+
+    expect(getMonthlyActions(data, metrics, "debt_pressure").map((action) => action.id)).toEqual([
+      "compare-debt-strategies"
+    ]);
+  });
+
+  it("does not offer simulation without money available to distribute", () => {
+    const data = getMonthlyPlanData(
+      makeOnboarding({
+        debts: [
+          makeDebt({
+            monthlyPayment: 500_000,
+            monthlyPaymentType: "minimum_required"
+          })
+        ],
+        hasDebts: true,
+        monthlyExpensesIncludesSmallExpenses: true
+      })
+    );
+    const metrics = getMonthlyPlanMetrics(data, {
+      monthlyExpenses: 1_500_000,
+      monthlyIncome: 2_000_000,
+      smallExpenses: 0
+    });
+
+    expect(getMonthlyActions(data, metrics, "debt_pressure")).toEqual([]);
+  });
+
+  it("does not keep debt pressure after every detailed debt is paid", () => {
+    const data = getMonthlyPlanData(
+      makeOnboarding({
+        debts: [makeDebt({ remainingAmount: 0, status: "overdue" })],
+        debtPaymentShare: "Más del 40%",
+        debtSituation: "Son una preocupación importante",
+        hasDebts: true,
+        monthlyExpensesIncludesSmallExpenses: true
+      })
+    );
+    const metrics = getMonthlyPlanMetrics(data, {
+      monthlyExpenses: 1_500_000,
+      monthlyIncome: 4_000_000,
+      smallExpenses: 0
+    });
+
+    expect(metrics.snapshot.priority.key).not.toBe("debt_pressure");
   });
 
   it("carries the new onboarding debt payment into monthly plan metrics", () => {

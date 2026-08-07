@@ -9,6 +9,7 @@ import { getOnboardingGoals } from "../types/financial";
 import { isDebtPaid } from "./debtPayments";
 import { calculateFinancialSnapshot, type SnapshotSource } from "./financialCalculations";
 import { getGoalAmountRangeEstimate } from "./financialRanges";
+import { isDebtGoal } from "./goalPlanning";
 import { getMonthsUntilTargetMonth } from "./monthYear";
 
 export type ProjectionDataOwner = "income" | "expenses" | "debts" | "goals" | "planning";
@@ -58,6 +59,7 @@ export type ProjectionDebtInput = {
 export type ProjectionGoalInput = {
   id: string;
   title: string;
+  type: string;
   amountRange: string | null;
   targetAmount: number | null;
   targetAmountSource: "exact" | "range" | "missing";
@@ -121,6 +123,7 @@ function toProjectionGoal(goal: FinancialGoal): ProjectionGoalInput {
   return {
     id: goal.id,
     title: goal.title,
+    type: goal.type,
     amountRange: goal.amountRange ?? null,
     targetAmount: exactTargetAmount ?? rangeTargetAmount,
     targetAmountSource:
@@ -200,7 +203,9 @@ export function buildFinancialProjectionInput({
       status: debt.status
     };
   });
-  const goals = getOnboardingGoals(onboarding).map(toProjectionGoal);
+  const goals = getOnboardingGoals(onboarding)
+    .filter((goal) => !isDebtGoal(goal))
+    .map(toProjectionGoal);
   const projectionDate = new Date(`${asOfDate}T12:00:00`);
 
   if (snapshot.cashflow.monthlyIncome === null) {

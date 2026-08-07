@@ -19,7 +19,7 @@ import { calculateFinancialSnapshot } from "./financialCalculations";
 import { buildFinancialProjectionInput } from "./financialProjectionInput";
 import type { FinancialProjectionInput } from "./financialProjectionInput";
 import { allocateMonthlyGoalBudget } from "./goalAllocationPolicy";
-import { isEmergencyGoal } from "./goalPlanning";
+import { isDebtGoal, isEmergencyGoal } from "./goalPlanning";
 import { buildSimulationExperience } from "./simulationExperience";
 
 export type ResolvedMonthlyDistribution = {
@@ -101,7 +101,10 @@ function fromDetailedScenario({
 
 function getPrimaryActiveGoalId(onboarding: OnboardingData) {
   const activeGoals = getOnboardingGoals(onboarding).filter(
-    (goal) => goal.status !== "completed" && goal.status !== "paused"
+    (goal) =>
+      goal.status !== "completed" &&
+      goal.status !== "paused" &&
+      !isDebtGoal(goal)
   );
 
   return (

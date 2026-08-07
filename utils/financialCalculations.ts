@@ -1,6 +1,6 @@
 import {
   exactFinancialValueKeys,
-  getPrimaryFinancialGoal,
+  getOnboardingGoals,
   type CompletedActionsState,
   type ExactFinancialValues,
   type OnboardingData
@@ -9,7 +9,9 @@ import {
   getRegisteredDebtSummary,
   type DebtDataSource
 } from "./debtCalculations";
+import { isDebtPaid } from "./debtPayments";
 import { formatCOP } from "./financialRanges";
+import { isDebtGoal } from "./goalPlanning";
 
 export type SnapshotSource = "exact" | "estimated" | "withheld" | "missing";
 export type SmallExpensesSource =
@@ -626,7 +628,9 @@ function getPriority(
 
 export function calculateFinancialSnapshot(profile: FinancialProfileInput): FinancialSnapshot {
   const { onboarding } = profile;
-  const primaryGoal = getPrimaryFinancialGoal(onboarding);
+  const planningGoals = getOnboardingGoals(onboarding).filter((goal) => !isDebtGoal(goal));
+  const primaryGoal =
+    planningGoals.find((goal) => goal.isPrimary) ?? planningGoals[0] ?? null;
   const exactValues = getExactValues(profile);
   const exactMonthlyIncome = exactValues.monthlyIncome;
   const exactMonthlyExpenses = exactValues.monthlyExpenses;
@@ -679,8 +683,13 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
     reportedMonthlyPaymentRange: onboarding.debtMonthlyPaymentRange,
     monthlyIncome
   });
-  const debtLevel =
-    registeredDebtSummary.source !== "none" ? registeredDebtSummary.level : selectedDebtLevel;
+  const hasOnlyPaidDetailedDebts =
+    onboarding.debts.length > 0 && onboarding.debts.every(isDebtPaid);
+  const debtLevel = hasOnlyPaidDetailedDebts
+    ? "none"
+    : registeredDebtSummary.source !== "none"
+      ? registeredDebtSummary.level
+      : selectedDebtLevel;
   const totalMonthlyOutflow =
     monthlyExpenses !== null &&
     (monthlyExpensesIncludesSmallExpenses || smallExpenses !== null)
@@ -863,35 +872,7 @@ export function generateMonthlyActions(
   const opportunity = snapshot.smallExpenses.opportunityAmount;
 
   const actionsByPriority: Record<PriorityKey, FinancialAction[]> = {
-    debt_pressure: [
-      {
-        id: "debt-monthly-payment",
-        title: "Revisar cuánto pagas al mes en deudas",
-        description: "Haz una lista simple de tus pagos mensuales de deuda.",
-        why: "Conocer ese valor ayuda a entender qué tanto presiona tu flujo mensual.",
-        estimatedImpact: "Te dará claridad para decidir qué revisar primero.",
-        difficulty: "Media",
-        category: "Deudas"
-      },
-      {
-        id: "debt-pressure-source",
-        title: "Identificar la deuda que más presión genera",
-        description: "Marca cuál deuda pesa más por pago mensual, interés o urgencia.",
-        why: "No todas las deudas afectan tu mes de la misma manera.",
-        estimatedImpact: "Puede ayudarte a priorizar sin tomar decisiones apresuradas.",
-        difficulty: "Media",
-        category: "Deudas"
-      },
-      {
-        id: "avoid-new-debt",
-        title: "Evitar nuevas deudas este mes si no es necesario",
-        description: "Antes de comprar a crédito, revisa si puede esperar.",
-        why: "Reducir presión nueva puede proteger tu margen mensual.",
-        estimatedImpact: "Ayuda a no aumentar la carga mientras ordenas el plan.",
-        difficulty: "Media",
-        category: "Deudas"
-      }
-    ],
+    debt_pressure: [],
     organize_cashflow: [
       {
         id: "review-main-expenses",

@@ -8,7 +8,7 @@ import {
   calculateFinancialSnapshot,
   type PriorityKey
 } from "./financialCalculations";
-import { isEmergencyGoal } from "./goalPlanning";
+import { isDebtGoal, isEmergencyGoal } from "./goalPlanning";
 import {
   resolveMonthlyDistribution,
   type ResolvedMonthlyDistribution
@@ -74,7 +74,10 @@ function resolveStoredDistributionPreference({
   const allocatedGoalIds = Object.keys(goalContributions);
   const selectedGoalId = allocatedGoalIds.length === 1 ? allocatedGoalIds[0] : null;
   const activeGoals = getOnboardingGoals(onboarding).filter(
-    (goal) => goal.status !== "completed" && goal.status !== "paused"
+    (goal) =>
+      goal.status !== "completed" &&
+      goal.status !== "paused" &&
+      !isDebtGoal(goal)
   );
   const storedGoal = storedPreference.goalId
     ? activeGoals.find((goal) => goal.id === storedPreference.goalId) ?? null

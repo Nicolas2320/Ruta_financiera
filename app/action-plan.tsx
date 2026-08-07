@@ -105,7 +105,7 @@ function getActionVisual(actionId: string): {
     return { icon: HandCoins, color: "#7C3AED", backgroundColor: "#F1E8FF" };
   }
 
-  if (actionId === "debt") {
+  if (actionId === "register-debts" || actionId === "compare-debt-strategies") {
     return { icon: Wallet, color: "#F97316", backgroundColor: "#FFF1E7" };
   }
 
@@ -146,12 +146,6 @@ type EvidenceConfig = {
 };
 
 const amountEvidenceByActionId: Record<string, Omit<EvidenceConfig, "type">> = {
-  "debt-monthly-payment": {
-    title: "Registra el pago mensual",
-    prompt: "Anota cuánto pagas aproximadamente al mes por tus deudas.",
-    placeholder: "",
-    resultLabel: "Pago mensual identificado"
-  },
   "weekly-limit": {
     title: "Define el límite",
     prompt: "Escribe el límite semanal que vas a probar.",
@@ -191,19 +185,6 @@ const amountEvidenceByActionId: Record<string, Omit<EvidenceConfig, "type">> = {
 };
 
 const detailEvidenceByActionId: Record<string, Omit<EvidenceConfig, "type"> & { type?: EvidenceConfig["type"] }> = {
-  "debt-pressure-source": {
-    title: "Identifica la deuda",
-    prompt: "Escribe cuál deuda pesa más por pago, interés o urgencia.",
-    placeholder: "Ej. Tarjeta de crédito",
-    resultLabel: "Deuda priorizada"
-  },
-  "avoid-new-debt": {
-    title: "Define una regla",
-    prompt: "Anota qué compra o deuda vas a evitar este mes.",
-    placeholder: "Ej. No financiar compras de ropa",
-    resultLabel: "Regla definida",
-    type: "decision"
-  },
   "review-main-expenses": {
     title: "Registra categorías",
     prompt: "Anota las categorías principales que revisaste.",
@@ -499,8 +480,9 @@ function ActionCard({
   const inputValue = evidenceConfig.type === "amount" ? formatCOPInputValue(amountText) : detailText;
   const impactMessage = getActionImpactMessage(impactItem);
   const hasOptions = Boolean(evidenceConfig.options && evidenceConfig.options.length > 0);
-  const isScenarioComparisonAction = action.id === "compare-goal-contribution";
-  const isDebtDetailsAction = action.id === "debt-monthly-payment";
+  const isScenarioComparisonAction =
+    action.id === "compare-goal-contribution" || action.id === "compare-debt-strategies";
+  const isDebtDetailsAction = action.id === "register-debts";
   const isCreateEmergencyGoalAction = action.id === "create-emergency-goal";
   const isGoalContributionAction = isGoalContributionActionId(action.id);
   const hasSavedProgress = Boolean(
@@ -1012,22 +994,35 @@ export default function ActionPlanScreen() {
               ) : null}
 
               <View style={styles.heroProgressBlock}>
-                <View style={styles.progressHeader}>
-                  <Text style={styles.progressText}>
-                    {completedCount} de {actionCount} acciones completadas
-                  </Text>
-                  <Text style={styles.progressPercent}>{progressPercentage}%</Text>
-                </View>
-                <View style={styles.progressTrack}>
-                  <View style={[styles.progressFill, { width: toPercentWidth(progressPercentage) }]} />
-                </View>
+                {actionCount > 0 ? (
+                  <>
+                    <View style={styles.progressHeader}>
+                      <Text style={styles.progressText}>
+                        {completedCount} de {actionCount} acciones completadas
+                      </Text>
+                      <Text style={styles.progressPercent}>{progressPercentage}%</Text>
+                    </View>
+                    <View style={styles.progressTrack}>
+                      <View
+                        style={[styles.progressFill, { width: toPercentWidth(progressPercentage) }]}
+                      />
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.progressText}>Sin acciones pendientes por ahora</Text>
+                    <Text style={styles.progressHelper}>
+                      El plan volverá a evaluarse cuando cambien tus datos financieros.
+                    </Text>
+                  </>
+                )}
                 {planSyncStatus === "saving" ? (
                   <Text style={styles.syncText}>Guardando avance...</Text>
                 ) : null}
                 {planSyncStatus === "error" && planSyncError ? (
                   <Text style={styles.syncErrorText}>{planSyncError}</Text>
                 ) : null}
-                {completedCount === actionCount ? (
+                {actionCount > 0 && completedCount === actionCount ? (
                   <Text style={styles.completedMessage}>
                     Buen trabajo. Completaste tu primer plan mensual.
                   </Text>
@@ -1048,7 +1043,7 @@ export default function ActionPlanScreen() {
             <SummaryMetric
               icon={<CalendarCheck color={colors.primary} size={20} strokeWidth={2.4} />}
               label="Acciones con avance"
-              value={`${engagedCount} de ${actionCount}`}
+              value={actionCount > 0 ? `${engagedCount} de ${actionCount}` : "Sin pendientes"}
             />
             <SummaryMetric
               icon={<HandCoins color={colors.support} size={20} strokeWidth={2.4} />}
@@ -1110,45 +1105,59 @@ export default function ActionPlanScreen() {
           </View>
 
           <View style={styles.actionsList}>
-            {actions.map((action, index) => {
-              const actionProgressId = getMonthlyActionProgressId(planProgressKey, action.id);
-              const actionProgress = effectiveCompletedActions[actionProgressId];
-              const impactItem = getActionProgressImpactItem(actionProgressId, actionProgress);
+            {actions.length > 0 ? (
+              actions.map((action, index) => {
+                const actionProgressId = getMonthlyActionProgressId(planProgressKey, action.id);
+                const actionProgress = effectiveCompletedActions[actionProgressId];
+                const impactItem = getActionProgressImpactItem(actionProgressId, actionProgress);
 
-              return (
-                <ActionCard
-                  compact={isPhone}
-                  key={actionProgressId}
-                  action={action}
-                  actionNumber={index + 1}
-                  expanded={expandedActionId === actionProgressId}
-                  impactItem={impactItem}
-                  onOpenDebts={() => router.push("/debts")}
-                  onOpenGoals={() =>
-                    router.push({
-                      pathname: "/goals",
-                      params: {
-                        mode: "add",
-                        suggestedTargetAmount:
-                          metrics.snapshot.emergencyFund.targetThreeMonths === null
-                            ? ""
-                            : `${metrics.snapshot.emergencyFund.targetThreeMonths}`,
-                        template: "emergency"
-                      }
-                    })
-                  }
-                  onOpenGoalsOverview={() => router.push("/goals-overview")}
-                  onOpenSimulation={() => router.push("/simulation")}
-                  onProgressChange={(patch) => updateActionProgress(actionProgressId, patch)}
-                  onToggleExpanded={() =>
-                    setExpandedActionId((currentActionId) =>
-                      currentActionId === actionProgressId ? null : actionProgressId
-                    )
-                  }
-                  progress={actionProgress}
-                />
-              );
-            })}
+                return (
+                  <ActionCard
+                    compact={isPhone}
+                    key={actionProgressId}
+                    action={action}
+                    actionNumber={index + 1}
+                    expanded={expandedActionId === actionProgressId}
+                    impactItem={impactItem}
+                    onOpenDebts={() => router.push("/debts")}
+                    onOpenGoals={() =>
+                      router.push({
+                        pathname: "/goals",
+                        params: {
+                          mode: "add",
+                          suggestedTargetAmount:
+                            metrics.snapshot.emergencyFund.targetThreeMonths === null
+                              ? ""
+                              : `${metrics.snapshot.emergencyFund.targetThreeMonths}`,
+                          template: "emergency"
+                        }
+                      })
+                    }
+                    onOpenGoalsOverview={() => router.push("/goals-overview")}
+                    onOpenSimulation={() => router.push("/simulation")}
+                    onProgressChange={(patch) => updateActionProgress(actionProgressId, patch)}
+                    onToggleExpanded={() =>
+                      setExpandedActionId((currentActionId) =>
+                        currentActionId === actionProgressId ? null : actionProgressId
+                      )
+                    }
+                    progress={actionProgress}
+                  />
+                );
+              })
+            ) : (
+              <View style={[styles.guidanceCard, isPhone && styles.cardPhone]}>
+                <View style={styles.guidanceIcon}>
+                  <CalendarCheck color={colors.primary} size={26} strokeWidth={2.4} />
+                </View>
+                <View style={styles.guidanceTextGroup}>
+                  <Text style={styles.guidanceTitle}>No tienes acciones pendientes</Text>
+                  <Text style={styles.text}>
+                    Mantén tus datos al día. El motor mostrará el siguiente paso cuando sea necesario.
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
           <View style={styles.actions}>

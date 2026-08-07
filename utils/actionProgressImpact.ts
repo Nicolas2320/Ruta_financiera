@@ -62,11 +62,6 @@ type ImpactDefinition = {
 };
 
 const impactDefinitionsByActionId: Record<string, ImpactDefinition> = {
-  "avoid-new-debt": {
-    kind: "insight",
-    label: "Regla de deuda",
-    target: "debt"
-  },
   "complete-optional-data": {
     kind: "data_signal",
     label: "Dato por actualizar",
@@ -81,16 +76,6 @@ const impactDefinitionsByActionId: Record<string, ImpactDefinition> = {
     kind: "insight",
     label: "Meta principal revisada",
     target: "goal"
-  },
-  "debt-monthly-payment": {
-    kind: "data_signal",
-    label: "Pago de deuda identificado",
-    target: "debt"
-  },
-  "debt-pressure-source": {
-    kind: "insight",
-    label: "Deuda priorizada",
-    target: "debt"
   },
   "define-investing-horizon": {
     kind: "insight",

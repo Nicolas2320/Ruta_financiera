@@ -12,7 +12,6 @@ import {
   ChevronUp,
   CheckCircle2,
   BriefcaseBusiness,
-  CreditCard,
   Dumbbell,
   Flag,
   Gift,
@@ -133,13 +132,6 @@ const goalVisualOptions: GoalVisualOption[] = [
     icon: PiggyBank,
     color: colors.primary,
     backgroundColor: colors.primarySoft
-  },
-  {
-    title: "Pagar deudas",
-    iconKey: "debt",
-    icon: CreditCard,
-    color: "#7C3AED",
-    backgroundColor: "#F1E8FF"
   },
   {
     title: "Ahorrar para vivienda",
@@ -731,6 +723,8 @@ function GoalCard({
     Boolean(onAssignCurrentSavings);
   const parsedEditorTargetAmount = getParsedCurrencyInput(targetInput);
   const hasValidEditorTargetMonth = targetMonth !== null;
+  const hasDebtGoalTitle =
+    selectedGoalOptionKey === "other" && getGoalTypeFromTitle(titleInput) === "debt";
 
   const resetEditorFields = () => {
     const nextGoalOptionKey = getGoalOptionKey(allocation.goal);
@@ -798,7 +792,7 @@ function GoalCard({
   };
 
   const handleSaveDetails = () => {
-    if (!hasValidEditorTargetMonth) {
+    if (!hasValidEditorTargetMonth || hasDebtGoalTitle) {
       return;
     }
 
@@ -1170,7 +1164,7 @@ function GoalCard({
               variant="secondary"
             />
             <AppModalAction
-              disabled={!hasValidEditorTargetMonth}
+              disabled={!hasValidEditorTargetMonth || hasDebtGoalTitle}
               icon={<CheckCircle2 color={colors.surface} size={19} strokeWidth={2.4} />}
               label="Guardar cambios"
               onPress={handleSaveDetails}
@@ -1227,6 +1221,11 @@ function GoalCard({
                       style={styles.input}
                       value={titleInput}
                     />
+                    {hasDebtGoalTitle ? (
+                      <Text style={[styles.helperText, styles.warningText]}>
+                        Las deudas se registran y proyectan desde Mis deudas.
+                      </Text>
+                    ) : null}
                   </View>
                   <View style={styles.editGroup}>
                     <Text style={styles.inputLabel}>Icono</Text>

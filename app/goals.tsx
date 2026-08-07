@@ -8,7 +8,6 @@ import {
   BriefcaseBusiness,
   Car,
   ChartColumnIncreasing,
-  CreditCard,
   Dumbbell,
   Gift,
   GraduationCap,
@@ -36,6 +35,7 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   createFinancialGoal,
+  getGoalTypeFromTitle,
   getOnboardingGoals,
   getPrimaryFinancialGoal,
   type FinancialGoal
@@ -73,13 +73,6 @@ const financialGoals: VisualOption[] = [
     icon: PiggyBank,
     color: colors.primary,
     backgroundColor: colors.primarySoft
-  },
-  {
-    title: "Pagar deudas",
-    iconKey: "debt",
-    icon: CreditCard,
-    color: "#7C3AED",
-    backgroundColor: "#F1E8FF"
   },
   {
     title: "Ahorrar para vivienda",
@@ -297,6 +290,7 @@ export default function GoalsScreen() {
 
   const isCustomGoal = selectedGoal === customGoalOption.title;
   const finalGoalTitle = isCustomGoal ? customGoalName.trim() : selectedGoal;
+  const isDebtGoalTitle = getGoalTypeFromTitle(finalGoalTitle) === "debt";
   const isManualAmount = selectedAmountRange === manualAmountOptionTitle;
   const parsedTargetAmount = isManualAmount ? parseCOPInput(targetAmountInput) : null;
   const finalIconKey =
@@ -306,6 +300,7 @@ export default function GoalsScreen() {
     "other";
   const canContinue = Boolean(
     finalGoalTitle &&
+      !isDebtGoalTitle &&
       targetMonth &&
       selectedAmountRange &&
       (!isManualAmount || (parsedTargetAmount !== null && parsedTargetAmount > 0))
@@ -509,6 +504,11 @@ export default function GoalsScreen() {
                     style={styles.input}
                     value={customGoalName}
                   />
+                  {isDebtGoalTitle ? (
+                    <Text style={styles.inputErrorText}>
+                      Las deudas se registran y proyectan desde Mis deudas.
+                    </Text>
+                  ) : null}
                 </View>
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Icono de la meta</Text>

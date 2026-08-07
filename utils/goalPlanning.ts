@@ -90,6 +90,12 @@ export function isEmergencyGoal(goal: Pick<FinancialGoal, "title" | "type"> | nu
   return goal?.type === "security" || normalizedTitle.includes("emergencia");
 }
 
+export function isDebtGoal(goal: Pick<FinancialGoal, "title" | "type"> | null | undefined) {
+  const normalizedTitle = normalizeText(goal?.title);
+
+  return goal?.type === "debt" || normalizedTitle.includes("deuda");
+}
+
 export function getGoalPlanningMonths(goal: FinancialGoal, referenceDate = new Date()) {
   const exactMonths = getMonthsUntilTargetMonth(goal.targetMonth, referenceDate);
 
@@ -461,7 +467,7 @@ export function getGoalPlanFromOnboarding(
 ) {
   return getGoalAllocationPlan({
     exactValues,
-    goals: getOnboardingGoals(onboarding),
+    goals: getOnboardingGoals(onboarding).filter((goal) => !isDebtGoal(goal)),
     monthlyContributions: options.monthlyContributions,
     monthlyGoalBudget,
     monthlyGoalBudgetMode: "recommended",

@@ -18,7 +18,7 @@ import {
 } from "../types/financial";
 import { initialOnboarding } from "../types/financial";
 import { isDebtPaid } from "./debtPayments";
-import { isEmergencyGoal } from "./goalPlanning";
+import { isDebtGoal, isEmergencyGoal } from "./goalPlanning";
 
 export type MonthlyPlanData = {
   incomeRange: string | null;
@@ -208,113 +208,66 @@ function getGoalAwareActions(
   });
 }
 
-function getDebtTitle(debt: DebtRecord) {
-  const debtTypeLabels: Record<string, string> = {
-    "Tarjeta de credito": "Tarjeta de crédito",
-    "Prestamo personal": "Préstamo personal",
-    Vehiculo: "Vehículo",
-    Educacion: "Educación"
-  };
-
-  return debt.name?.trim() || debtTypeLabels[debt.type] || debt.type;
+function normalizeText(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
-export function getPriorityDebt(debts: DebtRecord[]) {
-  return debts.filter((debt) => !isDebtPaid(debt)).sort((left, right) => {
-    const overdueDifference =
-      Number(right.status === "overdue") - Number(left.status === "overdue");
-
-    if (overdueDifference !== 0) {
-      return overdueDifference;
-    }
-
-    const pressureDifference =
-      Number(right.status === "sometimes_heavy") -
-      Number(left.status === "sometimes_heavy");
-
-    if (pressureDifference !== 0) {
-      return pressureDifference;
-    }
-
-    const interestDifference =
-      (right.annualInterestRate ?? -1) - (left.annualInterestRate ?? -1);
-
-    if (interestDifference !== 0) {
-      return interestDifference;
-    }
-
-    const paymentDifference = right.monthlyPayment - left.monthlyPayment;
-
-    if (paymentDifference !== 0) {
-      return paymentDifference;
-    }
-
-    return (right.remainingAmount ?? 0) - (left.remainingAmount ?? 0);
-  })[0] ?? null;
+function reportsNoDebts(data: MonthlyPlanData) {
+  return (
+    data.hasDebts === false ||
+    normalizeText(data.debtSituation).includes("no tengo") ||
+    normalizeText(data.debtPaymentShare).includes("no pago")
+  );
 }
 
-function getDebtPriorityReason(debt: DebtRecord) {
-  if (debt.status === "overdue") {
-    return "La marcaste con pagos atrasados, por eso conviene revisarla antes que las demás.";
+function getDebtPressureActions(
+  data: MonthlyPlanData,
+  metrics: MonthlyPlanMetrics
+): MonthlyAction[] {
+  const activeDebts = data.debts.filter((debt) => !isDebtPaid(debt));
+  const hasReportedDebtWithoutDetails =
+    !reportsNoDebts(data) &&
+    data.debts.length === 0 &&
+    (data.hasDebts === true ||
+      metrics.snapshot.debt.source === "reported" ||
+      metrics.snapshot.debt.source === "category");
+  const canCompareStrategies =
+    activeDebts.some((debt) => (debt.remainingAmount ?? 0) > 0) &&
+    metrics.snapshot.cashflow.monthlyIncome !== null &&
+    metrics.snapshot.cashflow.monthlyExpenses !== null &&
+    (metrics.snapshot.cashflow.monthlyMargin ?? 0) > 0;
+  const actions: MonthlyAction[] = [];
+
+  if (hasReportedDebtWithoutDetails) {
+    actions.push({
+      id: "register-debts",
+      title: "Registrar mis deudas",
+      description:
+        "Agrega cada deuda pendiente para que la app use sus saldos y cuotas reales.",
+      why: "El rango del diagnóstico no permite comparar estrategias de pago.",
+      estimatedImpact: "Tus deudas registradas reemplazarán la estimación inicial.",
+      difficulty: "Baja",
+      category: "Deudas"
+    });
   }
 
-  if (debt.status === "sometimes_heavy") {
-    return "Indicaste que algunos meses esta cuota se siente pesada.";
+  if (canCompareStrategies) {
+    actions.push({
+      id: "compare-debt-strategies",
+      title: "Comparar estrategias de pago",
+      description:
+        "Revisa cómo podrías repartir el dinero disponible entre tus deudas activas.",
+      why: "Comparar escenarios te permite elegir una distribución antes de aplicarla.",
+      estimatedImpact: "La simulación usará tus saldos, cuotas y margen mensual actuales.",
+      difficulty: "Baja",
+      category: "Deudas"
+    });
   }
 
-  if (debt.annualInterestRate !== null && debt.annualInterestRate !== undefined) {
-    return `Tiene la tasa anual más alta que registraste: ${debt.annualInterestRate}% E.A.`;
-  }
-
-  return "Es la cuota mensual más alta entre las deudas registradas.";
-}
-
-function personalizeDebtActions(actions: MonthlyAction[], debts: DebtRecord[]) {
-  const priorityDebt = getPriorityDebt(debts);
-
-  return actions.map((action) => {
-    if (action.id === "debt-monthly-payment") {
-      return debts.length === 0
-        ? {
-            ...action,
-            title: "Agregar el detalle de tus deudas",
-            description:
-              "Registra saldo, cuota mensual, tasa anual si la conoces y estado del pago.",
-            why: "Con esos datos la app podrá proponerte una primera deuda para revisar.",
-            estimatedImpact: "Puedes empezar solo con la cuota mensual y completar lo demás después."
-          }
-        : {
-            ...action,
-            title: "Confirmar cuotas y saldos registrados",
-            description: `Tienes ${debts.length} ${debts.length === 1 ? "deuda registrada" : "deudas registradas"}. Revisa que sus datos sigan vigentes.`,
-            estimatedImpact: "Los cambios actualizarán la prioridad inicial de tu plan."
-          };
-    }
-
-    if (action.id !== "debt-pressure-source" || !priorityDebt) {
-      return action;
-    }
-
-    const details = [
-      `cuota ${formatCOP(priorityDebt.monthlyPayment)}`,
-      priorityDebt.remainingAmount !== null && priorityDebt.remainingAmount !== undefined
-        ? `saldo ${formatCOP(priorityDebt.remainingAmount)}`
-        : null,
-      priorityDebt.annualInterestRate !== null &&
-      priorityDebt.annualInterestRate !== undefined
-        ? `tasa ${priorityDebt.annualInterestRate}% E.A.`
-        : null
-    ].filter((detail): detail is string => detail !== null);
-
-    return {
-      ...action,
-      title: `Revisar primero: ${getDebtTitle(priorityDebt)}`,
-      description: getDebtPriorityReason(priorityDebt),
-      why:
-        "Es una prioridad inicial basada únicamente en los datos registrados; puedes cambiarla si conoces otras condiciones.",
-      estimatedImpact: details.join(" · ")
-    };
-  });
+  return actions;
 }
 
 const noConcreteGoalAmountValues = [
@@ -341,7 +294,9 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
     debts = [],
     goals = []
   } = data;
-  const normalizedGoals = Array.isArray(goals) ? goals : [];
+  const normalizedGoals = (Array.isArray(goals) ? goals : []).filter(
+    (goal) => !isDebtGoal(goal)
+  );
   const primaryGoal =
     normalizedGoals.find((goal) => goal.isPrimary) ?? normalizedGoals[0] ?? null;
 
@@ -423,11 +378,14 @@ export function getMonthlyActions(
   priorityKey = metrics.snapshot.priority.key,
   goalContext?: MonthlyGoalContext
 ): MonthlyAction[] {
-  let actions = getGoalAwareActions(
-    generateMonthlyActions(metrics.snapshot, priorityKey),
-    priorityKey,
-    goalContext
-  );
+  let actions =
+    priorityKey === "debt_pressure"
+      ? getDebtPressureActions(data, metrics)
+      : getGoalAwareActions(
+          generateMonthlyActions(metrics.snapshot, priorityKey),
+          priorityKey,
+          goalContext
+        );
   const needsEmergencyGoal =
     (metrics.snapshot.priority.key === "build_emergency_fund" ||
       priorityKey === "build_emergency_fund") &&
@@ -460,9 +418,7 @@ export function getMonthlyActions(
     actions = [...actions.slice(0, 2), createEmergencyGoalAction];
   }
 
-  return priorityKey === "debt_pressure"
-    ? personalizeDebtActions(actions, data.debts)
-    : actions;
+  return actions;
 }
 
 export function getMonthlyPlanProgressKey(
