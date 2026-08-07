@@ -4,6 +4,7 @@ import { buildDistributionScenarios } from "../utils/financialDistribution";
 import { buildFinancialProjectionInput } from "../utils/financialProjectionInput";
 import {
   buildFinancialScenarioTimeline,
+  buildGoalOnlyTimeline,
   getFinancialTimelineDisplayMonths
 } from "../utils/financialTimeline";
 import { makeDebt, makeGoal, makeOnboarding } from "./fixtures/financial";
@@ -40,6 +41,58 @@ function makeTimelineInput() {
 }
 
 describe("month-by-month financial timeline", () => {
+  it("projects a standalone goal from its current amount and monthly contribution", () => {
+    const goal = buildFinancialProjectionInput({
+      asOfDate: "2026-08-02",
+      exactValues: {
+        monthlyExpenses: 1_000_000,
+        monthlyIncome: 3_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        debtPaymentShare: "No pago deudas",
+        debtSituation: "No tengo deudas",
+        goals: [makeGoal({ currentAmount: 1_000_000, targetAmount: 3_000_000 })]
+      })
+    }).goals[0];
+    const timeline = buildGoalOnlyTimeline({
+      asOfDate: "2026-08-02",
+      goal,
+      monthlyContribution: 500_000
+    });
+
+    expect(timeline).not.toBeNull();
+    expect(timeline?.goalCompletionMonth).toBe("2026-12");
+    expect(timeline?.months).toHaveLength(4);
+    expect(timeline?.months[0]).toMatchObject({
+      goalContributionTotal: 500_000,
+      month: "2026-09",
+      trackedGoalAmount: 1_500_000
+    });
+    expect(getFinancialTimelineDisplayMonths(timeline!)[0]).toMatchObject({
+      month: "2026-08",
+      trackedGoalAmount: 1_000_000
+    });
+  });
+
+  it("does not invent a completion date beyond the projection window", () => {
+    const goal = buildFinancialProjectionInput({
+      asOfDate: "2026-08-02",
+      onboarding: makeOnboarding({
+        goals: [makeGoal({ currentAmount: 0, targetAmount: 100_000_000 })]
+      })
+    }).goals[0];
+    const timeline = buildGoalOnlyTimeline({
+      asOfDate: "2026-08-02",
+      goal,
+      maxMonths: 3,
+      monthlyContribution: 100_000
+    });
+
+    expect(timeline?.months).toHaveLength(3);
+    expect(timeline?.goalCompletionMonth).toBeNull();
+  });
+
   it("releases a required payment in the month after a debt ends", () => {
     const input = makeTimelineInput();
     const scenario = buildDistributionScenarios({

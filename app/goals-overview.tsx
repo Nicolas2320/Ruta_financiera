@@ -61,6 +61,7 @@ import {
   type FinancialGoal
 } from "../types/financial";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
+import { getGoalBudgetPresentation } from "../utils/goalBudgetPresentation";
 import { formatTargetMonth } from "../utils/monthYear";
 import { applyGoalContribution, getGoalContributionPeriodSummary } from "../utils/goalContributions";
 import {
@@ -89,6 +90,8 @@ import {
 } from "../utils/monthlyPlan";
 import {
   getPlanPreferenceGoalBudget,
+  getPlanPreferenceGoalPlanOptions,
+  getPlanPreferencePreferredGoalId,
   resolvePlanPreference
 } from "../utils/planPreference";
 
@@ -328,12 +331,12 @@ function getBudgetMarginFeedback({
 
   if (percentage === null) {
     return {
-      label: "Escribe una bolsa para ver que porcentaje representa sobre tu margen mensual.",
+      label: "Escribe una referencia para ver qué porcentaje representa sobre tu margen mensual.",
       percentage: null
     };
   }
 
-  const prefix = isInputPreview ? "Esta bolsa" : "La bolsa actual";
+  const prefix = isInputPreview ? "Esta referencia" : "La referencia actual";
   const baseLabel = `${prefix} equivale al ${percentage}% de tu margen mensual estimado de ${formatCOP(monthlyMargin)}.`;
 
   if (percentage > 100) {
@@ -798,7 +801,7 @@ function GoalCard({
       ? 0
       : allocation.monthlyContribution > 0
         ? allocation.monthlyContribution
-        : contributionStep);
+        : 0);
   const isCompletedGoal = allocation.goal.status === "completed";
   const remainingContributionAmount =
     allocation.remainingAmount !== null ? Math.max(0, allocation.remainingAmount) : null;
@@ -924,7 +927,7 @@ function GoalCard({
       onRequestConfirmation({
         cancelLabel: "Volver",
         confirmLabel: "Cambiar meta",
-        message: `Tu meta principal pasará de “${allocation.goal.title}” a “${cleanTitle}”. Esto puede cambiar cómo se recomienda distribuir tu bolsa mensual. No moveremos tus ahorros registrados.`,
+        message: `Tu meta principal pasará de “${allocation.goal.title}” a “${cleanTitle}”. Esto puede cambiar cómo se distribuye tu referencia mensual. No moveremos tus ahorros registrados.`,
         onCancel: () => setIsEditing(true),
         onConfirm: () =>
           persistGoalDetails({
@@ -1075,7 +1078,7 @@ function GoalCard({
             <CurrencyInputField
               label="Monto del aporte"
               onChangeText={(value) => handleCurrencyInputChange(value, setContributionInput)}
-              placeholder={formatCOP(quickContribution)}
+              placeholder={quickContribution > 0 ? formatCOP(quickContribution) : "Ingresa un monto"}
               value={contributionInput}
             />
             <Pressable
@@ -1397,7 +1400,7 @@ function GoalCard({
                   <Text style={styles.editSummaryText}>
                     Recalcularemos el aporte recomendado y el tiempo estimado. Si
                     tienes varias metas, cuál es la principal, su fecha y su tipo pueden
-                    cambiar cómo se reparte la bolsa. No moveremos dinero.
+                    cambiar cómo se distribuye la referencia mensual. No moveremos dinero.
                   </Text>
                 </View>
               </View>
@@ -1470,12 +1473,10 @@ export default function GoalsOverviewScreen() {
     () => resolvePlanPreference({ exactValues, onboarding }),
     [exactValues, onboarding]
   );
-  const preferredGoalId =
-    planPreference.hasExplicitPreference &&
-    planPreference.isApplicable &&
-    planPreference.strategy === "prioritize_goal"
-      ? planPreference.goalId
-      : null;
+  const preferredGoalId = getPlanPreferencePreferredGoalId({
+    onboarding,
+    preference: planPreference
+  });
   const preferredPlanPriorityKey =
     planPreference.hasExplicitPreference && planPreference.isApplicable
       ? planPreference.priorityKey
@@ -1485,10 +1486,11 @@ export default function GoalsOverviewScreen() {
       onboarding,
       getPlanPreferenceGoalBudget({
         fallbackMonthlyBudget: metrics.snapshot.cashflow.suggestedMonthlyContribution,
-        preference: planPreference
+        preference: planPreference,
+        preferredGoalId
       }),
       exactValues,
-      { preferredGoalId }
+      getPlanPreferenceGoalPlanOptions(planPreference, preferredGoalId)
     ),
     [exactValues, metrics.snapshot.cashflow.suggestedMonthlyContribution, onboarding, planPreference, preferredGoalId]
   );
@@ -1585,19 +1587,50 @@ export default function GoalsOverviewScreen() {
   const currentSavingsForEmergency = metrics.snapshot.values.currentSavings;
   const selectedReferenceMonthlyBudget = getPlanPreferenceGoalBudget({
     fallbackMonthlyBudget: metrics.snapshot.cashflow.suggestedMonthlyContribution,
-    preference: planPreference
+    preference: planPreference,
+    preferredGoalId
   });
-  const budgetLabel =
+  const goalBudgetPresentation = getGoalBudgetPresentation({
+    assignedAmount: goalPlan.monthlyContributionTotal,
+    hasExplicitPreference: planPreference.hasExplicitPreference,
+    mode: goalPlan.monthlyGoalBudgetMode,
+    preferredGoalId,
+    priorityKey: planPreference.priorityKey,
+    referenceAmount: goalPlan.monthlyGoalBudget
+  });
+  const isWaitingForEmergencyGoal =
+    goalBudgetPresentation.status === "waiting_for_emergency_goal";
+  const referenceLabel =
     goalPlan.monthlyGoalBudget > 0
       ? `${formatCOP(goalPlan.monthlyGoalBudget)} aprox.`
       : "Por definir";
-  const budgetMarginLabel = getBudgetMarginShortLabel(goalPlan.monthlyGoalBudget, monthlyMargin);
+  const assignedContributionLabel =
+    goalBudgetPresentation.assignedAmount > 0
+      ? `${formatCOP(goalBudgetPresentation.assignedAmount)} aprox.`
+      : "$0";
+  const assignedMarginLabel = getBudgetMarginShortLabel(
+    goalBudgetPresentation.assignedAmount,
+    monthlyMargin
+  );
+  const assignedContributionHelper =
+    goalBudgetPresentation.status === "over_reference"
+      ? `${formatCOP(goalBudgetPresentation.excessAmount)} sobre la referencia`
+      : isWaitingForEmergencyGoal
+        ? "Fondo pendiente de crear"
+        : goalBudgetPresentation.status === "no_reference"
+          ? "Sin referencia automática"
+          : goalBudgetPresentation.status === "unassigned"
+            ? `De ${formatCOP(goalBudgetPresentation.referenceAmount)} disponibles`
+            : assignedMarginLabel;
+  const recommendedReferenceAmount = isWaitingForEmergencyGoal
+    ? planPreference.monthlyReference
+    : selectedReferenceMonthlyBudget;
   const recommendedBudgetLabel =
-    selectedReferenceMonthlyBudget > 0
-      ? `${formatCOP(selectedReferenceMonthlyBudget)} aprox.`
+    recommendedReferenceAmount > 0
+      ? `${formatCOP(recommendedReferenceAmount)} aprox.`
       : "Por definir";
   const recommendedBudgetMarginLabel = getBudgetMarginShortLabel(
-    selectedReferenceMonthlyBudget,
+    recommendedReferenceAmount,
     monthlyMargin
   );
   const recommendedBudgetDetailLabel = recommendedBudgetMarginLabel
@@ -1612,23 +1645,54 @@ export default function GoalsOverviewScreen() {
   });
   const budgetMarginFeedbackTone = getBudgetMarginTone(budgetMarginFeedback.percentage);
   const budgetMarginFeedbackColors = getToneColors(budgetMarginFeedbackTone);
-  const remainingLabel = goalPlan.isOverBudget
-    ? `${formatCOP(Math.abs(goalPlan.remainingBudget))} por encima`
-    : goalPlan.remainingBudget > 0
-      ? `${formatCOP(goalPlan.remainingBudget)} libres`
-      : "Total asignado";
+  const remainingLabel =
+    goalBudgetPresentation.status === "over_reference"
+      ? `${formatCOP(goalBudgetPresentation.excessAmount)} por encima`
+      : isWaitingForEmergencyGoal
+        ? "Referencia reservada"
+        : goalBudgetPresentation.referenceAmount === 0
+          ? "Sin referencia"
+          : goalBudgetPresentation.availableAmount > 0
+            ? `${formatCOP(goalBudgetPresentation.availableAmount)} disponibles`
+            : "Total asignado";
   const planReferenceOverrideNote =
     goalPlan.monthlyGoalBudgetMode === "manual"
-      ? `Tu bolsa manual de ${formatCOP(goalPlan.monthlyGoalBudget)} tiene prioridad sobre esta referencia.`
+      ? `Tu referencia manual de ${formatCOP(goalPlan.monthlyGoalBudget)} tiene prioridad sobre esta recomendación.`
       : hasManualAdjustments
-        ? "Los aportes manuales definidos dentro de tus metas tienen prioridad sobre esta referencia."
+        ? "Los aportes manuales definidos dentro de tus metas pueden superar esta referencia."
         : null;
+  const simulationDistributionSummary =
+    planPreference.goalMonthlyContribution > 0 && planPreference.extraDebtPayment > 0
+      ? `${formatCOP(planPreference.goalMonthlyContribution)} al mes para metas y ${formatCOP(
+          planPreference.extraDebtPayment
+        )} extra para deudas.`
+      : planPreference.goalMonthlyContribution > 0
+        ? `${formatCOP(planPreference.goalMonthlyContribution)} al mes asignados a metas.`
+        : planPreference.extraDebtPayment > 0
+          ? `${formatCOP(planPreference.extraDebtPayment)} extra al mes para deudas; este escenario no asigna aportes a metas.`
+          : `${formatCOP(planPreference.monthlyReference)} al mes como referencia recalculada.`;
 
   useEffect(() => {
     setBudgetInput(getCurrencyInputValue(onboarding.goalMonthlyBudget));
   }, [onboarding.goalMonthlyBudget]);
 
-  const persistGoals = (nextGoals: FinancialGoal[]) => {
+  const getCustomDistributionPreference = () => ({
+    strategy: "current_reference" as const,
+    goalId: null,
+    debtShare: null,
+    protectedMarginMode:
+      onboarding.simulationPlanPreference?.protectedMarginMode ?? "automatic",
+    customProtectedMargin:
+      onboarding.simulationPlanPreference?.protectedMarginMode === "custom"
+        ? onboarding.simulationPlanPreference.customProtectedMargin
+        : null,
+    selectedAt: new Date().toISOString()
+  });
+
+  const persistGoals = (
+    nextGoals: FinancialGoal[],
+    { markDistributionCustom = false }: { markDistributionCustom?: boolean } = {}
+  ) => {
     const hasPrimaryGoal = nextGoals.some((goal) => goal.isPrimary);
     const normalizedGoals = nextGoals.map((goal, index) => ({
       ...goal,
@@ -1639,6 +1703,9 @@ export default function GoalsOverviewScreen() {
 
     updateOnboarding({
       goals: normalizedGoals,
+      ...(markDistributionCustom
+        ? { simulationPlanPreference: getCustomDistributionPreference() }
+        : {}),
       ...getLegacyFieldsFromGoal(primaryGoal)
     });
   };
@@ -1655,7 +1722,8 @@ export default function GoalsOverviewScreen() {
               manualMonthlyContribution: Math.max(0, currentContribution + delta)
             }
           : goal
-      )
+      ),
+      { markDistributionCustom: true }
     );
   };
 
@@ -1668,7 +1736,8 @@ export default function GoalsOverviewScreen() {
               manualMonthlyContribution: value
             }
           : goal
-      )
+      ),
+      { markDistributionCustom: true }
     );
   };
 
@@ -1740,14 +1809,16 @@ export default function GoalsOverviewScreen() {
 
     updateOnboarding({
       goalMonthlyBudget: parsedBudget,
-      goals
+      goals,
+      simulationPlanPreference: getCustomDistributionPreference()
     });
   };
 
   const resetManualBudget = () => {
     updateOnboarding({
       goalMonthlyBudget: null,
-      goals
+      goals,
+      simulationPlanPreference: null
     });
   };
 
@@ -1756,7 +1827,19 @@ export default function GoalsOverviewScreen() {
   };
 
   const resetRecommendedDistribution = () => {
-    persistGoals(goals.map((goal) => ({ ...goal, manualMonthlyContribution: null })));
+    const nextGoals = goals.map((goal) => ({
+      ...goal,
+      manualMonthlyContribution: null,
+      updatedAt: new Date().toISOString()
+    }));
+    const primaryGoal = nextGoals.find((goal) => goal.isPrimary) ?? nextGoals[0] ?? null;
+
+    updateOnboarding({
+      goalMonthlyBudget: null,
+      goals: nextGoals,
+      simulationPlanPreference: null,
+      ...getLegacyFieldsFromGoal(primaryGoal)
+    });
   };
 
   const navigateToNewGoal = () => {
@@ -1797,7 +1880,7 @@ export default function GoalsOverviewScreen() {
     confirmGoalAction({
       confirmLabel: "Completar",
       message:
-        "La meta se marcará como completada, saldrá de la bolsa mensual y podrás reactivarla.",
+        "La meta se marcará como completada, dejará de recibir aporte mensual y podrás reactivarla.",
       onConfirm: () => completeGoal(allocation.goal.id),
       title: `Completar ${allocation.goal.title}`
     });
@@ -1807,7 +1890,7 @@ export default function GoalsOverviewScreen() {
     confirmGoalAction({
       confirmLabel: "Eliminar",
       destructive: true,
-      message: "Esta meta se quitará de tu lista y la bolsa mensual se redistribuirá entre las metas restantes.",
+      message: "Esta meta se quitará de tu lista y los aportes mensuales se redistribuirán entre las metas restantes.",
       onConfirm: () => removeGoal(allocation.goal.id),
       title: `Eliminar ${allocation.goal.title}`
     });
@@ -1843,10 +1926,16 @@ export default function GoalsOverviewScreen() {
           <View style={styles.statsGrid}>
             <StatCard
               icon={<Wallet color={colors.primary} size={20} strokeWidth={2.4} />}
-              helper={budgetMarginLabel}
-              label="Bolsa mensual"
-              value={budgetLabel}
-              tone={goalPlan.monthlyGoalBudgetMode === "manual" ? "warning" : "primary"}
+              helper={assignedContributionHelper}
+              label="Aporte mensual a metas"
+              value={assignedContributionLabel}
+              tone={
+                goalPlan.isOverBudget
+                  ? "danger"
+                  : goalPlan.monthlyGoalBudgetMode === "manual"
+                    ? "warning"
+                    : "primary"
+              }
             />
             <StatCard
               icon={<Flag color={colors.support} size={20} strokeWidth={2.4} />}
@@ -1921,9 +2010,11 @@ export default function GoalsOverviewScreen() {
                 </Text>
                 <Text style={styles.planReferenceTitle}>{planPreference.label}</Text>
                 <Text style={styles.planReferenceText}>
-                  {planPreference.isApplicable
-                    ? `${formatCOP(planPreference.monthlyReference)} al mes como referencia recalculada.`
-                    : "Esta elección ya no puede aplicarse con los datos actuales; usamos la recomendación automática."}
+                  {!planPreference.isApplicable
+                    ? "Esta elección ya no puede aplicarse con los datos actuales; usamos la recomendación automática."
+                    : isWaitingForEmergencyGoal
+                      ? `${formatCOP(planPreference.monthlyReference)} al mes como referencia para el fondo de emergencia. Se asignará cuando crees o reactives esa meta.`
+                      : simulationDistributionSummary}
                 </Text>
                 {planReferenceOverrideNote ? (
                   <Text style={styles.planReferenceOverride}>
@@ -1943,25 +2034,29 @@ export default function GoalsOverviewScreen() {
           >
             <View style={styles.budgetHeader}>
               <View>
-                <Text style={styles.sectionKicker}>Bolsa para metas</Text>
+                <Text style={styles.sectionKicker}>Distribución mensual</Text>
                 <Text style={styles.sectionTitle}>
-                  {goalPlan.monthlyContributionTotal > 0
-                    ? `${formatCOP(goalPlan.monthlyContributionTotal)} asignados`
+                  {goalBudgetPresentation.referenceAmount > 0
+                    ? `${formatCOP(goalBudgetPresentation.assignedAmount)} de ${formatCOP(
+                        goalBudgetPresentation.referenceAmount
+                      )} asignados`
+                    : goalBudgetPresentation.assignedAmount > 0
+                      ? `${formatCOP(goalBudgetPresentation.assignedAmount)} asignados sin referencia`
                     : "Sin aporte asignado"}
                 </Text>
               </View>
               <View style={styles.budgetHeaderActions}>
                 <FinancialEducationModal
-                  accessibilityLabel="Explicar la bolsa para metas"
+                  accessibilityLabel="Explicar la referencia y los aportes mensuales"
                   guidanceMode={guidanceMode}
                   icon={<Wallet color={colors.primary} size={23} strokeWidth={2.4} />}
-                  title="Cómo funciona tu bolsa para metas"
+                  title="Cómo se distribuyen tus aportes mensuales"
                 >
                   <FinancialEducationStory
                     calculationItems={[
                       {
-                        label: "Bolsa mensual",
-                        value: budgetLabel
+                        label: "Referencia mensual",
+                        value: referenceLabel
                       },
                       {
                         label: "Aportes asignados",
@@ -1975,36 +2070,44 @@ export default function GoalsOverviewScreen() {
                         value: formatCOP(Math.abs(goalPlan.remainingBudget))
                       }
                     ]}
-                    calculationTitle="Cómo se reparte tu bolsa"
-                    definition="La bolsa para metas es el presupuesto mensual que puedes distribuir entre una o varias metas. Sale de la referencia activa de tu plan o del monto manual que definas."
+                    calculationTitle="Referencia frente a aportes asignados"
+                    definition="La referencia mensual es un límite orientativo para planear aportes. Los aportes asignados son lo que decidiste dirigir cada mes a una o varias metas; no representan dinero movido por la app."
                     estimateLabel={
                       goalPlan.monthlyGoalBudgetMode === "manual"
-                        ? "Bolsa definida por ti"
-                        : planPreference.hasExplicitPreference && planPreference.isApplicable
-                          ? "Referencia elegida en simulación"
-                          : "Bolsa recomendada desde tu margen"
+                        ? "Referencia definida por ti"
+                        : isWaitingForEmergencyGoal
+                          ? "Esperando una meta de emergencia activa"
+                          : planPreference.hasExplicitPreference && planPreference.isApplicable
+                            ? "Referencia elegida en simulación"
+                            : "Referencia recomendada desde tu margen"
                     }
                     guidanceMode={guidanceMode}
                     plainLanguage={
-                      goalPlan.monthlyContributionTotal > 0
+                      isWaitingForEmergencyGoal
+                        ? `Tu diagnóstico reserva una referencia de ${formatCOP(
+                            planPreference.monthlyReference
+                          )} para construir un fondo de emergencia. No la asignamos a otras metas: primero debes crear o reactivar ese fondo.`
+                        : goalPlan.monthlyContributionTotal > 0
                         ? `Has repartido ${formatCOP(
                             goalPlan.monthlyContributionTotal
-                          )} de una bolsa de ${formatCOP(
+                          )} de una referencia de ${formatCOP(
                             goalPlan.monthlyGoalBudget
                           )}. Lo disponible es presupuesto todavía sin asignar dentro del plan; no es saldo en tu cuenta y la app no mueve dinero.`
-                        : `Tienes una referencia de ${formatCOP(
-                            goalPlan.monthlyGoalBudget
-                          )} para tus metas, pero todavía no has indicado cuánto irá a cada una. Esta referencia no es dinero en tu cuenta y la app no mueve dinero.`
+                        : goalBudgetPresentation.referenceAmount > 0
+                          ? `Tienes una referencia de ${formatCOP(
+                              goalPlan.monthlyGoalBudget
+                            )} para tus metas, pero todavía no has indicado cuánto irá a cada una. Esta referencia no es dinero en tu cuenta y la app no mueve dinero.`
+                          : "Todavía no existe una referencia automática activa para tus metas. Puedes crear la meta prioritaria o definir una referencia manual sin que la app mueva dinero."
                     }
                     plainLanguageBadge={
                       goalPlan.monthlyContributionTotal > 0 ? "✓" : "$0"
                     }
                     resultDescription={
                       goalPlan.isOverBudget
-                        ? "Tus aportes asignados superan la bolsa mensual definida."
+                        ? "Tus aportes asignados superan la referencia mensual definida."
                         : goalPlan.monthlyContributionTotal > 0
                           ? "La cifra asignada es la suma de los aportes mensuales de tus metas."
-                          : "Aún no has repartido tu bolsa mensual entre las metas."
+                          : "Aún no has distribuido aportes mensuales entre tus metas."
                     }
                     resultLabel={
                       goalPlan.monthlyContributionTotal > 0
@@ -2059,10 +2162,14 @@ export default function GoalsOverviewScreen() {
                 />
                 <Text style={[styles.helperText, goalPlan.isOverBudget && styles.warningText]}>
                   {goalPlan.isOverBudget
-                    ? "Tus aportes manuales superan la bolsa sugerida. Puedes reducir alguna meta o volver a la recomendacion."
-                    : planPreference.hasExplicitPreference && planPreference.isApplicable
-                      ? "La bolsa parte de la referencia que elegiste en Simulación. Puedes ajustar aportes sin cambiar tus respuestas financieras."
-                      : "La bolsa se calcula desde tu margen mensual sugerido. Puedes ajustar aportes sin cambiar tus respuestas financieras."}
+                    ? "Tus aportes manuales superan la referencia mensual. Puedes reducir alguna meta o aumentar la referencia manualmente."
+                    : goalPlan.monthlyGoalBudgetMode === "manual"
+                      ? "Esta referencia fue definida manualmente por ti. Puedes volver a la recomendación cuando quieras."
+                      : isWaitingForEmergencyGoal
+                        ? "La recomendación actual está reservada para un fondo de emergencia. Crea o reactiva esa meta para asignarle un aporte mensual."
+                        : planPreference.hasExplicitPreference && planPreference.isApplicable
+                          ? "La referencia viene del escenario que elegiste en Simulación. Puedes ajustar los aportes sin cambiar tus respuestas financieras."
+                          : "La referencia se calcula desde tu margen mensual sugerido. Puedes ajustar los aportes sin cambiar tus respuestas financieras."}
                 </Text>
               </View>
               <Pressable
@@ -2071,7 +2178,7 @@ export default function GoalsOverviewScreen() {
                 style={({ pressed }) => [styles.detailsToggle, styles.budgetToggle, pressed && styles.pressed]}
               >
                 <Text style={styles.detailsToggleText}>
-                  {showBudgetSettings ? "Ocultar ajuste de bolsa" : "Ajustar bolsa"}
+                  {showBudgetSettings ? "Ocultar ajuste de referencia" : "Ajustar referencia"}
                 </Text>
                 {showBudgetSettings ? (
                   <ChevronUp color={colors.primary} size={18} strokeWidth={2.5} />
@@ -2083,14 +2190,14 @@ export default function GoalsOverviewScreen() {
                 <>
               <View style={styles.budgetSettings}>
                 <View style={styles.budgetSettingCopy}>
-                  <Text style={styles.inputLabel}>Bolsa mensual manual</Text>
+                  <Text style={styles.inputLabel}>Referencia mensual manual</Text>
                   <Text style={styles.helperText}>
-                    Recomendada actual: {recommendedBudgetDetailLabel}. Puedes fijar otra bolsa si prefieres decidir el monto.
+                    {isWaitingForEmergencyGoal ? "Referencia reservada" : "Recomendada actual"}: {recommendedBudgetDetailLabel}. Puedes fijar otra referencia si prefieres decidir el límite mensual.
                   </Text>
                 </View>
                 <View style={styles.budgetInputRow}>
                   <CurrencyInputField
-                    label="Nueva bolsa"
+                    label="Nueva referencia"
                     onChangeText={(value) => {
                       const parsedValue = getParsedCurrencyInput(value);
                       setBudgetInput(parsedValue === null ? "" : formatCOP(parsedValue));
@@ -2127,7 +2234,7 @@ export default function GoalsOverviewScreen() {
                     style={({ pressed }) => [styles.resetButton, pressed && styles.pressed]}
                   >
                     <RotateCcw color={colors.primary} size={17} strokeWidth={2.4} />
-                    <Text style={styles.resetButtonText}>Volver a bolsa recomendada</Text>
+                    <Text style={styles.resetButtonText}>Volver a referencia recomendada</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -2138,7 +2245,7 @@ export default function GoalsOverviewScreen() {
                   style={({ pressed }) => [styles.resetButton, pressed && styles.pressed]}
                 >
                   <RotateCcw color={colors.primary} size={17} strokeWidth={2.4} />
-                  <Text style={styles.resetButtonText}>Usar recomendada</Text>
+                  <Text style={styles.resetButtonText}>Usar distribución recomendada</Text>
                 </Pressable>
               ) : null}
                 </>
@@ -2150,7 +2257,7 @@ export default function GoalsOverviewScreen() {
             <View style={styles.quickCreateCopy}>
               <Text style={styles.quickCreateTitle}>Agregar otra meta</Text>
               <Text style={styles.quickCreateText}>
-                Crea otro objetivo y la app ajustará la bolsa mensual según cuál sea tu meta principal, sus fechas y su avance actual.
+                Crea otro objetivo y la app ajustará la distribución mensual según cuál sea tu meta principal, sus fechas y su avance actual.
               </Text>
             </View>
             <Pressable

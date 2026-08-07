@@ -276,57 +276,64 @@ function getReferenceScenario(
   input: FinancialProjectionInput,
   preference: ProtectedMarginPreference
 ): DistributionScenario {
-  const operatingCosts = getOperatingCosts(input);
-  const monthlyIncome = safeNonNegative(input.cashflow.monthlyIncome);
-  const debtAllocations = getBaseDebtAllocations(input.debts, "planned");
+  const base = getStrategyBase(input, preference);
+  const plannedDebtAllocations = getBaseDebtAllocations(input.debts, "planned");
+  const debtAllocations = base.debtAllocations.map((allocation) => {
+    const plannedAllocation = plannedDebtAllocations.find(
+      (candidate) => candidate.debtId === allocation.debtId
+    );
+    const plannedPayment = Math.max(
+      allocation.basePayment,
+      plannedAllocation?.totalPayment ?? allocation.basePayment
+    );
+
+    return {
+      ...allocation,
+      extraPayment: Math.max(0, plannedPayment - allocation.basePayment),
+      totalPayment: plannedPayment
+    };
+  });
   const goalAllocations = getManualGoalAllocations(input.goals);
 
-  if (operatingCosts === null || monthlyIncome === null) {
+  if (base.status === "incomplete") {
     return {
       debtAllocations,
       debtShare: null,
       distributableAmount: 0,
       goalAllocations,
       id: "current_reference",
-      issues: [{ code: "missing_cashflow", message: "Faltan ingresos o gastos mensuales." }],
+      issues: base.issues,
       label: strategyLabels.current_reference,
       monthlyBalance: null,
-      protectedMargin: { amount: 0, mode: preference.mode, requestedAmount: null },
-      poolBreakdown: null,
+      protectedMargin: base.protectedMargin,
+      poolBreakdown: base.poolBreakdown,
       status: "incomplete",
-      surplusBeforeProtection: null,
+      surplusBeforeProtection: base.surplusBeforeProtection,
       unassignedAmount: 0
     };
   }
 
-  const monthlyBalance =
-    monthlyIncome -
-    operatingCosts -
-    sumDebtPayments(debtAllocations) -
+  const assignedAmount =
+    debtAllocations.reduce((total, allocation) => total + allocation.extraPayment, 0) +
     sumGoalContributions(goalAllocations);
-  const surplusBeforeProtection = Math.max(0, monthlyBalance);
-  const protectedMarginResult = calculateProtectedMargin({
-    preference,
-    surplusBeforeProtection
-  });
   const unassignedAmount = Math.max(
     0,
-    surplusBeforeProtection - protectedMarginResult.result.amount
+    base.distributableAmount - assignedAmount
   );
 
   return {
     debtAllocations,
     debtShare: null,
-    distributableAmount: unassignedAmount,
+    distributableAmount: base.distributableAmount,
     goalAllocations,
     id: "current_reference",
-    issues: protectedMarginResult.issues,
+    issues: base.issues,
     label: strategyLabels.current_reference,
-    monthlyBalance,
-    protectedMargin: protectedMarginResult.result,
-    poolBreakdown: null,
-    status: monthlyBalance <= 0 ? "no_surplus" : "ready",
-    surplusBeforeProtection,
+    monthlyBalance: getMonthlyBalance({ base, debtAllocations, goalAllocations }),
+    protectedMargin: base.protectedMargin,
+    poolBreakdown: base.poolBreakdown,
+    status: base.status,
+    surplusBeforeProtection: base.surplusBeforeProtection,
     unassignedAmount
   };
 }

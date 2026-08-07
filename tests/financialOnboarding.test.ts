@@ -156,6 +156,7 @@ describe("simulation plan preference normalization", () => {
       simulationPlanPreference: {
         strategy: "prioritize_goal",
         goalId: " goal-1 ",
+        debtShare: null,
         protectedMarginMode: "custom",
         customProtectedMargin: 320_000,
         selectedAt: "2026-08-04T12:00:00.000Z"
@@ -165,6 +166,7 @@ describe("simulation plan preference normalization", () => {
     expect(normalized.simulationPlanPreference).toEqual({
       strategy: "prioritize_goal",
       goalId: "goal-1",
+      debtShare: null,
       protectedMarginMode: "custom",
       customProtectedMargin: 320_000,
       selectedAt: "2026-08-04T12:00:00.000Z"
@@ -180,6 +182,25 @@ describe("simulation plan preference normalization", () => {
     });
 
     expect(normalized.simulationPlanPreference).toBeNull();
+  });
+
+  it("normalizes a persisted debt and goal split in five-point steps", () => {
+    const normalized = normalizeOnboardingData({
+      ...makeOnboarding(),
+      simulationPlanPreference: {
+        strategy: "split_debt_goal",
+        goalId: "goal-1",
+        debtShare: 0.43,
+        protectedMarginMode: "automatic",
+        customProtectedMargin: null,
+        selectedAt: "2026-08-04T12:00:00.000Z"
+      }
+    });
+
+    expect(normalized.simulationPlanPreference).toMatchObject({
+      strategy: "split_debt_goal",
+      debtShare: 0.45
+    });
   });
 });
 

@@ -78,6 +78,7 @@ import {
 } from "../utils/debtPayments";
 import { calculateFinancialSnapshot } from "../utils/financialCalculations";
 import { formatCOP, formatSignedCOP, parseCOPInput } from "../utils/financialRanges";
+import { resolvePlanPreference } from "../utils/planPreference";
 
 type IconProps = {
   color?: string;
@@ -1779,6 +1780,10 @@ export default function DebtsScreen() {
     () => calculateFinancialSnapshot({ onboarding, exactValues }),
     [exactValues, onboarding]
   );
+  const planPreference = useMemo(
+    () => resolvePlanPreference({ exactValues, onboarding }),
+    [exactValues, onboarding]
+  );
   const debtSummary = useMemo(
     () =>
       getRegisteredDebtSummary({
@@ -2135,6 +2140,15 @@ export default function DebtsScreen() {
                   : "Por calcular"
               }
             />
+            {planPreference.hasExplicitPreference &&
+            planPreference.usesResolvedDistribution &&
+            planPreference.distribution?.sourceMode === "detailed" ? (
+              <SummaryMetric
+                label="Extra mensual según simulación"
+                tone={planPreference.extraDebtPayment > 0 ? "primary" : "neutral"}
+                value={formatCOP(planPreference.extraDebtPayment)}
+              />
+            ) : null}
           </View>
 
           <SectionCard

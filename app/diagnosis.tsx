@@ -25,15 +25,10 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   calculateFinancialSnapshot,
-  getSmallExpensesMonthlySummary,
   type FinancialSnapshot,
   type SnapshotSource
 } from "../utils/financialCalculations";
-import {
-  formatCOP,
-  formatSignedCOP,
-  type FinancialRangeEstimate
-} from "../utils/financialRanges";
+import { formatCOP, formatSignedCOP } from "../utils/financialRanges";
 import type { ExactFinancialValues } from "../types/financial";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
@@ -45,7 +40,7 @@ type FinancialDisplay = {
   helper: string;
 };
 
-type PriorityKey = "debt" | "emergency" | "expenses" | "smallExpenses" | "goal";
+type PriorityKey = "debt" | "emergency" | "expenses" | "goal";
 
 type MainPriority = {
   key: PriorityKey;
@@ -62,15 +57,11 @@ type FinancialMetrics = {
   expenseValue: number | null;
   totalOutflowValue: number | null;
   currentSavingsValue: number | null;
-  smallExpenseEstimate: FinancialRangeEstimate;
   estimatedMargin: number | null;
   expensePercentage: number | null;
-  smallExpensePercentage: number | null;
   estimatedMarginLabel: string;
   expensePercentageLabel: string;
   expenseRatioInterpretation: string;
-  smallExpensesMetricLabel: string;
-  smallExpensesDetail: string;
   debtPaymentLabel: string;
   debtPaymentInterpretation: string;
   canEstimateMonthlyFlow: boolean;
@@ -209,29 +200,13 @@ function getFinancialMetrics(
     source: snapshot.sourceMap.currentSavings,
     value: snapshot.values.currentSavings
   });
-  const smallExpenseEstimate: FinancialRangeEstimate = {
-    min: null,
-    max: null,
-    midpoint: snapshot.values.smallExpenses,
-    label:
-      snapshot.values.smallExpenses !== null
-        ? snapshot.sourceMap.smallExpenses === "exact"
-          ? formatCOP(snapshot.values.smallExpenses)
-          : `${formatCOP(snapshot.values.smallExpenses)} aprox.`
-        : "No disponible"
-  };
   const incomeMidpoint = snapshot.cashflow.monthlyIncome;
   const expenseMidpoint = snapshot.cashflow.monthlyExpenses;
   const currentSavingsValue = snapshot.values.currentSavings;
-  const smallExpenseMidpoint = snapshot.values.smallExpenses;
   const estimatedMargin = snapshot.cashflow.monthlyMargin;
   const expensePercentage =
     snapshot.cashflow.expensesToIncomeRatio !== null
       ? Math.round(snapshot.cashflow.expensesToIncomeRatio * 100)
-      : null;
-  const smallExpensePercentage =
-    incomeMidpoint !== null && incomeMidpoint > 0 && smallExpenseMidpoint !== null
-      ? Math.round((smallExpenseMidpoint / incomeMidpoint) * 100)
       : null;
   const isCashflowExact =
     snapshot.sourceMap.monthlyIncome === "exact" &&
@@ -249,27 +224,6 @@ function getFinancialMetrics(
       : `${formatSignedCOP(estimatedMargin)} aprox.`;
   }
 
-  const smallExpensesMetricLabel =
-    snapshot.cashflow.monthlyExpensesIncludesSmallExpenses && smallExpenseMidpoint === null
-      ? "Incluidos en gastos mensuales"
-      : onboarding.hasSmallExpenses === "No"
-      ? "No identificados"
-      : snapshot.sourceMap.smallExpenses === "exact" && smallExpenseMidpoint !== null
-        ? formatCOP(smallExpenseMidpoint)
-        : onboarding.smallExpensesRange ?? "No disponible";
-  const smallExpensesDetail =
-    snapshot.cashflow.monthlyExpensesIncludesSmallExpenses && smallExpenseMidpoint === null
-      ? "No se suman aparte porque ya forman parte del total mensual que ingresaste."
-      : onboarding.hasSmallExpenses === "No"
-      ? "No usamos gastos pequeños para estimar aportes o escenarios."
-      : smallExpensePercentage !== null
-      ? snapshot.sourceMap.smallExpenses === "exact"
-        ? `Según el valor ingresado: cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
-        : `Cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
-      : onboarding.smallExpensesRange
-        ? "Rango seleccionado, sin porcentaje calculado."
-        : "No disponible";
-
   return {
     snapshot,
     incomeDisplay,
@@ -279,10 +233,8 @@ function getFinancialMetrics(
     expenseValue: expenseMidpoint,
     totalOutflowValue: snapshot.cashflow.totalMonthlyOutflow,
     currentSavingsValue,
-    smallExpenseEstimate,
     estimatedMargin,
     expensePercentage,
-    smallExpensePercentage,
     estimatedMarginLabel,
     expensePercentageLabel:
       expensePercentage !== null
@@ -291,8 +243,6 @@ function getFinancialMetrics(
           : `${expensePercentage}% aprox.`
         : "No disponible",
     expenseRatioInterpretation: getExpenseRatioInterpretation(expensePercentage),
-    smallExpensesMetricLabel,
-    smallExpensesDetail,
     debtPaymentLabel: getDebtPaymentLabel(snapshot.debt),
     debtPaymentInterpretation: getDebtPaymentInterpretation(snapshot.debt),
     canEstimateMonthlyFlow: estimatedMargin !== null && expensePercentage !== null,
@@ -330,11 +280,25 @@ function getDeclaredGoalContext(
 }
 
 function getMainPriority(metrics: FinancialMetrics): MainPriority {
+  if (metrics.snapshot.priority.key === "review_small_expenses") {
+    return metrics.snapshot.goal.status === "completed_or_ready"
+      ? {
+          key: "goal",
+          title: "Mantener claridad mensual",
+          text: "Revisar tu plan cada mes te ayuda a mantener tus decisiones alineadas con tus metas."
+        }
+      : {
+          key: "goal",
+          title: "Avanzar hacia tu meta",
+          text: "Tu plan puede enfocarse en separar un monto mensual adecuado para tu objetivo."
+        };
+  }
+
   const priorityKeyMap: Record<FinancialSnapshot["priority"]["key"], PriorityKey> = {
     debt_pressure: "debt",
     organize_cashflow: "expenses",
     build_emergency_fund: "emergency",
-    review_small_expenses: "smallExpenses",
+    review_small_expenses: "goal",
     advance_goal: "goal",
     learn_investing: "goal",
     keep_tracking: "goal"
@@ -345,54 +309,6 @@ function getMainPriority(metrics: FinancialMetrics): MainPriority {
     title: metrics.snapshot.priority.title,
     text: metrics.snapshot.priority.description
   };
-}
-
-function getSmallExpensesMessages(onboarding: OnboardingSnapshot, metrics: FinancialMetrics) {
-  if (
-    metrics.snapshot.cashflow.monthlyExpensesIncludesSmallExpenses &&
-    metrics.snapshot.smallExpenses.amount === null
-  ) {
-    return [
-      "Tus compras pequeñas ya están incluidas en el gasto mensual que compartiste.",
-      "Separarlas después es opcional y sirve solo para analizarlas; no las sumaremos dos veces."
-    ];
-  }
-
-  if (onboarding.hasSmallExpenses === "Sí") {
-    const messages = [
-      "Identificaste pequeños gastos frecuentes.",
-      getSmallExpensesMonthlySummary({
-        amount: metrics.snapshot.values.smallExpenses,
-        range: onboarding.smallExpensesRange,
-        source: metrics.snapshot.sourceMap.smallExpenses
-      })
-    ];
-
-    if (metrics.smallExpensePercentage !== null) {
-      messages.push(`Esto podría representar cerca del ${metrics.smallExpensePercentage}% de tus ingresos estimados.`);
-    }
-
-    messages.push(`Tu intención actual es: ${onboarding.smallExpensesIntention ?? "No respondido"}.`);
-    messages.push(
-      "No significa que debas eliminarlos. La idea es decidir cuáles quieres mantener, limitar o redirigir a una meta."
-    );
-
-    return messages;
-  }
-
-  if (onboarding.hasSmallExpenses === "No") {
-    return [
-      "No identificaste gastos pequeños frecuentes. Puedes revisar esta sección más adelante si notas consumos repetidos."
-    ];
-  }
-
-  if (onboarding.hasSmallExpenses === "No estoy seguro") {
-    return [
-      "Podrías observar tus pequeños gastos durante una semana para entender si tienen impacto en tu presupuesto."
-    ];
-  }
-
-  return ["No tenemos suficiente información sobre pequeños gastos frecuentes todavía."];
 }
 
 function getDebtMessage(metrics: FinancialMetrics) {
@@ -442,10 +358,6 @@ function getMeaningMessage(priority: MainPriority) {
 
   if (priority.key === "expenses") {
     return "En tu caso, revisar tu flujo mensual puede ayudarte a identificar qué gastos son esenciales, cuáles son variables y dónde podría aparecer margen para ahorrar.";
-  }
-
-  if (priority.key === "smallExpenses") {
-    return "En tu caso, los gastos pequeños no son el problema por sí solos. La oportunidad está en decidir cuáles quieres conservar y cuáles podrías limitar para acercarte a una meta.";
   }
 
   return "En tu caso, ya puedes empezar a traducir tu meta en una acción concreta y pequeña para esta semana, usando tus rangos como una primera referencia.";
@@ -567,20 +479,7 @@ export default function DiagnosisScreen() {
     () => getDeclaredGoalContext(onboarding, metrics, priority),
     [metrics, onboarding, priority]
   );
-  const smallExpensesMessages = useMemo(
-    () => getSmallExpensesMessages(onboarding, metrics),
-    [onboarding, metrics]
-  );
   const expenseBarWidth = metrics.expensePercentage ?? 0;
-  const smallExpensesBarWidth = Math.min(
-    metrics.smallExpensePercentage ?? 0,
-    expenseBarWidth,
-    100
-  );
-  const otherExpensesPercentage = Math.max(
-    0,
-    expenseBarWidth - (metrics.smallExpensePercentage ?? 0)
-  );
   const marginPercentage = 100 - expenseBarWidth;
   const expensesAreHigh = metrics.expensePercentage !== null && metrics.expensePercentage >= 85;
   const hasPositiveMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin > 0;
@@ -609,12 +508,8 @@ export default function DiagnosisScreen() {
     metrics.expensePercentage !== null
       ? metrics.expensePercentage > 100
         ? `Por cada $100 que entra, salen cerca de $${metrics.expensePercentage}.`
-        : metrics.snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
-          ? `Por cada $100 que entra, aproximadamente $${metrics.expensePercentage} se utiliza en gastos mensuales y deudas.`
-          : `Por cada $100 que entra, aproximadamente $${metrics.expensePercentage} se utiliza en gastos principales, gastos pequeños y deudas.`
-      : metrics.snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
-        ? "Compara lo que entra durante el mes con tus gastos mensuales y cuotas de deuda."
-        : "Compara lo que entra durante el mes con tus gastos principales, gastos pequeños y cuotas de deuda.";
+        : `Por cada $100 que entra, aproximadamente $${metrics.expensePercentage} se utiliza en gastos registrados y deudas.`
+      : "Compara lo que entra durante el mes con tus gastos registrados y cuotas de deuda.";
   const indicators = [
     {
       label: "Margen mensual",
@@ -637,11 +532,6 @@ export default function DiagnosisScreen() {
       label: metrics.currentSavingsDisplay.label,
       value: metrics.currentSavingsDisplay.value,
       detail: metrics.currentSavingsDisplay.helper
-    },
-    {
-      label: "Pequeños gastos",
-      value: metrics.smallExpensesMetricLabel,
-      detail: metrics.smallExpensesDetail
     },
     {
       label: "Peso de deudas",
@@ -805,11 +695,7 @@ export default function DiagnosisScreen() {
                       }
                     ]}
                     closeLabel="Cerrar"
-                    definition={
-                      metrics.snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
-                        ? "El margen mensual es lo que queda al restar gastos mensuales y cuotas de deuda de los ingresos. Los gastos pequeños ya están incluidos en el total mensual."
-                        : "El margen mensual es lo que queda al restar gastos principales, gastos pequeños y cuotas de deuda de los ingresos."
-                    }
+                    definition="El margen mensual es lo que queda al restar los gastos registrados y las cuotas de deuda de los ingresos."
                     guidanceMode={guidanceMode}
                     plainLanguage={flowPlainLanguage}
                     resultDescription={flowResultDescription}
@@ -832,7 +718,6 @@ export default function DiagnosisScreen() {
                 <View style={styles.valueRows}>
                   <ValueRow label={metrics.incomeDisplay.label} value={metrics.incomeDisplay.value} />
                   <ValueRow label={metrics.expenseDisplay.label} value={metrics.expenseDisplay.value} />
-                  <ValueRow label="Gastos pequeños" value={metrics.smallExpensesMetricLabel} />
                   <ValueRow
                     label="Cuotas de deuda"
                     value={`${formatCOP(metrics.snapshot.cashflow.monthlyDebtPayments)}${
@@ -874,32 +759,15 @@ export default function DiagnosisScreen() {
                       { width: toPercentWidth(expenseBarWidth) }
                     ]}
                   />
-                  {smallExpensesBarWidth > 0 ? (
-                    <View
-                      style={[
-                        styles.flowBarSmallExpenses,
-                        expensesAreHigh && styles.flowBarSmallExpensesWarning,
-                        { width: toPercentWidth(smallExpensesBarWidth) }
-                      ]}
-                    />
-                  ) : null}
                 </View>
 
                 <View style={styles.legendRow}>
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, styles.legendDotExpenses]} />
                     <Text style={styles.legendText}>
-                      Gastos y deudas ({otherExpensesPercentage}%)
+                      Gastos y deudas ({expenseBarWidth}%)
                     </Text>
                   </View>
-                  {smallExpensesBarWidth > 0 ? (
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, styles.legendDotSmallExpenses]} />
-                      <Text style={styles.legendText}>
-                        Pequeños gastos ({metrics.smallExpensePercentage}%)
-                      </Text>
-                    </View>
-                  ) : null}
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, styles.legendDotMargin]} />
                     <Text style={styles.legendText}>Margen ({marginPercentage}%)</Text>
@@ -969,17 +837,6 @@ export default function DiagnosisScreen() {
             title="Fondo de emergencia"
           >
             <Text style={styles.text}>{emergencyMessage}</Text>
-          </InfoCard>
-
-          <InfoCard
-            icon={<ClipboardCheck color={colors.primary} size={18} strokeWidth={2.4} />}
-            title="Pequeños gastos"
-          >
-            {smallExpensesMessages.map((message) => (
-              <Text key={message} style={styles.text}>
-                {message}
-              </Text>
-            ))}
           </InfoCard>
 
           <InfoCard
@@ -1283,18 +1140,6 @@ const styles = StyleSheet.create({
   flowBarExpensesWarning: {
     backgroundColor: "#F97316"
   },
-  flowBarSmallExpenses: {
-    backgroundColor: "#F59E0B",
-    borderBottomLeftRadius: radius.pill,
-    borderTopLeftRadius: radius.pill,
-    height: "100%",
-    left: 0,
-    position: "absolute",
-    top: 0
-  },
-  flowBarSmallExpensesWarning: {
-    backgroundColor: "#B45309"
-  },
   legendRow: {
     flexDirection: "row",
     gap: spacing.xs,
@@ -1317,9 +1162,6 @@ const styles = StyleSheet.create({
   },
   legendDotMargin: {
     backgroundColor: colors.support
-  },
-  legendDotSmallExpenses: {
-    backgroundColor: "#F59E0B"
   },
   legendText: {
     color: colors.textMuted,

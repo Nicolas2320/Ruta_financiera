@@ -220,14 +220,28 @@ function getInitialAmountSelection(goal: FinancialGoal | null) {
 export default function GoalsScreen() {
   const router = useRouter();
   const { isPhone, isSmallPhone, screenPadding } = useResponsiveLayout();
-  const params = useLocalSearchParams();
+  const params = useLocalSearchParams<{
+    mode?: string;
+    suggestedTargetAmount?: string;
+    template?: string;
+  }>();
   const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
   const goals = getOnboardingGoals(onboarding);
   const primaryGoal = getPrimaryFinancialGoal(onboarding);
   const isAddMode = params.mode === "add";
+  const isEmergencyTemplate = isAddMode && params.template === "emergency";
+  const suggestedEmergencyTargetAmount = isEmergencyTemplate
+    ? Number(params.suggestedTargetAmount)
+    : 0;
+  const hasSuggestedEmergencyTarget =
+    Number.isFinite(suggestedEmergencyTargetAmount) && suggestedEmergencyTargetAmount > 0;
   const initialGoal = isAddMode ? null : primaryGoal;
-  const initialGoalSelection = getInitialGoalSelection(initialGoal);
-  const initialAmountSelection = getInitialAmountSelection(initialGoal);
+  const initialGoalSelection = isEmergencyTemplate
+    ? "Crear un fondo de emergencia"
+    : getInitialGoalSelection(initialGoal);
+  const initialAmountSelection = hasSuggestedEmergencyTarget
+    ? manualAmountOptionTitle
+    : getInitialAmountSelection(initialGoal);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(initialGoalSelection);
   const [customGoalName, setCustomGoalName] = useState(
     initialGoal && initialGoalSelection === customGoalOption.title ? initialGoal.title : ""
@@ -239,7 +253,9 @@ export default function GoalsScreen() {
     initialAmountSelection
   );
   const [targetAmountInput, setTargetAmountInput] = useState(
-    getCurrencyInputValue(initialGoal?.targetAmount)
+    hasSuggestedEmergencyTarget
+      ? getCurrencyInputValue(suggestedEmergencyTargetAmount)
+      : getCurrencyInputValue(initialGoal?.targetAmount)
   );
   const [targetMonth, setTargetMonth] = useState<string | null>(initialGoal?.targetMonth ?? null);
   const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
@@ -251,17 +267,34 @@ export default function GoalsScreen() {
 
     hasHydratedStoredAnswers.current = true;
     const storedGoal = isAddMode ? null : getPrimaryFinancialGoal(onboarding);
-    const storedGoalSelection = getInitialGoalSelection(storedGoal);
+    const storedGoalSelection = isEmergencyTemplate
+      ? "Crear un fondo de emergencia"
+      : getInitialGoalSelection(storedGoal);
 
     setSelectedGoal(storedGoalSelection);
     setCustomGoalName(
       storedGoal && storedGoalSelection === customGoalOption.title ? storedGoal.title : ""
     );
-    setSelectedIconKey(storedGoal?.iconKey ?? null);
-    setSelectedAmountRange(getInitialAmountSelection(storedGoal));
-    setTargetAmountInput(getCurrencyInputValue(storedGoal?.targetAmount));
+    setSelectedIconKey(isEmergencyTemplate ? "emergency" : storedGoal?.iconKey ?? null);
+    setSelectedAmountRange(
+      hasSuggestedEmergencyTarget
+        ? manualAmountOptionTitle
+        : getInitialAmountSelection(storedGoal)
+    );
+    setTargetAmountInput(
+      hasSuggestedEmergencyTarget
+        ? getCurrencyInputValue(suggestedEmergencyTargetAmount)
+        : getCurrencyInputValue(storedGoal?.targetAmount)
+    );
     setTargetMonth(storedGoal?.targetMonth ?? null);
-  }, [isAddMode, onboarding, onboardingSyncStatus]);
+  }, [
+    hasSuggestedEmergencyTarget,
+    isAddMode,
+    isEmergencyTemplate,
+    onboarding,
+    onboardingSyncStatus,
+    suggestedEmergencyTargetAmount
+  ]);
 
   const isCustomGoal = selectedGoal === customGoalOption.title;
   const finalGoalTitle = isCustomGoal ? customGoalName.trim() : selectedGoal;
@@ -402,15 +435,31 @@ export default function GoalsScreen() {
           )}
 
           <HeroInfoCard
-            badge="Puedes empezar con un rango y ajustarlo después."
+            badge={
+              isEmergencyTemplate
+                ? "Referencia calculada con tus gastos actuales."
+                : "Puedes empezar con un rango y ajustarlo después."
+            }
             image={goalTargetImage}
             imageStyle={styles.heroImage}
             text={
-              isAddMode
+              isEmergencyTemplate
+                ? `Te proponemos ${
+                    hasSuggestedEmergencyTarget
+                      ? formatCOP(suggestedEmergencyTargetAmount)
+                      : "una base inicial"
+                  }, equivalente a tres meses de gastos. Puedes cambiar el monto y elegir la fecha antes de guardarla.`
+                : isAddMode
                 ? "Agrega otra meta con su propio monto y mes objetivo."
                 : "Elige la meta en la que quieres enfocarte ahora. Podrás crear otras metas y cambiar cuál es la principal."
             }
-            title={isAddMode ? "Agregar una meta" : "Tu meta principal"}
+            title={
+              isEmergencyTemplate
+                ? "Crear fondo de emergencia"
+                : isAddMode
+                  ? "Agregar una meta"
+                  : "Tu meta principal"
+            }
           />
 
           <View style={styles.card}>

@@ -59,6 +59,7 @@ import {
   type MonthlyPlanData,
   type MonthlyPlanMetrics
 } from "../utils/monthlyPlan";
+import { getSpendingBarSegments } from "../utils/spendingPresentation";
 
 type IconProps = {
   color?: string;
@@ -444,12 +445,6 @@ function getSmallExpensesValue(metrics: MonthlyPlanMetrics) {
 function getSmallExpensesComparisonValue(metrics: MonthlyPlanMetrics) {
   const smallExpenses = metrics.snapshot.smallExpenses.amount;
 
-  if (metrics.snapshot.cashflow.monthlyExpensesIncludesSmallExpenses) {
-    return smallExpenses === null
-      ? "Incluidos en gastos mensuales"
-      : `${formatCOP(smallExpenses)} dentro del total`;
-  }
-
   if (metrics.snapshot.sourceMap.smallExpenses === "reported_none") {
     return "No identificados";
   }
@@ -505,7 +500,7 @@ function getSmallExpensesText(data: MonthlyPlanData, metrics: MonthlyPlanMetrics
     metrics.snapshot.cashflow.monthlyExpensesIncludesSmallExpenses &&
     metrics.snapshot.smallExpenses.amount === null
   ) {
-    return "Ya están considerados en tu gasto mensual. Puedes detallarlos más adelante si quieres analizarlos por separado.";
+    return "Ya están incluidos en tu gasto mensual. Puedes detallarlos aquí para entender cuánto representan y decidir si quieres ajustar alguno.";
   }
 
   if (data.hasSmallExpenses === "No") {
@@ -901,7 +896,14 @@ export default function SpendingScreen() {
     savedCategoryAmounts,
     categoryAmountsFromInputs
   );
-  const expenseBarWidth = metrics.expensePercentage ?? 0;
+  const spendingBarSegments = getSpendingBarSegments({
+    debtPayments: snapshot.cashflow.monthlyDebtPayments,
+    mainExpenses: metrics.expenseMidpoint,
+    monthlyExpensesIncludesSmallExpenses:
+      snapshot.cashflow.monthlyExpensesIncludesSmallExpenses,
+    monthlyIncome: metrics.incomeMidpoint,
+    smallExpenses: snapshot.values.smallExpenses
+  });
   const expensesMayExceedIncome =
     metrics.expensePercentage !== null && metrics.expensePercentage >= 100;
   const expensesAreHigh =
@@ -910,6 +912,10 @@ export default function SpendingScreen() {
     metrics.estimatedMargin === null ? "neutral" : metrics.estimatedMargin <= 0 ? "warning" : "support";
   const hasPositiveMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin > 0;
   const hasNoMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin <= 0;
+  const hasSmallExpensesDetail =
+    data.hasSmallExpenses !== null ||
+    data.smallExpensesRange !== null ||
+    snapshot.smallExpenses.amount !== null;
   const navigate = (route: Route) => router.push(route);
 
   useEffect(() => {
@@ -1039,13 +1045,15 @@ export default function SpendingScreen() {
                             ? formatCOP(metrics.expenseMidpoint)
                             : "Por calcular"
                       },
-                      {
-                        label: "Gastos pequeños",
-                        operator: snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
-                          ? undefined
-                          : "+",
-                        value: getSmallExpensesComparisonValue(metrics)
-                      },
+                      ...(!snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
+                        ? [
+                            {
+                              label: "Gastos pequeños",
+                              operator: "+" as const,
+                              value: getSmallExpensesComparisonValue(metrics)
+                            }
+                          ]
+                        : []),
                       {
                         label: "Cuotas de deuda",
                         operator: "+",
@@ -1080,7 +1088,7 @@ export default function SpendingScreen() {
                     calculationTitle="Cómo obtenemos el porcentaje"
                     definition={
                       snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
-                        ? "Esta relación usa tus gastos mensuales —que ya incluyen los gastos pequeños— y suma las cuotas de deuda."
+                        ? "Esta relación usa el total de tus gastos mensuales y suma las cuotas de deuda."
                         : "Esta relación suma gastos principales, gastos pequeños y cuotas de deuda para mostrar qué parte de tus ingresos ya está comprometida."
                     }
                     guidanceMode={guidanceMode}
@@ -1133,6 +1141,13 @@ export default function SpendingScreen() {
               </View>
             </View>
             <View
+              accessibilityLabel={`Distribución del ingreso: ${monthlyExpensesLabel}, ${getAmountLabel(
+                metrics.expenseMidpoint,
+                hasExactMonthlyExpenses
+              )}; cuotas de deuda, ${getDebtPaymentsComparisonValue(metrics)}; ${getCashflowMetricLabel(
+                isCashflowExact
+              ).toLocaleLowerCase("es-CO")}, ${getCashflowMetricValue(metrics)}.`}
+              accessible
               style={[
                 styles.progressTrack,
                 hasPositiveMargin && styles.progressTrackMargin,
@@ -1143,9 +1158,25 @@ export default function SpendingScreen() {
                 style={[
                   styles.expenseFill,
                   expensesAreHigh && styles.expenseFillWarning,
-                  { width: toPercentWidth(expenseBarWidth) }
+                  { width: toPercentWidth(spendingBarSegments.mainExpenses) }
                 ]}
               />
+              {spendingBarSegments.separateSmallExpenses > 0 ? (
+                <View
+                  style={[
+                    styles.smallExpensesFill,
+                    { width: toPercentWidth(spendingBarSegments.separateSmallExpenses) }
+                  ]}
+                />
+              ) : null}
+              {spendingBarSegments.debtPayments > 0 ? (
+                <View
+                  style={[
+                    styles.debtPaymentsFill,
+                    { width: toPercentWidth(spendingBarSegments.debtPayments) }
+                  ]}
+                />
+              ) : null}
             </View>
             <View style={styles.comparisonMetrics}>
               <ComparisonMetric
@@ -1153,11 +1184,13 @@ export default function SpendingScreen() {
                 tone={expensesAreHigh ? "warning" : "primary"}
                 value={getAmountLabel(metrics.expenseMidpoint, hasExactMonthlyExpenses)}
               />
-              <ComparisonMetric
-                label="Gastos pequeños"
-                tone="warning"
-                value={getSmallExpensesComparisonValue(metrics)}
-              />
+              {!snapshot.cashflow.monthlyExpensesIncludesSmallExpenses ? (
+                <ComparisonMetric
+                  label="Gastos pequeños"
+                  tone="warning"
+                  value={getSmallExpensesComparisonValue(metrics)}
+                />
+              ) : null}
               <ComparisonMetric
                 label="Cuotas de deuda"
                 tone="neutral"
@@ -1170,6 +1203,27 @@ export default function SpendingScreen() {
               />
             </View>
           </View>
+
+          <SectionCard
+            compact={isPhone}
+            actionLabel={hasSmallExpensesDetail ? "Revisar" : "Ingresar datos"}
+            icon={<Coffee color="#B45309" size={20} strokeWidth={2.4} />}
+            onActionPress={() => router.push({ pathname: "/small-expenses", params: { source: "spending" } })}
+            title="Gastos pequeños frecuentes"
+          >
+            <View style={styles.smallExpensesSummary}>
+              <Text style={styles.smallExpensesLabel}>Monto mensual</Text>
+              <Text style={styles.smallExpensesValue}>{getSmallExpensesValue(metrics)}</Text>
+              {data.hasSmallExpenses === "No" || data.smallExpensesRange ? (
+                <Text style={styles.helperText}>
+                  {data.hasSmallExpenses === "No"
+                    ? "No usamos este rubro para estimar aportes."
+                    : data.smallExpensesRange}
+                </Text>
+              ) : null}
+            </View>
+            <Text style={styles.text}>{getSmallExpensesText(data, metrics)}</Text>
+          </SectionCard>
 
           {spendingSignals.length > 0 ? (
             <SectionCard
@@ -1319,25 +1373,6 @@ export default function SpendingScreen() {
                 </View>
               </View>
             )}
-          </SectionCard>
-
-          <SectionCard
-            compact={isPhone}
-            actionLabel="Revisar"
-            icon={<Coffee color="#B45309" size={20} strokeWidth={2.4} />}
-            onActionPress={() => router.push({ pathname: "/small-expenses", params: { source: "spending" } })}
-            title="Gastos pequeños frecuentes"
-          >
-            <View style={styles.smallExpensesSummary}>
-              <Text style={styles.smallExpensesLabel}>Monto mensual</Text>
-              <Text style={styles.smallExpensesValue}>{getSmallExpensesValue(metrics)}</Text>
-              <Text style={styles.helperText}>
-                {data.hasSmallExpenses === "No"
-                  ? "No usamos este rubro para estimar aportes."
-                  : data.smallExpensesRange ?? "Sin rango definido."}
-              </Text>
-            </View>
-            <Text style={styles.text}>{getSmallExpensesText(data, metrics)}</Text>
           </SectionCard>
 
           </SpendingSectionContent>
@@ -1506,9 +1541,9 @@ const styles = StyleSheet.create({
   progressTrack: {
     backgroundColor: "#E4EAF2",
     borderRadius: radius.pill,
+    flexDirection: "row",
     height: 12,
-    overflow: "hidden",
-    position: "relative"
+    overflow: "hidden"
   },
   progressTrackMargin: {
     backgroundColor: colors.support
@@ -1518,14 +1553,18 @@ const styles = StyleSheet.create({
   },
   expenseFill: {
     backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    height: "100%",
-    left: 0,
-    position: "absolute",
-    top: 0
+    height: "100%"
   },
   expenseFillWarning: {
     backgroundColor: "#F97316"
+  },
+  smallExpensesFill: {
+    backgroundColor: "#B45309",
+    height: "100%"
+  },
+  debtPaymentsFill: {
+    backgroundColor: colors.textSubtle,
+    height: "100%"
   },
   comparisonMetrics: {
     flexDirection: "row",

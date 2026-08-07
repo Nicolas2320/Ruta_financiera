@@ -54,6 +54,8 @@ import {
 } from "../utils/monthlyPlan";
 import {
   getPlanPreferenceGoalBudget,
+  getPlanPreferenceGoalPlanOptions,
+  getPlanPreferencePreferredGoalId,
   resolvePlanPreference
 } from "../utils/planPreference";
 
@@ -673,12 +675,10 @@ export default function DashboardScreen() {
     () => resolvePlanPreference({ exactValues, onboarding }),
     [exactValues, onboarding]
   );
-  const preferredGoalId =
-    planPreference.hasExplicitPreference &&
-    planPreference.isApplicable &&
-    planPreference.strategy === "prioritize_goal"
-      ? planPreference.goalId
-      : null;
+  const preferredGoalId = getPlanPreferencePreferredGoalId({
+    onboarding,
+    preference: planPreference
+  });
   const preferredPlanPriorityKey =
     planPreference.hasExplicitPreference && planPreference.isApplicable
       ? planPreference.priorityKey
@@ -688,10 +688,11 @@ export default function DashboardScreen() {
       onboarding,
       getPlanPreferenceGoalBudget({
         fallbackMonthlyBudget: snapshot.cashflow.suggestedMonthlyContribution,
-        preference: planPreference
+        preference: planPreference,
+        preferredGoalId
       }),
       exactValues,
-      { preferredGoalId }
+      getPlanPreferenceGoalPlanOptions(planPreference, preferredGoalId)
     ),
     [exactValues, onboarding, planPreference, preferredGoalId, snapshot.cashflow.suggestedMonthlyContribution]
   );
@@ -834,7 +835,7 @@ export default function DashboardScreen() {
       : "";
   const goalsDetailText =
     totalGoalsCount > 1
-      ? `Bolsa sugerida: ${getAmountLabel(goalPlan.monthlyGoalBudget)}. Principal: ${getDefinedLabel(primaryGoalTitle, "No definida")}.${completedGoalsDetail}`
+      ? `Aporte mensual asignado: ${getAmountLabel(goalPlan.monthlyContributionTotal)} de una referencia de ${getAmountLabel(goalPlan.monthlyGoalBudget)}. Principal: ${getDefinedLabel(primaryGoalTitle, "No definida")}.${completedGoalsDetail}`
       : goalDetailText;
   const goalStatusTone =
     primaryGoalAllocation && isCompletedGoalAllocation(primaryGoalAllocation)
@@ -1071,7 +1072,10 @@ export default function DashboardScreen() {
           >
             <Chip label={goalStatus} tone={goalStatusTone} />
             {totalGoalsCount > 1 ? (
-              <Chip label={`Bolsa ${getAmountLabel(goalPlan.monthlyGoalBudget)}`} tone="support" />
+              <Chip
+                label={`Aporte ${getAmountLabel(goalPlan.monthlyContributionTotal)}`}
+                tone="support"
+              />
             ) : null}
             {completedGoalsChipLabel ? (
               <Chip label={completedGoalsChipLabel} tone="support" />

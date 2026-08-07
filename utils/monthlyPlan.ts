@@ -13,10 +13,12 @@ import {
   type DebtRecord,
   type ExactFinancialValues,
   type ExpenseCategoryAmounts,
+  type FinancialGoal,
   type OnboardingData
 } from "../types/financial";
 import { initialOnboarding } from "../types/financial";
 import { isDebtPaid } from "./debtPayments";
+import { isEmergencyGoal } from "./goalPlanning";
 
 export type MonthlyPlanData = {
   ageRange: string | null;
@@ -38,6 +40,7 @@ export type MonthlyPlanData = {
   debts: DebtRecord[];
   financialGoal: string | null;
   goalAmountRange: string | null;
+  goals: FinancialGoal[];
 };
 
 export type MonthlyPlanMetrics = {
@@ -337,7 +340,8 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
     debtPaymentShare = null,
     debts = [],
     financialGoal = null,
-    goalAmountRange = null
+    goalAmountRange = null,
+    goals = []
   } = data;
 
   return {
@@ -362,7 +366,8 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
     debtPaymentShare,
     debts: Array.isArray(debts) ? debts : [],
     financialGoal,
-    goalAmountRange
+    goalAmountRange,
+    goals: Array.isArray(goals) ? goals : []
   };
 }
 
@@ -421,11 +426,42 @@ export function getMonthlyActions(
   priorityKey = metrics.snapshot.priority.key,
   goalContext?: MonthlyGoalContext
 ): MonthlyAction[] {
-  const actions = getGoalAwareActions(
+  let actions = getGoalAwareActions(
     generateMonthlyActions(metrics.snapshot, priorityKey),
     priorityKey,
     goalContext
   );
+  const needsEmergencyGoal =
+    (metrics.snapshot.priority.key === "build_emergency_fund" ||
+      priorityKey === "build_emergency_fund") &&
+    !data.goals.some(
+      (goal) =>
+        goal.status !== "completed" &&
+        goal.status !== "paused" &&
+        isEmergencyGoal(goal)
+    );
+  const createEmergencyGoalAction: MonthlyAction = {
+    id: "create-emergency-goal",
+    title: "Crear fondo de emergencia en Metas",
+    description:
+      "Crea la meta para definir su monto, fecha y aporte sin mezclarla con tus otros objetivos.",
+    why:
+      "Tenerla como meta permite que la simulación y el plan mensual usen el mismo aporte.",
+    estimatedImpact:
+      "La app podrá seguir su avance y ajustar la proyección con tus datos actuales.",
+    difficulty: "Baja",
+    category: "Ahorro"
+  };
+
+  if (needsEmergencyGoal && priorityKey === "build_emergency_fund") {
+    actions = actions.map((action, index) =>
+      index === 0
+        ? createEmergencyGoalAction
+        : action
+    );
+  } else if (needsEmergencyGoal) {
+    actions = [...actions.slice(0, 2), createEmergencyGoalAction];
+  }
 
   return priorityKey === "debt_pressure"
     ? personalizeDebtActions(actions, data.debts)

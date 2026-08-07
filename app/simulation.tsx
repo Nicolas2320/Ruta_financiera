@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
-  AlertCircle,
   Bot,
   ClipboardCheck,
   Flag,
@@ -30,10 +29,11 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import type { SimulationPlanStrategy } from "../types/financial";
+import { type SimulationPlanStrategy } from "../types/financial";
 import {
   buildDistributionScenarios,
   calculateProtectedMargin,
+  type DistributionStrategyId,
   type ProtectedMarginPreference
 } from "../utils/financialDistribution";
 import { presentDistributionScenarios } from "../utils/financialDistributionPresentation";
@@ -113,23 +113,6 @@ function formatSimulationAmountRange(range: SimulationAmountRange) {
   }
 
   return `${formatCOP(range.minimum ?? 0)} – ${formatCOP(range.maximum ?? 0)}`;
-}
-
-function getInvestmentEducationMessage(
-  snapshot: ReturnType<typeof calculateFinancialSnapshot>
-) {
-  if (
-    snapshot.emergencyFund.status === "none" ||
-    snapshot.emergencyFund.status === "starter"
-  ) {
-    return "Primero conviene fortalecer una base para imprevistos.";
-  }
-
-  if (snapshot.debt.level === "high" || snapshot.debt.level === "medium") {
-    return "Antes de invertir, puede ser útil revisar el peso mensual de tus deudas.";
-  }
-
-  return "Si después confirmas que tu base está estable, puedes explorar inversión con calma y educación.";
 }
 
 function IconBubble({ icon, tone = "primary" }: { icon: ReactNode; tone?: Tone }) {
@@ -262,6 +245,8 @@ export default function SimulationScreen() {
   const [customProtectedMarginInput, setCustomProtectedMarginInput] = useState("");
   const [selectedPlanStrategy, setSelectedPlanStrategy] =
     useState<SimulationPlanStrategy>("diagnosis_recommended");
+  const [selectedDistributionId, setSelectedDistributionId] =
+    useState<DistributionStrategyId>("current_reference");
   const [expandedDistributionId, setExpandedDistributionId] =
     useState<string>("current_reference");
   const [splitDebtPercent, setSplitDebtPercent] = useState(50);
@@ -372,30 +357,74 @@ export default function SimulationScreen() {
         ? ""
         : formatCOP(preference.customProtectedMargin)
     );
+    if (
+      preference.strategy === "current_reference" ||
+      preference.strategy === "reduce_interest" ||
+      preference.strategy === "accelerate_goal" ||
+      preference.strategy === "split_debt_goal"
+    ) {
+      setSelectedDistributionId(preference.strategy);
+    } else if (preference.strategy === "prioritize_goal") {
+      setSelectedDistributionId("accelerate_goal");
+    }
+    if (preference.debtShare !== null) {
+      setSplitDebtPercent(Math.round(preference.debtShare * 100));
+    }
     setSelectedPlanStrategy(
-      preference.strategy === "prioritize_goal" && preference.goalId !== selectedGoalId
-        ? "diagnosis_recommended"
-        : preference.strategy
+      (preference.strategy === "prioritize_goal" ||
+        preference.strategy === "accelerate_goal") &&
+        preference.goalId === selectedGoalId
+        ? "prioritize_goal"
+        : "diagnosis_recommended"
     );
   }, [onboarding.simulationPlanPreference?.selectedAt, selectedGoalId]);
 
   useEffect(() => {
-    if (selectedPlanStrategy === "prioritize_goal" && !canSelectPreliminaryGoal) {
+    if (canSelectPreliminaryGoal && selectedPlanStrategy !== "prioritize_goal") {
+      setSelectedPlanStrategy("prioritize_goal");
+    } else if (
+      selectedPlanStrategy === "prioritize_goal" &&
+      !canSelectPreliminaryGoal
+    ) {
       setSelectedPlanStrategy("diagnosis_recommended");
     }
   }, [canSelectPreliminaryGoal, selectedPlanStrategy]);
 
   const handleContinue = () => {
-    if (!isDetailedDebtMode) {
+    if (isDetailedDebtMode) {
+      const selectedScenario = distributionScenarios.find(
+        (scenario) => scenario.id === selectedDistributionId
+      );
       const strategy =
-        selectedPlanStrategy === "prioritize_goal" && canSelectPreliminaryGoal
-          ? "prioritize_goal"
-          : "diagnosis_recommended";
+        selectedScenario?.status === "ready"
+          ? selectedDistributionId
+          : "current_reference";
 
       updateOnboarding({
         simulationPlanPreference: {
           strategy,
-          goalId: strategy === "prioritize_goal" ? selectedGoalId : null,
+          goalId:
+            strategy === "accelerate_goal" || strategy === "split_debt_goal"
+              ? selectedGoalId
+              : null,
+          debtShare: strategy === "split_debt_goal" ? splitDebtPercent / 100 : null,
+          protectedMarginMode,
+          customProtectedMargin:
+            protectedMarginMode === "custom" ? customProtectedMargin : null,
+          selectedAt: new Date().toISOString()
+        }
+      });
+    } else {
+      const preliminaryStrategy =
+        selectedPlanStrategy === "prioritize_goal" && canSelectPreliminaryGoal
+          ? "accelerate_goal"
+          : "diagnosis_recommended";
+
+      updateOnboarding({
+        simulationPlanPreference: {
+          strategy: preliminaryStrategy,
+          goalId: preliminaryStrategy === "accelerate_goal" ? selectedGoalId : null,
+          debtShare: null,
           protectedMarginMode,
           customProtectedMargin:
             protectedMarginMode === "custom" ? customProtectedMargin : null,
@@ -562,7 +591,10 @@ export default function SimulationScreen() {
                   label="Quieres reunir"
                   tone="support"
                   value={
-                    selectedProjectionGoal.targetAmount === null
+                    selectedProjectionGoal.targetAmountSource === "range" &&
+                    selectedProjectionGoal.amountRange
+                      ? selectedProjectionGoal.amountRange
+                      : selectedProjectionGoal.targetAmount === null
                       ? "Por definir"
                       : formatCOP(selectedProjectionGoal.targetAmount)
                   }
@@ -608,7 +640,8 @@ export default function SimulationScreen() {
               >
                 <Text style={styles.sectionDescription}>
                   Todas conservan primero tus gastos y cuotas requeridas. Lo único que cambia
-                  es el destino del dinero que queda disponible.
+                  es el destino del dinero que queda disponible. Elige una para que Metas,
+                  Deudas, el dashboard y tu plan mensual usen la misma distribución.
                 </Text>
                 <View style={styles.scenariosList}>
                   {distributionScenarios.map((scenario) => (
@@ -621,18 +654,24 @@ export default function SimulationScreen() {
                           : () => router.push(getResolutionRoute(scenario.issueCodes))
                       }
                       onSplitDebtPercentChange={setSplitDebtPercent}
+                      onSelect={
+                        scenario.status === "ready"
+                          ? () => setSelectedDistributionId(scenario.id)
+                          : undefined
+                      }
                       onToggle={() =>
                         setExpandedDistributionId((current) =>
                           current === scenario.id ? "" : scenario.id
                         )
                       }
                       scenario={scenario}
+                      selected={selectedDistributionId === scenario.id}
                     />
                   ))}
                 </View>
                 <Text style={styles.disclaimerText}>
-                  Estos escenarios son comparaciones educativas. No registran pagos, no separan
-                  dinero y no crean una deuda nueva.
+                  La estrategia elegida se guardará como referencia al continuar. No registra
+                  pagos, no separa dinero y no crea una deuda nueva.
                 </Text>
               </SectionCard>
             </>
@@ -640,42 +679,18 @@ export default function SimulationScreen() {
             <SectionCard
               compact={isPhone}
               icon={<TrendingUp color={colors.primary} size={22} strokeWidth={2.4} />}
-              title="Posibles escenarios"
+              title="Proyección de tu meta"
             >
               <PreliminarySimulationComparison
                 asOfDate={projectionInput.asOfDate}
                 distributableAmount={distributableAmount}
-                emergencyCoverageMonths={snapshot.emergencyFund.coverageMonths}
                 experience={simulationExperience}
                 goal={selectedProjectionGoal}
                 onSelect={setSelectedPlanStrategy}
-                priority={snapshot.priority}
                 selectedStrategy={selectedPlanStrategy}
               />
             </SectionCard>
           )}
-
-          <View style={styles.insightsGrid}>
-            <View style={[styles.insightCard, isPhone && styles.cardPhone]}>
-              <View style={styles.insightHeader}>
-                <IconBubble
-                  icon={<AlertCircle color={colors.primary} size={22} strokeWidth={2.4} />}
-                />
-                <Text style={styles.insightTitle}>{snapshot.priority.title}</Text>
-              </View>
-              <Text style={styles.text}>{snapshot.priority.description}</Text>
-            </View>
-            <View style={[styles.insightCard, isPhone && styles.cardPhone]}>
-              <View style={styles.insightHeader}>
-                <IconBubble
-                  icon={<ShieldCheck color={colors.support} size={22} strokeWidth={2.4} />}
-                  tone="support"
-                />
-                <Text style={styles.insightTitle}>Antes de invertir</Text>
-              </View>
-              <Text style={styles.text}>{getInvestmentEducationMessage(snapshot)}</Text>
-            </View>
-          </View>
 
           <View style={styles.actions}>
             <PrimaryButton
@@ -1089,34 +1104,6 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
-  },
-  insightsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md
-  },
-  insightCard: {
-    ...shadows.card,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    flexBasis: 300,
-    flexGrow: 1,
-    gap: spacing.sm,
-    padding: spacing.lg
-  },
-  insightHeader: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: spacing.md
-  },
-  insightTitle: {
-    color: colors.text,
-    flex: 1,
-    fontSize: typography.question,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.question
   },
   text: {
     color: colors.textMuted,

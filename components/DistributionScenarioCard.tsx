@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp } from "lucide-react-native";
+import { Check, ChevronDown, ChevronUp } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
@@ -278,20 +278,30 @@ function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentat
 export function DistributionScenarioCard({
   expanded,
   onResolve,
+  onSelect,
   onSplitDebtPercentChange,
   onToggle,
-  scenario
+  scenario,
+  selected = false
 }: {
   expanded: boolean;
   onResolve?: () => void;
+  onSelect?: () => void;
   onSplitDebtPercentChange?: (value: number) => void;
   onToggle: () => void;
   scenario: DistributionScenarioPresentation;
+  selected?: boolean;
 }) {
   const unavailable = scenario.status !== "ready";
 
   return (
-    <View style={[styles.card, unavailable && styles.cardUnavailable]}>
+    <View
+      style={[
+        styles.card,
+        selected && styles.cardSelected,
+        unavailable && styles.cardUnavailable
+      ]}
+    >
       <View style={styles.header}>
         <View style={styles.headerCopy}>
           <View style={styles.titleRow}>
@@ -321,6 +331,38 @@ export function DistributionScenarioCard({
           {getHeadline(scenario)}
         </Text>
       </View>
+
+      {!unavailable && onSelect ? (
+        <Pressable
+          accessibilityRole="radio"
+          accessibilityState={{ selected }}
+          onPress={onSelect}
+          style={({ pressed }) => [
+            styles.selectButton,
+            selected && styles.selectButtonSelected,
+            pressed && styles.pressed
+          ]}
+        >
+          <View
+            style={[
+              styles.selectIndicator,
+              selected && styles.selectIndicatorSelected
+            ]}
+          >
+            {selected ? (
+              <Check color={colors.surface} size={14} strokeWidth={3} />
+            ) : null}
+          </View>
+          <Text
+            style={[
+              styles.selectButtonText,
+              selected && styles.selectButtonTextSelected
+            ]}
+          >
+            {selected ? "Estrategia elegida" : "Elegir esta estrategia"}
+          </Text>
+        </Pressable>
+      ) : null}
 
       {scenario.issueMessages.length > 1 ? (
         <View style={styles.issueList}>
@@ -423,6 +465,10 @@ const styles = StyleSheet.create({
   cardUnavailable: {
     backgroundColor: "#FAFBFC"
   },
+  cardSelected: {
+    borderColor: colors.primary,
+    borderWidth: 2
+  },
   header: {
     alignItems: "flex-start",
     flexDirection: "row",
@@ -491,6 +537,42 @@ const styles = StyleSheet.create({
   },
   headlineUnavailable: {
     color: "#B45309"
+  },
+  selectButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  selectButtonSelected: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary
+  },
+  selectIndicator: {
+    borderColor: colors.primary,
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    height: 20,
+    width: 20,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  selectIndicatorSelected: {
+    backgroundColor: colors.primary
+  },
+  selectButtonText: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  selectButtonTextSelected: {
+    color: colors.primary
   },
   issueList: {
     gap: spacing.xs

@@ -129,7 +129,7 @@ export function ProtectedMarginControl({
             <Text style={styles.breakdownTotal}>{formatCOP(poolBreakdown.total)}</Text>
           </View>
           <Text style={styles.breakdownDescription}>
-            No es dinero adicional: es la misma bolsa mensual disponible para comparar
+            No es dinero adicional: es el mismo monto mensual disponible para comparar
             decisiones distintas.
           </Text>
           <View style={styles.breakdownRows}>
@@ -156,7 +156,7 @@ export function ProtectedMarginControl({
           </View>
           {poolBreakdown.overcommittedAmount > 0 ? (
             <Text style={styles.breakdownWarning}>
-              Tus decisiones voluntarias superan esta bolsa por {formatCOP(
+              Tus decisiones voluntarias superan este monto por {formatCOP(
                 poolBreakdown.overcommittedAmount
               )}; algún monto tendría que ajustarse.
             </Text>

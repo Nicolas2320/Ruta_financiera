@@ -79,6 +79,8 @@ import {
 } from "../utils/monthlyPlan";
 import {
   getPlanPreferenceGoalBudget,
+  getPlanPreferenceGoalPlanOptions,
+  getPlanPreferencePreferredGoalId,
   resolvePlanPreference
 } from "../utils/planPreference";
 
@@ -463,6 +465,7 @@ function ActionCard({
   expanded,
   impactItem,
   onOpenDebts,
+  onOpenGoals,
   onOpenSimulation,
   onProgressChange,
   onToggleExpanded,
@@ -474,6 +477,7 @@ function ActionCard({
   expanded: boolean;
   impactItem: MonthlyActionImpactItem | null;
   onOpenDebts: () => void;
+  onOpenGoals: () => void;
   onOpenSimulation: () => void;
   onProgressChange: (patch: ActionProgressPatch) => void;
   onToggleExpanded: () => void;
@@ -503,6 +507,7 @@ function ActionCard({
   const hasOptions = Boolean(evidenceConfig.options && evidenceConfig.options.length > 0);
   const isScenarioComparisonAction = action.id === "compare-goal-contribution";
   const isDebtDetailsAction = action.id === "debt-monthly-payment";
+  const isCreateEmergencyGoalAction = action.id === "create-emergency-goal";
   const hasSavedProgress = Boolean(
     progressRecord && (progressRecord.status !== "pending" || progressRecord.evidence)
   );
@@ -648,6 +653,20 @@ function ActionCard({
             ]}
           >
             <Text style={styles.cardSecondaryActionButtonText}>Ver mis deudas</Text>
+            <ArrowRight color={colors.primary} size={17} strokeWidth={2.6} />
+          </Pressable>
+        ) : null}
+        {isCreateEmergencyGoalAction ? (
+          <Pressable
+            accessibilityLabel="Crear fondo de emergencia en Metas"
+            accessibilityRole="button"
+            onPress={onOpenGoals}
+            style={({ pressed }) => [
+              styles.cardSecondaryActionButton,
+              pressed && styles.checkboxPressed
+            ]}
+          >
+            <Text style={styles.cardSecondaryActionButtonText}>Crear en Metas</Text>
             <ArrowRight color={colors.primary} size={17} strokeWidth={2.6} />
           </Pressable>
         ) : null}
@@ -829,12 +848,10 @@ export default function ActionPlanScreen() {
     () => resolvePlanPreference({ exactValues, onboarding }),
     [exactValues, onboarding]
   );
-  const preferredGoalId =
-    planPreference.hasExplicitPreference &&
-    planPreference.isApplicable &&
-    planPreference.strategy === "prioritize_goal"
-      ? planPreference.goalId
-      : null;
+  const preferredGoalId = getPlanPreferencePreferredGoalId({
+    onboarding,
+    preference: planPreference
+  });
   const preferredPlanPriorityKey =
     planPreference.hasExplicitPreference && planPreference.isApplicable
       ? planPreference.priorityKey
@@ -844,10 +861,11 @@ export default function ActionPlanScreen() {
       onboarding,
       getPlanPreferenceGoalBudget({
         fallbackMonthlyBudget: metrics.snapshot.cashflow.suggestedMonthlyContribution,
-        preference: planPreference
+        preference: planPreference,
+        preferredGoalId
       }),
       exactValues,
-      { preferredGoalId }
+      getPlanPreferenceGoalPlanOptions(planPreference, preferredGoalId)
     ),
     [exactValues, metrics.snapshot.cashflow.suggestedMonthlyContribution, onboarding, planPreference, preferredGoalId]
   );
@@ -1144,6 +1162,19 @@ export default function ActionPlanScreen() {
                   expanded={expandedActionId === actionProgressId}
                   impactItem={impactItem}
                   onOpenDebts={() => router.push("/debts")}
+                  onOpenGoals={() =>
+                    router.push({
+                      pathname: "/goals",
+                      params: {
+                        mode: "add",
+                        suggestedTargetAmount:
+                          metrics.snapshot.emergencyFund.targetThreeMonths === null
+                            ? ""
+                            : `${metrics.snapshot.emergencyFund.targetThreeMonths}`,
+                        template: "emergency"
+                      }
+                    })
+                  }
                   onOpenSimulation={() => router.push("/simulation")}
                   onProgressChange={(patch) => {
                     updateActionProgress(actionProgressId, patch);

@@ -1,9 +1,8 @@
-import { Check, ShieldCheck, Target, TrendingUp } from "lucide-react-native";
+import { Check, Target, TrendingUp } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
 import type { SimulationPlanStrategy } from "../types/financial";
-import type { FinancialSnapshot } from "../utils/financialCalculations";
 import type { ProjectionGoalInput } from "../utils/financialProjectionInput";
 import { formatCOP, formatSignedCOP } from "../utils/financialRanges";
 import { formatTargetMonth } from "../utils/monthYear";
@@ -11,6 +10,7 @@ import type {
   SimulationAmountRange,
   SimulationExperience
 } from "../utils/simulationExperience";
+import { PreliminaryGoalTimeline } from "./PreliminaryGoalTimeline";
 
 function formatAmountRange(
   range: SimulationAmountRange,
@@ -103,45 +103,49 @@ export function PreliminarySimulationComparison({
   asOfDate,
   distributableAmount,
   experience,
-  emergencyCoverageMonths,
   goal,
   onSelect,
-  priority,
   selectedStrategy
 }: {
   asOfDate: string;
   distributableAmount: number | null;
-  emergencyCoverageMonths: number | null;
   experience: SimulationExperience;
   goal: ProjectionGoalInput | null;
   onSelect: (strategy: SimulationPlanStrategy) => void;
-  priority: FinancialSnapshot["priority"];
   selectedStrategy: SimulationPlanStrategy;
 }) {
+  const exploredGoalContribution =
+    goal && goal.targetAmount !== null && distributableAmount !== null
+      ? Math.min(
+          distributableAmount,
+          Math.max(0, goal.targetAmount - goal.currentAmount)
+        )
+      : distributableAmount;
   const goalProjection = getGoalProjection({
     asOfDate,
     goal,
-    monthlyContribution: distributableAmount
+    monthlyContribution: exploredGoalContribution
   });
   const canEstimate = experience.planningMonthlyMargin !== null;
   const canSelectGoal = Boolean(
-    goal && canEstimate && distributableAmount !== null && distributableAmount > 0
+    goal &&
+      canEstimate &&
+      exploredGoalContribution !== null &&
+      exploredGoalContribution > 0
   );
-  const goalIsAlreadyRecommended = priority.key === "advance_goal";
   const prudentMonthlyMargin =
     experience.planningMonthlyMargin === null
       ? null
       : Math.max(0, experience.planningMonthlyMargin);
-  const recommendedUnassignedAmount =
-    prudentMonthlyMargin === null
-      ? null
-      : Math.max(0, prudentMonthlyMargin - experience.recommendedMonthlyContribution);
   const explorationProtectedAmount =
     prudentMonthlyMargin === null || distributableAmount === null
       ? null
       : Math.max(0, prudentMonthlyMargin - distributableAmount);
-  const recommendedSelected = selectedStrategy === "diagnosis_recommended";
   const goalSelected = selectedStrategy === "prioritize_goal" && canSelectGoal;
+  const timelineGoal = goalSelected ? goal : null;
+  const timelineMonthlyContribution = goalSelected
+    ? exploredGoalContribution
+    : null;
 
   return (
     <View style={styles.container}>
@@ -186,87 +190,11 @@ export function PreliminarySimulationComparison({
       </View>
 
       <Text style={styles.comparisonIntro}>
-        {goalIsAlreadyRecommended
-          ? "Tu diagnóstico ya prioriza la meta. Aquí eliges el ritmo: un aporte gradual o uno acelerado usando más del margen disponible."
-          : "Elige qué referencia quieres usar en la vista previa de tu plan. Podrás cambiarla después sin registrar pagos ni mover dinero."}
+        Esta proyección organiza el dinero disponible alrededor de la meta principal que elegiste.
+        Podrás ajustar el aporte después sin registrar pagos ni mover dinero.
       </Text>
 
-      {goalIsAlreadyRecommended && emergencyCoverageMonths !== null ? (
-        <View style={styles.priorityExplanation}>
-          <Text style={styles.priorityExplanationTitle}>
-            ¿Por qué el diagnóstico ahora recomienda la meta?
-          </Text>
-          <Text style={styles.priorityExplanationText}>
-            Tus ahorros equivalen aproximadamente a {new Intl.NumberFormat("es-CO", {
-              maximumFractionDigits: 1
-            }).format(emergencyCoverageMonths)} meses de gastos mensuales registrados. Por eso el fondo
-            de emergencia ya no aparece como primera prioridad. Ese ahorro general no se suma
-            automáticamente a la meta: allí solo cuenta el dinero que registraste como ya
-            separado para ella.
-          </Text>
-        </View>
-      ) : null}
-
       <View style={styles.options}>
-        <Pressable
-          accessibilityLabel={`Usar la recomendación: ${priority.title}`}
-          accessibilityRole="radio"
-          accessibilityState={{ selected: recommendedSelected }}
-          onPress={() => onSelect("diagnosis_recommended")}
-          style={({ pressed }) => [
-            styles.option,
-            styles.optionRecommended,
-            recommendedSelected && styles.optionSelectedSupport,
-            pressed && styles.optionPressed
-          ]}
-        >
-          <View style={styles.optionHeader}>
-            <View style={[styles.optionIcon, styles.optionIconSupport]}>
-              <ShieldCheck color={colors.support} size={22} strokeWidth={2.5} />
-            </View>
-            <View style={styles.optionHeaderCopy}>
-              <Text style={[styles.optionTag, styles.optionTagSupport]}>RECOMENDADO</Text>
-              <Text style={styles.optionTitle}>
-                {goalIsAlreadyRecommended && goal
-                  ? `Aporte gradual para ${goal.title}`
-                  : priority.title}
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.selectionIndicator,
-                recommendedSelected && styles.selectionIndicatorSupport
-              ]}
-            >
-              {recommendedSelected ? (
-                <Check color={colors.surface} size={15} strokeWidth={3} />
-              ) : null}
-            </View>
-          </View>
-          <Text style={styles.optionDescription}>
-            {goalIsAlreadyRecommended
-              ? "Avanza hacia la meta sin asignar todo el margen prudente, para conservar espacio ante gastos variables o imprevistos."
-              : priority.description}
-          </Text>
-          <View style={styles.optionResult}>
-            <Text style={styles.optionResultLabel}>
-              {goalIsAlreadyRecommended
-                ? "Aporte mensual gradual"
-                : "Referencia mensual del diagnóstico"}
-            </Text>
-            <Text style={[styles.optionResultValue, styles.optionResultValueSupport]}>
-              {experience.recommendedMonthlyContribution > 0
-                ? formatCOP(experience.recommendedMonthlyContribution)
-                : "Por definir"}
-            </Text>
-          </View>
-          <Text style={styles.optionFootnote}>
-            {recommendedUnassignedAmount === null
-              ? "Mantiene la prioridad detectada en tu diagnóstico."
-              : `Conserva al menos ${formatCOP(recommendedUnassignedAmount)} del margen prudente sin asignar.`}
-          </Text>
-        </Pressable>
-
         <Pressable
           accessibilityLabel={
             goal ? `Usar la referencia para priorizar ${goal.title}` : "Priorizar una meta"
@@ -287,13 +215,9 @@ export function PreliminarySimulationComparison({
               <Target color={colors.primary} size={22} strokeWidth={2.5} />
             </View>
             <View style={styles.optionHeaderCopy}>
-              <Text style={styles.optionTag}>EXPLORACIÓN</Text>
+              <Text style={styles.optionTag}>PROYECCIÓN DE TU META</Text>
               <Text style={styles.optionTitle}>
-                {goal
-                  ? goalIsAlreadyRecommended
-                    ? `Acelerar ${goal.title}`
-                    : `Si priorizaras ${goal.title}`
-                  : "Si priorizaras una meta"}
+                {goal ? `Avanzar hacia ${goal.title}` : "Define tu meta principal"}
               </Text>
             </View>
             <View
@@ -308,14 +232,15 @@ export function PreliminarySimulationComparison({
             </View>
           </View>
           <Text style={styles.optionDescription}>
-            {goalIsAlreadyRecommended
-              ? "Usa para la meta todo lo disponible después del margen protegido. Avanza más rápido, pero deja menos dinero sin asignar."
-              : "Muestra qué pasaría si dirigieras a la meta todo lo disponible después de proteger el margen elegido."}
+            Usa para la meta lo disponible después de cubrir gastos, deudas estimadas y el margen
+            protegido que elegiste.
           </Text>
           <View style={styles.optionResult}>
             <Text style={styles.optionResultLabel}>Aporte mensual explorado</Text>
             <Text style={styles.optionResultValue}>
-              {distributableAmount === null ? "Por estimar" : formatCOP(distributableAmount)}
+              {exploredGoalContribution === null
+                ? "Por estimar"
+                : formatCOP(exploredGoalContribution)}
             </Text>
           </View>
           <Text style={styles.optionFootnote}>
@@ -334,6 +259,18 @@ export function PreliminarySimulationComparison({
           ) : null}
         </Pressable>
       </View>
+
+      {timelineGoal &&
+      timelineMonthlyContribution !== null &&
+      timelineMonthlyContribution > 0 ? (
+        <PreliminaryGoalTimeline
+          asOfDate={asOfDate}
+          goal={timelineGoal}
+          hasReportedDebt={experience.mode === "reported_debt"}
+          isEmergencyReference={timelineGoal.id === "emergency-fund-reference"}
+          monthlyContribution={timelineMonthlyContribution}
+        />
+      ) : null}
 
       <Text style={styles.disclaimer}>
         {experience.mode === "goal_only"
@@ -568,6 +505,72 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: typography.small,
     fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.small
+  },
+  timelineNotice: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.md
+  },
+  timelineNoticeTitle: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  timelineNoticeText: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    lineHeight: typography.lineHeight.small
+  },
+  emergencyGoalAction: {
+    alignItems: "center",
+    backgroundColor: colors.supportSoft,
+    borderColor: colors.supportBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  emergencyGoalIcon: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    height: 44,
+    justifyContent: "center",
+    width: 44
+  },
+  emergencyGoalCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 220
+  },
+  emergencyGoalTitle: {
+    color: colors.text,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  emergencyGoalText: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    lineHeight: typography.lineHeight.small
+  },
+  emergencyGoalButton: {
+    backgroundColor: colors.support,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  emergencyGoalButtonText: {
+    color: colors.surface,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.small
   },
   disclaimer: {

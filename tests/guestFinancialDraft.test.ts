@@ -52,6 +52,7 @@ describe("guest financial draft", () => {
         simulationPlanPreference: {
           strategy: "prioritize_goal",
           goalId: "goal-1",
+          debtShare: null,
           protectedMarginMode: "automatic",
           customProtectedMargin: null,
           selectedAt: "2026-08-04T12:00:00.000Z"

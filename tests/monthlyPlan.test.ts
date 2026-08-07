@@ -6,7 +6,7 @@ import {
   getMonthlyPlanMetrics,
   getPriorityDebt
 } from "../utils/monthlyPlan";
-import { makeDebt, makeOnboarding } from "./fixtures/financial";
+import { makeDebt, makeGoal, makeOnboarding } from "./fixtures/financial";
 
 describe("monthly debt plan", () => {
   it("prioritizes an overdue debt before rate and payment size", () => {
@@ -122,5 +122,55 @@ describe("monthly debt plan", () => {
       reportedPaymentKind: "exact"
     });
     expect(metrics.estimatedMargin).toBe(1_600_000);
+  });
+});
+
+describe("monthly emergency-fund action", () => {
+  it("invites the user to create the emergency goal when it does not exist", () => {
+    const data = getMonthlyPlanData(makeOnboarding({ goals: [] }));
+    const metrics = getMonthlyPlanMetrics(data);
+    const actions = getMonthlyActions(data, metrics, "build_emergency_fund");
+
+    expect(actions[0]).toMatchObject({
+      id: "create-emergency-goal",
+      title: "Crear fondo de emergencia en Metas"
+    });
+  });
+
+  it("keeps the contribution action when an emergency goal is already active", () => {
+    const data = getMonthlyPlanData(
+      makeOnboarding({ goals: [makeGoal({ type: "security" })] })
+    );
+    const metrics = getMonthlyPlanMetrics(data);
+    const actions = getMonthlyActions(data, metrics, "build_emergency_fund");
+
+    expect(actions[0]?.id).toBe("initial-emergency-contribution");
+  });
+
+  it("keeps the emergency goal as a monthly task while honoring a goal-focused plan", () => {
+    const data = getMonthlyPlanData(
+      makeOnboarding({
+        goals: [
+          makeGoal({
+            title: "Empezar a invertir",
+            type: "investment"
+          })
+        ]
+      })
+    );
+    const metrics = getMonthlyPlanMetrics(data, {
+      currentSavings: 0,
+      monthlyExpenses: 1_500_000,
+      monthlyIncome: 4_000_000
+    });
+    const actions = getMonthlyActions(data, metrics, "advance_goal", {
+      title: "Empezar a invertir",
+      monthlyContribution: 900_000,
+      estimatedMonthsToGoal: 14
+    });
+
+    expect(actions).toHaveLength(3);
+    expect(actions[0]?.id).toBe("set-goal-contribution");
+    expect(actions[2]?.id).toBe("create-emergency-goal");
   });
 });

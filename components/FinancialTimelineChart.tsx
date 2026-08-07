@@ -235,6 +235,11 @@ export function FinancialTimelineChart({
       .filter((month): month is string => Boolean(month))
       .map((month) => displayMonths.findIndex((item) => item.month === month))
       .filter((index) => index >= 0);
+
+    if (relevantIndexes.length === 0) {
+      return Math.min(displayMonths.length, NEAR_MONTH_COUNT + 1);
+    }
+
     const lastRelevantIndex = Math.max(0, ...relevantIndexes);
 
     return Math.min(

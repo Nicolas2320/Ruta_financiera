@@ -49,10 +49,43 @@ describe("financial projection input", () => {
     });
     expect(input.cashflow.baselineMonthlyExpensesSource).toBe("exact");
     expect(input.goals[0]).toMatchObject({
+      amountRange: null,
       targetAmount: 6_000_000,
+      targetAmountSource: "exact",
       targetMonth: "2027-01"
     });
     expect(input.goals[0]).not.toHaveProperty("priority");
+  });
+
+  it("uses a selected goal range as an explicit projection reference", () => {
+    const input = buildFinancialProjectionInput({
+      exactValues: {
+        monthlyExpenses: 2_000_000,
+        monthlyIncome: 4_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        debtPaymentShare: "No pago deudas",
+        debtSituation: "No tengo deudas",
+        goals: [
+          makeGoal({
+            amountRange: "$5.000.000 – $20.000.000",
+            targetAmount: null
+          })
+        ]
+      })
+    });
+
+    expect(input.goals[0]).toMatchObject({
+      amountRange: "$5.000.000 – $20.000.000",
+      targetAmount: 12_500_000,
+      targetAmountSource: "range"
+    });
+    expect(
+      input.issues.some(
+        (issue) => issue.code === "missing_goal_target" && issue.entityId === "goal-1"
+      )
+    ).toBe(false);
   });
 
   it("treats a self-selected payment as adjustable with a zero required floor", () => {

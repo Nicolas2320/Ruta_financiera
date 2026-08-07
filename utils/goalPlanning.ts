@@ -322,6 +322,7 @@ export function getGoalAllocationPlan({
   asOfDate = new Date(),
   exactValues = {},
   goals,
+  monthlyContributions = null,
   monthlyGoalBudget,
   monthlyGoalBudgetMode = "recommended",
   preferredGoalId = null
@@ -329,6 +330,7 @@ export function getGoalAllocationPlan({
   asOfDate?: Date;
   exactValues?: ExactFinancialValues;
   goals: FinancialGoal[];
+  monthlyContributions?: Record<string, number> | null;
   monthlyGoalBudget: number;
   monthlyGoalBudgetMode?: GoalAllocationPlan["monthlyGoalBudgetMode"];
   preferredGoalId?: string | null;
@@ -381,17 +383,24 @@ export function getGoalAllocationPlan({
           goalMetric.goal.status !== "paused"
       ) ?? null
     : null;
-  const recommendedContributions = preferredGoal
-    ? new Map([[preferredGoal.goal.id, safeBudget]])
-    : distributeRecommendedContributions(
-        goalMetrics
-          .filter((goalMetric) => goalMetric.score > 0)
-          .map((goalMetric) => ({
-            goalId: goalMetric.goal.id,
-            score: goalMetric.score
-          })),
-        safeBudget
-      );
+  const recommendedContributions = monthlyContributions
+    ? new Map(
+        Object.entries(monthlyContributions).map(([goalId, amount]) => [
+          goalId,
+          Math.max(0, Math.floor(amount))
+        ])
+      )
+    : preferredGoal
+      ? new Map([[preferredGoal.goal.id, safeBudget]])
+      : distributeRecommendedContributions(
+          goalMetrics
+            .filter((goalMetric) => goalMetric.score > 0)
+            .map((goalMetric) => ({
+              goalId: goalMetric.goal.id,
+              score: goalMetric.score
+            })),
+          safeBudget
+        );
   const allocations = goalMetrics.map((goalMetric) => {
     const goalIsInactive =
       goalMetric.goal.status === "completed" || goalMetric.goal.status === "paused";
@@ -400,7 +409,9 @@ export function getGoalAllocationPlan({
     const manualContribution = safeNonNegative(goalMetric.goal.manualMonthlyContribution);
     const monthlyContribution = goalIsInactive
       ? 0
-      : manualContribution ?? recommendedMonthlyContribution;
+      : monthlyContributions
+        ? recommendedMonthlyContribution
+        : manualContribution ?? recommendedMonthlyContribution;
     const estimatedMonthsToGoal =
       goalMetric.remainingAmount !== null && monthlyContribution > 0
         ? Math.ceil(goalMetric.remainingAmount / monthlyContribution)
@@ -459,13 +470,21 @@ export function getGoalPlanFromOnboarding(
   onboarding: OnboardingData,
   monthlyGoalBudget: number,
   exactValues: ExactFinancialValues = {},
-  options: { preferredGoalId?: string | null } = {}
+  options: {
+    monthlyContributions?: Record<string, number> | null;
+    preferredGoalId?: string | null;
+    useStoredManualBudget?: boolean;
+  } = {}
 ) {
-  const manualGoalBudget = safeNonNegative(onboarding.goalMonthlyBudget);
+  const manualGoalBudget =
+    options.useStoredManualBudget === false
+      ? null
+      : safeNonNegative(onboarding.goalMonthlyBudget);
 
   return getGoalAllocationPlan({
     exactValues,
     goals: getOnboardingGoals(onboarding),
+    monthlyContributions: options.monthlyContributions,
     monthlyGoalBudget: manualGoalBudget ?? monthlyGoalBudget,
     monthlyGoalBudgetMode: manualGoalBudget !== null ? "manual" : "recommended",
     preferredGoalId: options.preferredGoalId

@@ -156,6 +156,101 @@ function getProjectionMonth(asOfDate: string, monthIndex: number) {
   )}`;
 }
 
+export function buildGoalOnlyTimeline({
+  asOfDate,
+  goal,
+  maxMonths = 120,
+  monthlyContribution
+}: {
+  asOfDate: string;
+  goal: ProjectionGoalInput;
+  maxMonths?: number;
+  monthlyContribution: number;
+}): FinancialScenarioTimeline | null {
+  const targetAmount = safeNonNegative(goal.targetAmount);
+  const safeMonthlyContribution = safeNonNegative(monthlyContribution);
+
+  if (
+    targetAmount === null ||
+    targetAmount <= 0 ||
+    safeMonthlyContribution === null ||
+    safeMonthlyContribution <= 0
+  ) {
+    return null;
+  }
+
+  const asOfMonth = getProjectionMonth(asOfDate, 0);
+  const trackedGoal = {
+    currentAmount: Math.max(0, goal.currentAmount),
+    goalId: goal.id,
+    targetAmount,
+    targetMonth: goal.targetMonth,
+    title: goal.title
+  };
+  const months: FinancialTimelineMonth[] = [];
+  const safeMaxMonths = Math.max(1, Math.floor(maxMonths));
+  let currentAmount = trackedGoal.currentAmount;
+  let goalCompletionMonth = currentAmount >= targetAmount ? asOfMonth : null;
+
+  for (let index = 1; index <= safeMaxMonths; index += 1) {
+    const startingAmount = currentAmount;
+    const amount =
+      goalCompletionMonth === null
+        ? Math.min(safeMonthlyContribution, Math.max(0, targetAmount - startingAmount))
+        : 0;
+    currentAmount += amount;
+    const reached = currentAmount >= targetAmount;
+    const month = getProjectionMonth(asOfDate, index);
+
+    if (reached && goalCompletionMonth === null) {
+      goalCompletionMonth = month;
+    }
+
+    months.push({
+      baseDebtPayments: 0,
+      debtPayments: [],
+      endingKnownDebtBalance: 0,
+      extraDebtPayments: 0,
+      goalContributions: [
+        {
+          amount,
+          endingAmount: currentAmount,
+          goalId: goal.id,
+          reached,
+          startingAmount,
+          title: goal.title
+        }
+      ],
+      goalContributionTotal: amount,
+      index,
+      interestCharged: 0,
+      month,
+      monthlyBalance: 0,
+      newlyPaidDebtIds: [],
+      protectedMargin: 0,
+      releasedPaymentNextMonth: 0,
+      trackedGoalAmount: currentAmount,
+      unassignedAmount: 0
+    });
+
+    if (goalCompletionMonth !== null) {
+      break;
+    }
+  }
+
+  return {
+    allDebtBalancesKnown: false,
+    allKnownDebtsPaidMonth: null,
+    asOfMonth,
+    goalCompletionMonth,
+    hasUnknownInterestRates: false,
+    months,
+    status: "ready",
+    totalInterestCharged: 0,
+    trackedGoal
+  };
+}
+
 function getProtectedMarginPreference(
   scenario: DistributionScenario
 ): ProtectedMarginPreference {

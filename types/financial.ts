@@ -58,7 +58,11 @@ export type DebtRecord = {
 
 export const simulationPlanStrategies = [
   "diagnosis_recommended",
-  "prioritize_goal"
+  "prioritize_goal",
+  "current_reference",
+  "reduce_interest",
+  "accelerate_goal",
+  "split_debt_goal"
 ] as const;
 
 export type SimulationPlanStrategy = (typeof simulationPlanStrategies)[number];
@@ -75,6 +79,7 @@ export type SimulationProtectedMarginMode =
 export type SimulationPlanPreference = {
   strategy: SimulationPlanStrategy;
   goalId: string | null;
+  debtShare: number | null;
   protectedMarginMode: SimulationProtectedMarginMode;
   customProtectedMargin: number | null;
   selectedAt: string;
@@ -366,6 +371,10 @@ export function normalizeSimulationPlanPreference(
       : requestedProtectedMarginMode;
   const customProtectedMargin =
     protectedMarginMode === "custom" ? requestedCustomProtectedMargin : null;
+  const debtShare =
+    typeof preference.debtShare === "number" && Number.isFinite(preference.debtShare)
+      ? Math.min(0.9, Math.max(0.1, Math.round(preference.debtShare * 20) / 20))
+      : null;
   const selectedAtDate =
     typeof preference.selectedAt === "string"
       ? new Date(preference.selectedAt)
@@ -374,6 +383,8 @@ export function normalizeSimulationPlanPreference(
   return {
     strategy: preference.strategy as SimulationPlanStrategy,
     goalId: normalizeGoalString(preference.goalId)?.trim() ?? null,
+    debtShare:
+      preference.strategy === "split_debt_goal" ? debtShare ?? 0.5 : null,
     protectedMarginMode,
     customProtectedMargin,
     selectedAt:

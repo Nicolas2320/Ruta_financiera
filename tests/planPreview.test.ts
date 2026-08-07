@@ -25,7 +25,7 @@ describe("getPlanPreviewData", () => {
     expect(preview.marginTone).toBe("support");
     expect(preview.contributionLabel).not.toBe("Por definir");
     expect(preview.contributionPurpose.length).toBeGreaterThan(0);
-    expect(preview.routeEstimateLabel).toContain("meses");
+    expect(preview.routeEstimateLabel).toBe("4 meses aprox.");
     expect(preview.firstActionTitle.length).toBeGreaterThan(0);
     expect(preview.actionCount).toBeGreaterThan(0);
     expect(preview.lockedActionTitles).toHaveLength(preview.actionCount - 1);
@@ -95,6 +95,7 @@ describe("getPlanPreviewData", () => {
         simulationPlanPreference: {
           strategy: "prioritize_goal",
           goalId: "goal-1",
+          debtShare: null,
           protectedMarginMode: "automatic",
           customProtectedMargin: null,
           selectedAt: "2026-08-04T12:00:00.000Z"

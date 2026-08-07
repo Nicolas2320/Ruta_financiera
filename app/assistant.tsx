@@ -53,6 +53,8 @@ import {
 } from "../utils/monthlyPlan";
 import {
   getPlanPreferenceGoalBudget,
+  getPlanPreferenceGoalPlanOptions,
+  getPlanPreferencePreferredGoalId,
   resolvePlanPreference
 } from "../utils/planPreference";
 
@@ -389,7 +391,7 @@ function buildAssistantFinancialContext({
       expensesToIncomeRatio: snapshot.cashflow.expensesToIncomeRatio,
       suggestedMonthlyContribution: snapshot.cashflow.suggestedMonthlyContribution,
       suggestedMonthlyContributionMeaning:
-        "Aporte sugerido desde el margen mensual; no es necesariamente la bolsa manual ni el aporte asignado a una meta."
+        "Aporte sugerido desde el margen mensual; no es necesariamente la referencia manual ni el aporte finalmente asignado a una meta."
     },
     debt: {
       debtToIncomeRatio: snapshot.debt.debtToIncomeRatio,
@@ -454,7 +456,7 @@ function buildAssistantFinancialContext({
       primaryGoalMonthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
       primaryGoalMonthlyContributionLabel: "Aporte meta",
       primaryGoalMonthlyContributionMeaning:
-        "Aporte asignado a la meta principal dentro de la bolsa de metas. En la UI aparece como Aporte meta.",
+        "Aporte mensual asignado a la meta principal dentro de la referencia disponible. En la UI aparece como Aporte meta.",
       progressPercentage,
       realContributionThisMonth,
       referenceMonthlyContribution,
@@ -532,12 +534,10 @@ export default function AssistantScreen() {
     const data = getMonthlyPlanData(onboarding);
     const metrics = getMonthlyPlanMetrics(data, exactValues);
     const planPreference = resolvePlanPreference({ exactValues, onboarding });
-    const preferredGoalId =
-      planPreference.hasExplicitPreference &&
-      planPreference.isApplicable &&
-      planPreference.strategy === "prioritize_goal"
-        ? planPreference.goalId
-        : null;
+    const preferredGoalId = getPlanPreferencePreferredGoalId({
+      onboarding,
+      preference: planPreference
+    });
     const preferredPlanPriorityKey =
       planPreference.hasExplicitPreference && planPreference.isApplicable
         ? planPreference.priorityKey
@@ -546,10 +546,11 @@ export default function AssistantScreen() {
       onboarding,
       getPlanPreferenceGoalBudget({
         fallbackMonthlyBudget: metrics.snapshot.cashflow.suggestedMonthlyContribution,
-        preference: planPreference
+        preference: planPreference,
+        preferredGoalId
       }),
       exactValues,
-      { preferredGoalId }
+      getPlanPreferenceGoalPlanOptions(planPreference, preferredGoalId)
     );
     const primaryGoalAllocation =
       goalPlan.allocations.find((allocation) => allocation.goal.id === preferredGoalId) ??

@@ -8,6 +8,8 @@ import type {
 import { getOnboardingGoals } from "../types/financial";
 import { isDebtPaid } from "./debtPayments";
 import { calculateFinancialSnapshot, type SnapshotSource } from "./financialCalculations";
+import { getGoalAmountRangeEstimate } from "./financialRanges";
+import { getGoalAllocationPlan } from "./goalPlanning";
 import { getMonthsUntilTargetMonth } from "./monthYear";
 
 export type ProjectionDataOwner = "income" | "expenses" | "debts" | "goals" | "planning";
@@ -57,7 +59,9 @@ export type ProjectionDebtInput = {
 export type ProjectionGoalInput = {
   id: string;
   title: string;
+  amountRange: string | null;
   targetAmount: number | null;
+  targetAmountSource: "exact" | "range" | "missing";
   currentAmount: number;
   manualMonthlyContribution: number | null;
   targetMonth: string | null;
@@ -108,10 +112,25 @@ function getRequiredMonthlyPayment(
 }
 
 function toProjectionGoal(goal: FinancialGoal): ProjectionGoalInput {
+  const exactTargetAmount =
+    typeof goal.targetAmount === "number" &&
+    Number.isFinite(goal.targetAmount) &&
+    goal.targetAmount > 0
+      ? goal.targetAmount
+      : null;
+  const rangeTargetAmount = getGoalAmountRangeEstimate(goal.amountRange).midpoint;
+
   return {
     id: goal.id,
     title: goal.title,
-    targetAmount: goal.targetAmount ?? null,
+    amountRange: goal.amountRange ?? null,
+    targetAmount: exactTargetAmount ?? rangeTargetAmount,
+    targetAmountSource:
+      exactTargetAmount !== null
+        ? "exact"
+        : rangeTargetAmount !== null
+          ? "range"
+          : "missing",
     currentAmount: goal.currentAmount ?? 0,
     manualMonthlyContribution: goal.manualMonthlyContribution ?? null,
     targetMonth: goal.targetMonth ?? null,
@@ -184,7 +203,36 @@ export function buildFinancialProjectionInput({
       status: debt.status
     };
   });
-  const goals = getOnboardingGoals(onboarding).map(toProjectionGoal);
+  const onboardingGoals = getOnboardingGoals(onboarding);
+  const manualGoalPlan =
+    typeof onboarding.goalMonthlyBudget === "number" &&
+    Number.isFinite(onboarding.goalMonthlyBudget) &&
+    onboarding.goalMonthlyBudget >= 0
+      ? getGoalAllocationPlan({
+          asOfDate: new Date(`${asOfDate}T12:00:00`),
+          exactValues: exactValues ?? {},
+          goals: onboardingGoals,
+          monthlyGoalBudget: onboarding.goalMonthlyBudget,
+          monthlyGoalBudgetMode: "manual"
+        })
+      : null;
+  const manualContributionByGoalId = new Map(
+    manualGoalPlan?.allocations.map((allocation) => [
+      allocation.goal.id,
+      allocation.monthlyContribution
+    ]) ?? []
+  );
+  const goals = onboardingGoals.map((goal) => {
+    const projectionGoal = toProjectionGoal(goal);
+
+    return manualGoalPlan
+      ? {
+          ...projectionGoal,
+          manualMonthlyContribution:
+            manualContributionByGoalId.get(goal.id) ?? 0
+        }
+      : projectionGoal;
+  });
   const projectionDate = new Date(`${asOfDate}T12:00:00`);
 
   if (snapshot.cashflow.monthlyIncome === null) {
