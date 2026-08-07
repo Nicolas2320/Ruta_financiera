@@ -168,6 +168,92 @@ describe("registered debt calculations", () => {
     });
   });
 
+  it("does not create a debt category before the person registers one", () => {
+    expect(
+      syncDebtExpenseCategory({
+        debts: [],
+        expenseCategories: ["Vivienda", "Salud"],
+        expenseCategoryAmounts: { Vivienda: 900_000 }
+      })
+    ).toEqual({
+      expenseCategories: ["Arriendo", "Salud"],
+      expenseCategoryAmounts: { Arriendo: 900_000 }
+    });
+  });
+
+  it("uses an exact reported monthly payment before ranges or legacy shares", () => {
+    const summary = getRegisteredDebtSummary({
+      debts: [],
+      debtPaymentShare: "20% \u2013 40%",
+      hasDebts: true,
+      reportedMonthlyPayment: 650_000,
+      reportedMonthlyPaymentRange: "$500.000 \u2013 $1.000.000",
+      monthlyIncome: 4_000_000
+    });
+
+    expect(summary).toMatchObject({
+      source: "reported",
+      monthlyPaymentTotal: 650_000,
+      reportedPaymentKind: "exact",
+      reportedPaymentBounds: { maximum: 650_000, minimum: 650_000 },
+      isPaymentEstimated: false
+    });
+  });
+
+  it("uses a reported monthly range before the legacy income share", () => {
+    const summary = getRegisteredDebtSummary({
+      debts: [],
+      debtPaymentShare: "20% \u2013 40%",
+      hasDebts: true,
+      reportedMonthlyPaymentRange: "$250.000 \u2013 $500.000",
+      monthlyIncome: 4_000_000
+    });
+
+    expect(summary).toMatchObject({
+      source: "reported",
+      monthlyPaymentTotal: 375_000,
+      reportedPaymentKind: "range",
+      reportedPaymentBounds: { maximum: 500_000, minimum: 250_000 },
+      isPaymentEstimated: true
+    });
+  });
+
+  it("keeps detailed debts and debt categories ahead of onboarding estimates", () => {
+    const registered = getRegisteredDebtSummary({
+      debts: [makeDebt({ monthlyPayment: 320_000 })],
+      hasDebts: true,
+      reportedMonthlyPayment: 650_000,
+      monthlyIncome: 4_000_000
+    });
+    const category = getRegisteredDebtSummary({
+      debts: [],
+      expenseCategoryAmounts: { Deudas: 480_000 },
+      hasDebts: true,
+      reportedMonthlyPayment: 650_000,
+      monthlyIncome: 4_000_000
+    });
+
+    expect(registered).toMatchObject({ source: "registered", monthlyPaymentTotal: 320_000 });
+    expect(category).toMatchObject({ source: "category", monthlyPaymentTotal: 480_000 });
+  });
+
+  it("ignores stale reported payments after the person confirms no debts", () => {
+    const summary = getRegisteredDebtSummary({
+      debts: [],
+      debtPaymentShare: "20% \u2013 40%",
+      hasDebts: false,
+      reportedMonthlyPayment: 650_000,
+      reportedMonthlyPaymentRange: "$500.000 \u2013 $1.000.000",
+      monthlyIncome: 4_000_000
+    });
+
+    expect(summary).toMatchObject({
+      source: "none",
+      monthlyPaymentTotal: 0,
+      reportedPaymentKind: null
+    });
+  });
+
   it("excludes paid debts without reviving an earlier reported range", () => {
     const paidDebt = makeDebt({
       remainingAmount: 0,

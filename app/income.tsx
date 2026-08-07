@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { ArrowLeftRight, CalendarCheck, PiggyBank } from "lucide-react-native";
-import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
@@ -11,7 +10,7 @@ import { HeroInfoCard } from "../components/ui/HeroInfoCard";
 import { ExactAmountField } from "../components/ui/ExactAmountField";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
-import { colors, radius, shadows, spacing, typography } from "../constants/theme";
+import { colors, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
@@ -22,10 +21,6 @@ import {
 } from "../utils/financialRanges";
 
 const incomePiggy = require("../assets/illustrations/income-piggy.png");
-const frequencyMonthly = require("../assets/icons/frequency-monthly.png");
-const frequencyBiweekly = require("../assets/icons/frequency-biweekly.png");
-const frequencyWeekly = require("../assets/icons/frequency-weekly.png");
-const frequencyIrregular = require("../assets/icons/frequency-irregular.png");
 
 const incomeRanges = [
   "Menos de $1.500.000",
@@ -33,49 +28,6 @@ const incomeRanges = [
   "$3.000.000 – $5.000.000",
   "$5.000.000 – $8.000.000",
   "Más de $8.000.000"
-] as const;
-
-const incomeTypes = [
-  {
-    title: "Fijo",
-    subtitle: "Ingresas estable todos los meses",
-    icon: CalendarCheck,
-    color: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  {
-    title: "Variable",
-    subtitle: "Tus ingresos cambian",
-    icon: ArrowLeftRight,
-    color: colors.support,
-    backgroundColor: colors.supportSoft
-  },
-  {
-    title: "Mixto",
-    subtitle: "Combinación de fijo y variable",
-    icon: PiggyBank,
-    color: "#C88416",
-    backgroundColor: colors.warningSoft
-  }
-] as const;
-
-const incomeFrequencies = [
-  {
-    title: "Mensual",
-    image: frequencyMonthly
-  },
-  {
-    title: "Quincenal",
-    image: frequencyBiweekly
-  },
-  {
-    title: "Semanal",
-    image: frequencyWeekly
-  },
-  {
-    title: "Irregular",
-    image: frequencyIrregular
-  }
 ] as const;
 
 const exactIncomeOption = "Ingresar cifra";
@@ -95,12 +47,6 @@ export default function IncomeScreen() {
   const [selectedIncomeRange, setSelectedIncomeRange] = useState<string | null>(
     onboarding.incomeRange
   );
-  const [selectedIncomeType, setSelectedIncomeType] = useState<string | null>(
-    onboarding.incomeType
-  );
-  const [selectedIncomeFrequency, setSelectedIncomeFrequency] = useState<string | null>(
-    onboarding.incomeFrequency
-  );
   const [usesExactIncome, setUsesExactIncome] = useState(
     hasExactFinancialValue(exactValues.monthlyIncome)
   );
@@ -118,8 +64,6 @@ export default function IncomeScreen() {
 
     hasHydratedStoredAnswers.current = true;
     setSelectedIncomeRange(onboarding.incomeRange);
-    setSelectedIncomeType(onboarding.incomeType);
-    setSelectedIncomeFrequency(onboarding.incomeFrequency);
     setUsesExactIncome(hasExactFinancialValue(exactValues.monthlyIncome));
     setExactIncomeInput(
       hasExactFinancialValue(exactValues.monthlyIncome)
@@ -131,11 +75,9 @@ export default function IncomeScreen() {
   const parsedExactIncome = parseCOPInput(exactIncomeInput);
 
   const canContinue = Boolean(
-    (usesExactIncome
+    usesExactIncome
       ? parsedExactIncome !== null && parsedExactIncome > 0
-      : selectedIncomeRange) &&
-      selectedIncomeType &&
-      selectedIncomeFrequency
+      : selectedIncomeRange
   );
 
   const handleExactIncomeChange = (value: string) => {
@@ -145,8 +87,6 @@ export default function IncomeScreen() {
 
   const handleContinue = async () => {
     if (
-      !selectedIncomeType ||
-      !selectedIncomeFrequency ||
       (usesExactIncome
         ? parsedExactIncome === null || parsedExactIncome <= 0
         : !selectedIncomeRange)
@@ -166,11 +106,7 @@ export default function IncomeScreen() {
     }
 
     const saved = await saveOnboardingAndExactValues(
-      {
-        incomeRange,
-        incomeType: selectedIncomeType,
-        incomeFrequency: selectedIncomeFrequency
-      },
+      { incomeRange },
       nextExactValues
     );
 
@@ -205,20 +141,22 @@ export default function IncomeScreen() {
               onBack={() => router.replace("/profile")}
               onNext={handleContinue}
               title="Ingresos"
-              totalSteps={7}
+              totalSteps={6}
             />
           ) : null}
 
           <HeroInfoCard
-            badge="Puedes ajustar esta información más adelante."
+            badge="No incluyas préstamos ni ingresos excepcionales."
             image={incomePiggy}
             imageStyle={styles.heroImage}
-            text="Puedes elegir un rango para avanzar rápido o ingresar una cifra si ya la tienes clara."
+            text="Si tus ingresos cambian, usa un promedio mensual. Puedes elegir un rango o ingresar una cifra."
             title="Tus ingresos"
           />
 
           <View style={styles.card}>
-            <Text style={styles.questionTitle}>¿Cuál es tu rango de ingresos mensuales?</Text>
+            <Text style={styles.questionTitle}>
+              En un mes normal, ¿cuánto dinero recibes aproximadamente?
+            </Text>
             <View style={styles.optionList}>
               {incomeRanges.map((incomeRange) => (
                 <SelectableCard
@@ -244,60 +182,6 @@ export default function IncomeScreen() {
                 value={exactIncomeInput}
               />
             ) : null}
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.questionTitle}>¿Qué tipo de ingreso tienes?</Text>
-            <View style={styles.typeGrid}>
-              {incomeTypes.map((incomeType) => {
-                const Icon = incomeType.icon;
-
-                return (
-                  <SelectableCard
-                    key={incomeType.title}
-                    leading={
-                      <View
-                        style={[
-                          styles.typeIcon,
-                          { backgroundColor: incomeType.backgroundColor }
-                        ]}
-                      >
-                        <Icon color={incomeType.color} size={25} strokeWidth={2.4} />
-                      </View>
-                    }
-                    onPress={() => setSelectedIncomeType(incomeType.title)}
-                    selected={selectedIncomeType === incomeType.title}
-                    subtitle={incomeType.subtitle}
-                    title={incomeType.title}
-                    variant="tile"
-                  />
-                );
-              })}
-            </View>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.questionTitle}>¿Con qué frecuencia recibes ingresos?</Text>
-            <View style={styles.frequencyGrid}>
-              {incomeFrequencies.map((frequency) => (
-                <SelectableCard
-                  key={frequency.title}
-                  leading={
-                    <Image
-                      accessibilityIgnoresInvertColors
-                      resizeMode="contain"
-                      source={frequency.image}
-                      style={styles.frequencyImage}
-                    />
-                  }
-                  onPress={() => setSelectedIncomeFrequency(frequency.title)}
-                  selected={selectedIncomeFrequency === frequency.title}
-                  style={styles.frequencyCard}
-                  title={frequency.title}
-                  variant="center"
-                />
-              ))}
-            </View>
           </View>
 
           <View style={styles.actions}>
@@ -363,32 +247,6 @@ const styles = StyleSheet.create({
   },
   optionList: {
     gap: spacing.xs
-  },
-  typeGrid: {
-    flexDirection: "row",
-    gap: spacing.sm
-  },
-  typeIcon: {
-    alignItems: "center",
-    borderRadius: radius.pill,
-    height: 42,
-    justifyContent: "center",
-    marginBottom: spacing.xs,
-    width: 42
-  },
-  frequencyGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  frequencyCard: {
-    flexBasis: "47%",
-    flexGrow: 1,
-    minHeight: 82
-  },
-  frequencyImage: {
-    height: 34,
-    width: 34
   },
   actions: {
     gap: spacing.sm,

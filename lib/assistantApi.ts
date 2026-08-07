@@ -39,9 +39,12 @@ export type AssistantFinancialContext = {
   };
   debt: {
     debtToIncomeRatio: number | null;
+    isPaymentEstimated: boolean;
     label: string;
     level: string;
     monthlyPaymentTotal: number;
+    reportedMonthlyPaymentRange: string | null;
+    reportedPaymentKind: "exact" | "range" | "share" | null;
     reportedPaymentShare: string | null;
     shouldPrioritizeDebt: boolean;
     source: string;
@@ -62,7 +65,6 @@ export type AssistantFinancialContext = {
   goal: {
     estimatedMonthsToGoal: number | null;
     name: string | null;
-    priority: string | null;
     progressPercentage: number | null;
     remainingAmount: number | null;
     targetAmount: number | null;
@@ -83,9 +85,6 @@ export type AssistantFinancialContext = {
     monthlyContributionTotal: number;
     primaryGoalMonthlyContribution: number | null;
     remainingBudget: number;
-  };
-  investment: {
-    situation: string | null;
   };
   monthlyPlan: {
     actions: AssistantMonthlyPlanAction[];

@@ -54,6 +54,8 @@ import {
 } from "../utils/monthlyPlan";
 import {
   getPlanPreferenceGoalBudget,
+  getPlanPreferenceGoalPlanOptions,
+  getPlanPreferencePreferredGoalId,
   resolvePlanPreference
 } from "../utils/planPreference";
 
@@ -224,11 +226,13 @@ function getDashboardDebtText({
   count,
   level,
   monthlyPaymentTotal,
+  reportedPaymentKind,
   source
 }: {
   count: number;
   level: string;
   monthlyPaymentTotal: number;
+  reportedPaymentKind: "exact" | "range" | "share" | null;
   source: string;
 }) {
   if (count > 0) {
@@ -240,9 +244,15 @@ function getDashboardDebtText({
   }
 
   if (source === "reported") {
+    if (reportedPaymentKind === "exact") {
+      return "Usamos el pago mensual que informaste. Puedes registrar cada deuda si luego quieres hacerles seguimiento por separado.";
+    }
+
     return monthlyPaymentTotal > 0
-      ? "Esta es una referencia estimada desde el rango que reportaste. Registra cuotas solo si quieres reemplazarla por datos más precisos."
-      : "Conservamos el rango que reportaste; falta una referencia de ingresos para estimar el monto mensual.";
+      ? reportedPaymentKind === "range"
+        ? "Esta es una referencia estimada desde el rango que reportaste. Registra cuotas solo si quieres reemplazarla por datos más precisos."
+        : "Esta es una referencia estimada desde la proporción de ingresos que reportaste anteriormente."
+      : "Conservamos tu respuesta anterior; falta una referencia de ingresos para estimar el monto mensual.";
   }
 
   if (level === "none") {
@@ -665,12 +675,10 @@ export default function DashboardScreen() {
     () => resolvePlanPreference({ exactValues, onboarding }),
     [exactValues, onboarding]
   );
-  const preferredGoalId =
-    planPreference.hasExplicitPreference &&
-    planPreference.isApplicable &&
-    planPreference.strategy === "prioritize_goal"
-      ? planPreference.goalId
-      : null;
+  const preferredGoalId = getPlanPreferencePreferredGoalId({
+    onboarding,
+    preference: planPreference
+  });
   const preferredPlanPriorityKey =
     planPreference.hasExplicitPreference && planPreference.isApplicable
       ? planPreference.priorityKey
@@ -680,10 +688,11 @@ export default function DashboardScreen() {
       onboarding,
       getPlanPreferenceGoalBudget({
         fallbackMonthlyBudget: snapshot.cashflow.suggestedMonthlyContribution,
-        preference: planPreference
+        preference: planPreference,
+        preferredGoalId
       }),
       exactValues,
-      { preferredGoalId }
+      getPlanPreferenceGoalPlanOptions(planPreference, preferredGoalId)
     ),
     [exactValues, onboarding, planPreference, preferredGoalId, snapshot.cashflow.suggestedMonthlyContribution]
   );
@@ -698,11 +707,13 @@ export default function DashboardScreen() {
     () => ({
       title: primaryGoalTitle,
       monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
-      estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null
+      estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null,
+      hasRegisteredContribution: (primaryGoalAllocation?.currentAmount ?? 0) > 0
     }),
     [
       primaryGoalAllocation?.estimatedMonthsToGoal,
       primaryGoalAllocation?.monthlyContribution,
+      primaryGoalAllocation?.currentAmount,
       primaryGoalTitle
     ]
   );
@@ -762,15 +773,16 @@ export default function DashboardScreen() {
   const hasExactCashflowAmounts =
     snapshot.sourceMap.monthlyIncome === "exact" &&
     snapshot.sourceMap.monthlyExpenses === "exact" &&
-    (snapshot.sourceMap.smallExpenses === "exact" ||
+    (snapshot.cashflow.monthlyExpensesIncludesSmallExpenses ||
+      snapshot.sourceMap.smallExpenses === "exact" ||
       snapshot.sourceMap.smallExpenses === "reported_none") &&
-    snapshot.debt.source !== "reported";
+    !snapshot.debt.isPaymentEstimated;
   const emergencyTone = getEmergencyTone(snapshot.emergencyFund.status);
   const emergencyStatus = {
     state: snapshot.emergencyFund.label,
     text:
       snapshot.emergencyFund.coverageMonths !== null
-        ? `Con estos datos, tu ahorro cubre cerca de ${getRoundedMonthsLabel(snapshot.emergencyFund.coverageMonths)} meses de gastos principales.`
+        ? `Con estos datos, tu ahorro cubre cerca de ${getRoundedMonthsLabel(snapshot.emergencyFund.coverageMonths)} meses de gastos mensuales registrados.`
         : snapshot.emergencyFund.label,
     tone: emergencyTone
   };
@@ -795,7 +807,6 @@ export default function DashboardScreen() {
     metrics.expensePercentage !== null ? Math.min(metrics.expensePercentage, 100) : 0;
   const expensesMayExceedIncome =
     metrics.expensePercentage !== null && metrics.expensePercentage > 100;
-  const categoryLabels = data.smallExpenseCategories.slice(0, 4);
   const primaryGoalTargetAmount = primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount;
   const primaryGoalTargetMonth = primaryGoalAllocation?.goal.targetMonth
     ? formatTargetMonth(primaryGoalAllocation.goal.targetMonth)
@@ -826,7 +837,7 @@ export default function DashboardScreen() {
       : "";
   const goalsDetailText =
     totalGoalsCount > 1
-      ? `Bolsa sugerida: ${getAmountLabel(goalPlan.monthlyGoalBudget)}. Principal: ${getDefinedLabel(primaryGoalTitle, "No definida")}.${completedGoalsDetail}`
+      ? `Aporte mensual asignado: ${getAmountLabel(goalPlan.monthlyContributionTotal)} de una referencia de ${getAmountLabel(goalPlan.monthlyGoalBudget)}. Principal: ${getDefinedLabel(primaryGoalTitle, "No definida")}.${completedGoalsDetail}`
       : goalDetailText;
   const goalStatusTone =
     primaryGoalAllocation && isCompletedGoalAllocation(primaryGoalAllocation)
@@ -841,7 +852,10 @@ export default function DashboardScreen() {
       ? `${completedGoalsCount} de ${totalGoalsCount} completadas`
       : null;
   const smallExpensesValue =
-    snapshot.sourceMap.smallExpenses === "reported_none"
+    snapshot.cashflow.monthlyExpensesIncludesSmallExpenses &&
+    snapshot.smallExpenses.amount === null
+      ? "Incluidos en el gasto mensual"
+      : snapshot.sourceMap.smallExpenses === "reported_none"
       ? "No identificados"
       : snapshot.smallExpenses.amount !== null
       ? snapshot.sourceMap.smallExpenses === "exact"
@@ -850,11 +864,20 @@ export default function DashboardScreen() {
       : snapshot.sourceMap.smallExpenses === "unknown"
         ? "Por estimar"
         : `Rango: ${getDefinedLabel(data.smallExpensesRange)}`;
+  const smallExpensesText =
+    snapshot.cashflow.monthlyExpensesIncludesSmallExpenses &&
+    snapshot.smallExpenses.amount === null
+      ? "Ya están considerados en el total mensual. Detallarlos después es opcional y no los sumará dos veces."
+      : snapshot.smallExpenses.recommendation;
+  const hasSmallExpensesDetail =
+    data.hasSmallExpenses !== null ||
+    data.smallExpensesRange !== null ||
+    snapshot.smallExpenses.amount !== null;
   const dashboardDebtTone = getDashboardDebtTone(snapshot.debt.level);
   const dashboardDebtValue =
     snapshot.debt.monthlyPaymentTotal > 0
       ? snapshot.debt.source === "reported"
-        ? `Estimado: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
+        ? `${snapshot.debt.isPaymentEstimated ? "Estimado" : "Cuotas"}: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
         : snapshot.debt.source === "category"
         ? `Referencia: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
         : `Cuotas: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
@@ -863,6 +886,7 @@ export default function DashboardScreen() {
     count: snapshot.debt.registeredDebtCount,
     level: snapshot.debt.level,
     monthlyPaymentTotal: snapshot.debt.monthlyPaymentTotal,
+    reportedPaymentKind: snapshot.debt.reportedPaymentKind,
     source: snapshot.debt.source
   });
   const firstName = onboarding.firstName.trim();
@@ -959,7 +983,7 @@ export default function DashboardScreen() {
                   value={
                     snapshot.cashflow.monthlyDebtPayments > 0
                       ? `${formatCOP(snapshot.cashflow.monthlyDebtPayments)}${
-                          snapshot.debt.source === "reported" ? " aprox." : ""
+                          snapshot.debt.isPaymentEstimated ? " aprox." : ""
                         }`
                       : "$0"
                   }
@@ -1007,7 +1031,7 @@ export default function DashboardScreen() {
             value={
               snapshot.values.currentSavings !== null
                 ? `Ahorro actual: ${getAmountLabel(snapshot.values.currentSavings, currentSavingsIsExact)}`
-                : getDefinedLabel(data.emergencyCoverage)
+                : "Ahorro por registrar"
             }
           >
             <Chip label={emergencyStatus.state} tone={emergencyStatus.tone} />
@@ -1015,26 +1039,27 @@ export default function DashboardScreen() {
 
           <RowCard
             compact={isPhone}
-            actionLabel="Revisar gastos"
+            actionLabel={hasSmallExpensesDetail ? "Revisar gastos" : "Detallar (opcional)"}
             icon={<Coffee color="#B45309" size={36} strokeWidth={2.4} />}
             onPress={() => router.push({ pathname: "/small-expenses", params: { source: "dashboard" } })}
-            text={snapshot.smallExpenses.recommendation}
+            text={smallExpensesText}
             title="Gastos pequeños"
-            tone="warning"
+            tone={hasSmallExpensesDetail ? "warning" : "neutral"}
             value={smallExpensesValue}
           >
-            <View style={styles.categoryChipLine}>
-              <Text style={styles.rowInlineText}>
-                Intención:{" "}
-                {data.hasSmallExpenses === "No"
-                  ? "No aplica"
-                  : getDefinedLabel(data.smallExpensesIntention, "No definida")}
-              </Text>
-              <Chip label={snapshot.smallExpenses.label} tone="warning" />
-              {categoryLabels.map((category) => (
-                <Chip key={category} label={category} tone="warning" />
-              ))}
-            </View>
+            {hasSmallExpensesDetail ? (
+              <View style={styles.categoryChipLine}>
+                <Text style={styles.rowInlineText}>
+                  Intención:{" "}
+                  {data.hasSmallExpenses === "No"
+                    ? "No aplica"
+                    : getDefinedLabel(data.smallExpensesIntention, "No definida")}
+                </Text>
+                <Chip label={snapshot.smallExpenses.label} tone="warning" />
+              </View>
+            ) : (
+              <Chip label="Detalle opcional" tone="neutral" />
+            )}
           </RowCard>
 
           <RowCard
@@ -1049,7 +1074,10 @@ export default function DashboardScreen() {
           >
             <Chip label={goalStatus} tone={goalStatusTone} />
             {totalGoalsCount > 1 ? (
-              <Chip label={`Bolsa ${getAmountLabel(goalPlan.monthlyGoalBudget)}`} tone="support" />
+              <Chip
+                label={`Aporte ${getAmountLabel(goalPlan.monthlyContributionTotal)}`}
+                tone="support"
+              />
             ) : null}
             {completedGoalsChipLabel ? (
               <Chip label={completedGoalsChipLabel} tone="support" />
@@ -1072,7 +1100,7 @@ export default function DashboardScreen() {
             <Chip
               label={getDebtRatioLabel(
                 snapshot.debt.debtToIncomeRatio,
-                snapshot.debt.source === "reported"
+                snapshot.debt.reportedPaymentKind === "share"
                   ? snapshot.debt.reportedPaymentShare
                   : null
               )}

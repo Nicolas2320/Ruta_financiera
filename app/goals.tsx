@@ -29,7 +29,6 @@ import { ContextHeader } from "../components/ui/ContextHeader";
 import { ExactAmountField } from "../components/ui/ExactAmountField";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
 import { MonthYearPickerField } from "../components/ui/MonthYearPickerField";
-import { OptionalTag } from "../components/ui/OptionalTag";
 import { SelectableCard } from "../components/ui/SelectableCard";
 import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
@@ -37,7 +36,6 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   createFinancialGoal,
-  getLegacyFieldsFromGoal,
   getOnboardingGoals,
   getPrimaryFinancialGoal,
   type FinancialGoal
@@ -180,7 +178,6 @@ const customGoalIconOptions: VisualOption[] = [
   }
 ];
 
-const goalPriorities = ["Baja", "Media", "Alta", "Muy alta"] as const;
 const manualAmountOptionTitle = "Escribir monto";
 const unknownGoalAmountOption = "Aún no lo sé";
 
@@ -222,14 +219,28 @@ function getInitialAmountSelection(goal: FinancialGoal | null) {
 export default function GoalsScreen() {
   const router = useRouter();
   const { isPhone, isSmallPhone, screenPadding } = useResponsiveLayout();
-  const params = useLocalSearchParams();
+  const params = useLocalSearchParams<{
+    mode?: string;
+    suggestedTargetAmount?: string;
+    template?: string;
+  }>();
   const { onboarding, onboardingSyncStatus, updateOnboarding } = useOnboarding();
   const goals = getOnboardingGoals(onboarding);
   const primaryGoal = getPrimaryFinancialGoal(onboarding);
   const isAddMode = params.mode === "add";
+  const isEmergencyTemplate = isAddMode && params.template === "emergency";
+  const suggestedEmergencyTargetAmount = isEmergencyTemplate
+    ? Number(params.suggestedTargetAmount)
+    : 0;
+  const hasSuggestedEmergencyTarget =
+    Number.isFinite(suggestedEmergencyTargetAmount) && suggestedEmergencyTargetAmount > 0;
   const initialGoal = isAddMode ? null : primaryGoal;
-  const initialGoalSelection = getInitialGoalSelection(initialGoal);
-  const initialAmountSelection = getInitialAmountSelection(initialGoal);
+  const initialGoalSelection = isEmergencyTemplate
+    ? "Crear un fondo de emergencia"
+    : getInitialGoalSelection(initialGoal);
+  const initialAmountSelection = hasSuggestedEmergencyTarget
+    ? manualAmountOptionTitle
+    : getInitialAmountSelection(initialGoal);
   const [selectedGoal, setSelectedGoal] = useState<string | null>(initialGoalSelection);
   const [customGoalName, setCustomGoalName] = useState(
     initialGoal && initialGoalSelection === customGoalOption.title ? initialGoal.title : ""
@@ -237,14 +248,13 @@ export default function GoalsScreen() {
   const [selectedIconKey, setSelectedIconKey] = useState<string | null>(
     initialGoal?.iconKey ?? null
   );
-  const [selectedPriority, setSelectedPriority] = useState<string | null>(
-    initialGoal?.priority ?? null
-  );
   const [selectedAmountRange, setSelectedAmountRange] = useState<string | null>(
     initialAmountSelection
   );
   const [targetAmountInput, setTargetAmountInput] = useState(
-    getCurrencyInputValue(initialGoal?.targetAmount)
+    hasSuggestedEmergencyTarget
+      ? getCurrencyInputValue(suggestedEmergencyTargetAmount)
+      : getCurrencyInputValue(initialGoal?.targetAmount)
   );
   const [targetMonth, setTargetMonth] = useState<string | null>(initialGoal?.targetMonth ?? null);
   const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
@@ -256,18 +266,34 @@ export default function GoalsScreen() {
 
     hasHydratedStoredAnswers.current = true;
     const storedGoal = isAddMode ? null : getPrimaryFinancialGoal(onboarding);
-    const storedGoalSelection = getInitialGoalSelection(storedGoal);
+    const storedGoalSelection = isEmergencyTemplate
+      ? "Crear un fondo de emergencia"
+      : getInitialGoalSelection(storedGoal);
 
     setSelectedGoal(storedGoalSelection);
     setCustomGoalName(
       storedGoal && storedGoalSelection === customGoalOption.title ? storedGoal.title : ""
     );
-    setSelectedIconKey(storedGoal?.iconKey ?? null);
-    setSelectedPriority(storedGoal?.priority ?? null);
-    setSelectedAmountRange(getInitialAmountSelection(storedGoal));
-    setTargetAmountInput(getCurrencyInputValue(storedGoal?.targetAmount));
+    setSelectedIconKey(isEmergencyTemplate ? "emergency" : storedGoal?.iconKey ?? null);
+    setSelectedAmountRange(
+      hasSuggestedEmergencyTarget
+        ? manualAmountOptionTitle
+        : getInitialAmountSelection(storedGoal)
+    );
+    setTargetAmountInput(
+      hasSuggestedEmergencyTarget
+        ? getCurrencyInputValue(suggestedEmergencyTargetAmount)
+        : getCurrencyInputValue(storedGoal?.targetAmount)
+    );
     setTargetMonth(storedGoal?.targetMonth ?? null);
-  }, [isAddMode, onboarding, onboardingSyncStatus]);
+  }, [
+    hasSuggestedEmergencyTarget,
+    isAddMode,
+    isEmergencyTemplate,
+    onboarding,
+    onboardingSyncStatus,
+    suggestedEmergencyTargetAmount
+  ]);
 
   const isCustomGoal = selectedGoal === customGoalOption.title;
   const finalGoalTitle = isCustomGoal ? customGoalName.trim() : selectedGoal;
@@ -281,7 +307,7 @@ export default function GoalsScreen() {
   const canContinue = Boolean(
     finalGoalTitle &&
       targetMonth &&
-      selectedPriority &&
+      selectedAmountRange &&
       (!isManualAmount || (parsedTargetAmount !== null && parsedTargetAmount > 0))
   );
 
@@ -321,7 +347,7 @@ export default function GoalsScreen() {
   };
 
   const handleContinue = () => {
-    if (!canContinue || !finalGoalTitle || !targetMonth || !selectedPriority) {
+    if (!canContinue || !finalGoalTitle || !targetMonth || !selectedAmountRange) {
       return;
     }
 
@@ -332,7 +358,6 @@ export default function GoalsScreen() {
           : selectedAmountRange,
       iconKey: finalIconKey,
       isPrimary: !isAddMode,
-      priority: selectedPriority,
       targetMonth,
       targetAmount: parsedTargetAmount,
       title: finalGoalTitle
@@ -350,11 +375,8 @@ export default function GoalsScreen() {
           isPrimary: !hasPrimaryGoal && goals.length === 0
         }
       ];
-      const nextPrimaryGoal = nextGoals.find((goal) => goal.isPrimary) ?? nextGoals[0] ?? null;
-
       updateOnboarding({
-        goals: nextGoals,
-        ...getLegacyFieldsFromGoal(nextPrimaryGoal)
+        goals: nextGoals
       });
       router.push("/goals-overview");
       return;
@@ -364,7 +386,6 @@ export default function GoalsScreen() {
       ...nextGoal,
       id: primaryGoal?.id ?? nextGoal.id,
       isPrimary: true,
-      manualMonthlyContribution: primaryGoal?.manualMonthlyContribution ?? null,
       createdAt: primaryGoal?.createdAt ?? nextGoal.createdAt
     };
     const nextGoals = [
@@ -375,8 +396,7 @@ export default function GoalsScreen() {
     ];
 
     updateOnboarding({
-      goals: nextGoals,
-      ...getLegacyFieldsFromGoal(nextPrimaryGoal)
+      goals: nextGoals
     });
     router.push("/summary");
   };
@@ -398,31 +418,49 @@ export default function GoalsScreen() {
             />
           ) : (
             <StepHeader
-              currentStep={7}
+              currentStep={6}
               nextAccessibilityLabel="Continuar hacia revisión de respuestas"
               nextDisabled={!canContinue}
               onBack={() => router.replace("/savings-debts")}
               onNext={handleContinue}
               title="Meta financiera"
-              totalSteps={7}
+              totalSteps={6}
             />
           )}
 
           <HeroInfoCard
-            badge="No necesitas tener una cifra exacta para empezar."
+            badge={
+              isEmergencyTemplate
+                ? "Referencia calculada con tus gastos actuales."
+                : "Puedes empezar con un rango y ajustarlo después."
+            }
             image={goalTargetImage}
             imageStyle={styles.heroImage}
             text={
-              isAddMode
-                ? "Agrega otra meta para repartir tu bolsa mensual entre objetivos con distintos horizontes e importancia."
-                : "Elige qué quieres lograr primero. Esta es tu prioridad inicial y podrás ajustarla cuando lo necesites."
+              isEmergencyTemplate
+                ? `Te proponemos ${
+                    hasSuggestedEmergencyTarget
+                      ? formatCOP(suggestedEmergencyTargetAmount)
+                      : "una base inicial"
+                  }, equivalente a tres meses de gastos. Puedes cambiar el monto y elegir la fecha antes de guardarla.`
+                : isAddMode
+                ? "Agrega otra meta con su propio monto y mes objetivo."
+                : "Elige la meta en la que quieres enfocarte ahora. Podrás crear otras metas y cambiar cuál es la principal."
             }
-            title={isAddMode ? "Agregar una meta" : "Tu primera meta financiera"}
+            title={
+              isEmergencyTemplate
+                ? "Crear fondo de emergencia"
+                : isAddMode
+                  ? "Agregar una meta"
+                  : "Tu meta principal"
+            }
           />
 
           <View style={styles.card}>
             <Text style={styles.questionTitle}>
-              {isAddMode ? "¿Qué quieres lograr con esta meta?" : "¿Qué quieres lograr primero?"}
+              {isAddMode
+                ? "¿Qué quieres lograr con esta meta?"
+                : "¿Cuál es tu meta principal ahora mismo?"}
             </Text>
             <View style={styles.goalGrid}>
               {financialGoals.map((goal) => (
@@ -490,34 +528,7 @@ export default function GoalsScreen() {
           </View>
 
           <View style={styles.card}>
-            <MonthYearPickerField
-              helper="Con mes y año es suficiente para calcular cuánto tiempo tienes."
-              label="¿Para qué mes quieres alcanzar esta meta?"
-              onChange={setTargetMonth}
-              value={targetMonth}
-            />
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.questionTitle}>¿Qué tan importante es esta meta para ti?</Text>
-            <View style={styles.priorityGrid}>
-              {goalPriorities.map((priority) => (
-                <SelectableCard
-                  key={priority}
-                  onPress={() => setSelectedPriority(priority)}
-                  selected={selectedPriority === priority}
-                  style={styles.priorityOption}
-                  title={priority}
-                />
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.card}>
-            <View style={styles.questionRow}>
-              <Text style={styles.questionTitle}>¿Cuánto quieres reunir?</Text>
-              <OptionalTag />
-            </View>
+            <Text style={styles.questionTitle}>¿Cuánto quieres reunir?</Text>
 
             <View style={styles.amountModeSwitch}>
               <Pressable
@@ -580,6 +591,19 @@ export default function GoalsScreen() {
                 ))}
               </View>
             )}
+          </View>
+
+          <View style={styles.card}>
+            <MonthYearPickerField
+              helper="Con mes y año es suficiente para calcular cuánto tiempo tienes."
+              label={
+                isAddMode
+                  ? "¿Para qué mes quieres alcanzar esta meta?"
+                  : "¿Para qué mes quieres alcanzar tu meta principal?"
+              }
+              onChange={setTargetMonth}
+              value={targetMonth}
+            />
           </View>
 
           <View style={styles.actions}>
@@ -827,22 +851,6 @@ const styles = StyleSheet.create({
     height: 42,
     justifyContent: "center",
     width: 42
-  },
-  priorityGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  priorityOption: {
-    flexBasis: "47%",
-    flexGrow: 1,
-    minHeight: 52
-  },
-  questionRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
   },
   amountGrid: {
     flexDirection: "row",

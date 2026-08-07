@@ -138,7 +138,6 @@ export function applyGoalContribution(
       ...goal,
       currentAmount,
       contributions,
-      manualMonthlyContribution: status === "completed" ? 0 : goal.manualMonthlyContribution,
       status
     };
   });
@@ -192,7 +191,6 @@ export function removeGoalContributionBySource(
         (contribution) =>
           !isLinkedContribution(contribution, contributionId, sourceProgressId)
       ),
-      manualMonthlyContribution: status === "completed" ? 0 : goal.manualMonthlyContribution,
       status
     };
   });

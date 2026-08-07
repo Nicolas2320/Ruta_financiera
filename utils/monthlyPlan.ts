@@ -13,32 +13,31 @@ import {
   type DebtRecord,
   type ExactFinancialValues,
   type ExpenseCategoryAmounts,
+  type FinancialGoal,
   type OnboardingData
 } from "../types/financial";
 import { initialOnboarding } from "../types/financial";
 import { isDebtPaid } from "./debtPayments";
+import { isEmergencyGoal } from "./goalPlanning";
 
 export type MonthlyPlanData = {
-  ageRange: string | null;
-  country: string | null;
-  city: string | null;
   incomeRange: string | null;
   expensesRange: string | null;
   expenseCategoryAmounts: ExpenseCategoryAmounts;
   expensesFeeling: string | null;
+  monthlyExpensesIncludesSmallExpenses: boolean | null;
   smallExpensesRange: string | null;
   smallExpensesIntention: string | null;
   hasSmallExpenses: string | null;
-  smallExpenseCategories: string[];
   savingsRange: string | null;
-  emergencyCoverage: string | null;
+  hasDebts: boolean | null;
+  debtMonthlyPaymentRange: string | null;
   debtSituation: string | null;
   debtPaymentShare: string | null;
   debts: DebtRecord[];
-  investmentSituation: string | null;
   financialGoal: string | null;
-  goalPriority: string | null;
   goalAmountRange: string | null;
+  goals: FinancialGoal[];
 };
 
 export type MonthlyPlanMetrics = {
@@ -72,6 +71,7 @@ export type MonthlyGoalContext = {
   title: string | null;
   monthlyContribution: number | null;
   estimatedMonthsToGoal: number | null;
+  hasRegisteredContribution?: boolean;
 };
 
 const monthlyPlanProgressVersion = "monthly-plan-v0.2";
@@ -128,10 +128,10 @@ function getGoalContributionImpact(goalContext?: MonthlyGoalContext) {
   const contribution = goalContext?.monthlyContribution ?? null;
 
   if (contribution !== null && contribution > 0) {
-    return `Aporte asignado a esta meta: ${formatCOP(contribution)} aprox.`;
+    return `Referencia mensual de tu estrategia: ${formatCOP(contribution)} aprox.`;
   }
 
-  return "Esta meta aún no tiene un aporte mensual asignado.";
+  return "La estrategia actual no reparte un monto mensual a esta meta.";
 }
 
 function getGoalAwareFocus(
@@ -151,8 +151,8 @@ function getGoalAwareFocus(
     title: `Meta del mes: ${goalTitle}`,
     text:
       contribution !== null && contribution > 0
-        ? `Tu plan puede enfocarse en separar ${formatCOP(contribution)} aprox. para esta meta.`
-        : `Tu plan puede enfocarse en definir un aporte mensual sostenible para ${goalTitle}.`
+        ? `Tu estrategia reparte ${formatCOP(contribution)} aprox. al mes a esta meta. Registra en Metas los aportes que realmente hagas.`
+        : `Tu plan puede enfocarse en registrar un aporte real para ${goalTitle} desde Metas.`
   };
 }
 
@@ -171,8 +171,12 @@ function getGoalAwareActions(
     if (action.id === "set-goal-contribution") {
       return {
         ...action,
-        title: `Separar aporte para ${goalTitle}`,
-        description: "Usa el aporte asignado como referencia. Puedes ajustarlo.",
+        title: goalContext?.hasRegisteredContribution
+          ? `Registrar otro aporte para ${goalTitle}`
+          : `Registrar el primer aporte para ${goalTitle}`,
+        description:
+          "Hazlo desde Metas para actualizar el avance real y la fecha proyectada.",
+        why: "Registrar solo lo que realmente aportas mantiene el plan alineado con tu avance.",
         estimatedImpact: getGoalContributionImpact(goalContext)
       };
     }
@@ -181,7 +185,7 @@ function getGoalAwareActions(
       return {
         ...action,
         title: `Revisar el objetivo de ${goalTitle}`,
-        description: "Compara el monto objetivo con el aporte mensual asignado.",
+        description: "Compara el monto objetivo con la distribución mensual actual.",
         why: "Ajustar monto, plazo o aporte puede hacer la meta más sostenible."
       };
     }
@@ -190,7 +194,8 @@ function getGoalAwareActions(
       return {
         ...action,
         title: "Comparar escenarios en Simulación",
-        description: "Revisa el aporte actual, equilibrado e intensivo antes de elegir uno.",
+        description:
+          "Compara cómo cambia la fecha al repartir el dinero entre deudas y metas.",
         estimatedImpact:
           goalContext?.estimatedMonthsToGoal !== null &&
           goalContext?.estimatedMonthsToGoal !== undefined
@@ -320,32 +325,27 @@ const noConcreteGoalAmountValues = [
 
 export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanData {
   const {
-    ageRange = null,
-    country = null,
-    city = null,
     incomeRange = null,
     expensesRange = null,
     expenseCategoryAmounts = {},
     expensesFeeling = null,
+    monthlyExpensesIncludesSmallExpenses = null,
     smallExpensesRange = null,
     smallExpensesIntention = null,
     hasSmallExpenses = null,
-    smallExpenseCategories = [],
     savingsRange = null,
-    emergencyCoverage = null,
+    hasDebts = null,
+    debtMonthlyPaymentRange = null,
     debtSituation = null,
     debtPaymentShare = null,
     debts = [],
-    investmentSituation = null,
-    financialGoal = null,
-    goalPriority = null,
-    goalAmountRange = null
+    goals = []
   } = data;
+  const normalizedGoals = Array.isArray(goals) ? goals : [];
+  const primaryGoal =
+    normalizedGoals.find((goal) => goal.isPrimary) ?? normalizedGoals[0] ?? null;
 
   return {
-    ageRange,
-    country,
-    city,
     incomeRange,
     expensesRange,
     expenseCategoryAmounts:
@@ -353,19 +353,19 @@ export function getMonthlyPlanData(data: Partial<MonthlyPlanData>): MonthlyPlanD
         ? expenseCategoryAmounts
         : {},
     expensesFeeling,
+    monthlyExpensesIncludesSmallExpenses,
     smallExpensesRange,
     smallExpensesIntention,
     hasSmallExpenses,
-    smallExpenseCategories: Array.isArray(smallExpenseCategories) ? smallExpenseCategories : [],
     savingsRange,
-    emergencyCoverage,
+    hasDebts,
+    debtMonthlyPaymentRange,
     debtSituation,
     debtPaymentShare,
     debts: Array.isArray(debts) ? debts : [],
-    investmentSituation,
-    financialGoal,
-    goalPriority,
-    goalAmountRange
+    financialGoal: primaryGoal?.title ?? null,
+    goalAmountRange: primaryGoal?.amountRange ?? null,
+    goals: normalizedGoals
   };
 }
 
@@ -381,8 +381,7 @@ export function getMonthlyPlanMetrics(
 ): MonthlyPlanMetrics {
   const onboarding: OnboardingData = {
     ...initialOnboarding,
-    ...data,
-    city: data.city ?? ""
+    ...data
   };
   const snapshot = calculateFinancialSnapshot({ onboarding, exactValues });
   const expensePercentage =
@@ -405,10 +404,6 @@ export function getMonthlyPlanMetrics(
   };
 }
 
-export function hasLowEmergencyCoverage(emergencyCoverage: string | null) {
-  return emergencyCoverage === "No podría cubrirlos" || emergencyCoverage === "Menos de 1 mes";
-}
-
 export function goalNeedsAmount(goalAmountRange: string | null) {
   return !goalAmountRange || noConcreteGoalAmountValues.includes(goalAmountRange);
 }
@@ -428,11 +423,42 @@ export function getMonthlyActions(
   priorityKey = metrics.snapshot.priority.key,
   goalContext?: MonthlyGoalContext
 ): MonthlyAction[] {
-  const actions = getGoalAwareActions(
+  let actions = getGoalAwareActions(
     generateMonthlyActions(metrics.snapshot, priorityKey),
     priorityKey,
     goalContext
   );
+  const needsEmergencyGoal =
+    (metrics.snapshot.priority.key === "build_emergency_fund" ||
+      priorityKey === "build_emergency_fund") &&
+    !data.goals.some(
+      (goal) =>
+        goal.status !== "completed" &&
+        goal.status !== "paused" &&
+        isEmergencyGoal(goal)
+    );
+  const createEmergencyGoalAction: MonthlyAction = {
+    id: "create-emergency-goal",
+    title: "Crear fondo de emergencia en Metas",
+    description:
+      "Crea la meta para definir su monto, fecha y registrar su avance sin mezclarla con tus otros objetivos.",
+    why:
+      "Tenerla como meta permite que la simulación y el plan mensual usen el mismo objetivo.",
+    estimatedImpact:
+      "La app podrá seguir su avance y ajustar la proyección con tus datos actuales.",
+    difficulty: "Baja",
+    category: "Ahorro"
+  };
+
+  if (needsEmergencyGoal && priorityKey === "build_emergency_fund") {
+    actions = actions.map((action, index) =>
+      index === 0
+        ? createEmergencyGoalAction
+        : action
+    );
+  } else if (needsEmergencyGoal) {
+    actions = [...actions.slice(0, 2), createEmergencyGoalAction];
+  }
 
   return priorityKey === "debt_pressure"
     ? personalizeDebtActions(actions, data.debts)

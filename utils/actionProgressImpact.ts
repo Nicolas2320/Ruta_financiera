@@ -79,7 +79,7 @@ const impactDefinitionsByActionId: Record<string, ImpactDefinition> = {
   },
   "confirm-goal-priority": {
     kind: "insight",
-    label: "Prioridad validada",
+    label: "Meta principal revisada",
     target: "goal"
   },
   "debt-monthly-payment": {

@@ -58,18 +58,18 @@ describe("financial distribution presentation", () => {
       "split_debt_goal"
     ]);
     expect(presentations[0]).toMatchObject({
-      badge: "Referencia",
+      badge: "Sin repartir",
       baseDebtPayments: 500_000,
       extraDebtPayment: 0,
       goalContribution: 0
     });
     expect(presentations[1]).toMatchObject({
-      badge: "Deuda",
+      badge: "Solo deudas",
       extraDebtPayment: 1_500_000,
       targetDebtTitles: ["Nubank TC"]
     });
     expect(presentations[3]).toMatchObject({
-      badge: "Reparto ajustable",
+      badge: "50% deudas · 50% metas",
       debtSharePercent: 50
     });
   });
@@ -91,5 +91,42 @@ describe("financial distribution presentation", () => {
       monthsUntilTarget: 5,
       targetGapAtTargetMonth: 0
     });
+  });
+
+  it("keeps a missing interest rate as an internal 0% assumption without repeating it in the scenario copy", () => {
+    const input = buildFinancialProjectionInput({
+      asOfDate: "2026-08-02",
+      exactValues: {
+        monthlyExpenses: 1_500_000,
+        monthlyIncome: 4_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        debts: [
+          makeDebt({
+            annualInterestRate: null,
+            monthlyPayment: 700_000,
+            monthlyPaymentType: "minimum_required",
+            remainingAmount: 10_000_000
+          })
+        ],
+        goals: [makeGoal()]
+      })
+    });
+    const presentations = presentDistributionScenarios({
+      input,
+      scenarios: buildDistributionScenarios({
+        input,
+        protectedMarginPreference: { mode: "use_all" }
+      })
+    });
+    const debtScenario = presentations.find(
+      (scenario) => scenario.id === "reduce_interest"
+    );
+
+    expect(debtScenario?.status).toBe("ready");
+    expect(debtScenario?.issueCodes).not.toContain("unknown_interest_rate");
+    expect(debtScenario?.issueMessages).toEqual([]);
+    expect(debtScenario?.timeline.totalInterestCharged).toBe(0);
   });
 });

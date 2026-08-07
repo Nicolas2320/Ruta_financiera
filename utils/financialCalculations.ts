@@ -81,6 +81,7 @@ export type FinancialSnapshot = {
   cashflow: {
     monthlyIncome: number | null;
     monthlyExpenses: number | null;
+    monthlyExpensesIncludesSmallExpenses: boolean;
     monthlyDebtPayments: number;
     totalMonthlyOutflow: number | null;
     monthlyMargin: number | null;
@@ -127,6 +128,9 @@ export type FinancialSnapshot = {
     remainingTotal: number | null;
     debtToIncomeRatio: number | null;
     reportedPaymentShare: string | null;
+    reportedMonthlyPaymentRange: string | null;
+    reportedPaymentKind: "exact" | "range" | "share" | null;
+    isPaymentEstimated: boolean;
     hasCategoryDebtReference: boolean;
     hasPossibleDuplicate: boolean;
   };
@@ -216,7 +220,7 @@ const emergencyFundLabels: Record<EmergencyFundStatus, string> = {
   building: "Vas construyendo protección",
   solid: "Tienes una base sólida",
   strong: "Tienes una protección amplia",
-  unknown: "Necesitamos ahorro actual y gastos principales para estimar tu fondo"
+  unknown: "Necesitamos ahorro actual y gastos mensuales para estimar tu fondo"
 };
 
 const goalLabels: Record<GoalStatus, string> = {
@@ -380,7 +384,7 @@ function estimateGoalTargetAmountFromRange(label: string | null | undefined) {
 }
 
 export function getExactValuesCount(exactValues: ExactFinancialValues | null | undefined) {
-  return exactFinancialValueKeys.filter((key) => {
+  return exactFinancialValueKeys.filter((key) => key !== "monthlyDebtPayments").filter((key) => {
     const value = exactValues?.[key];
 
     if (key === "currentSavings" || key === "smallExpenses") {
@@ -564,8 +568,7 @@ function getDebtLevel(debtSituation: string | null, debtPaymentShare: string | n
 }
 
 function getPriority(
-  snapshot: Omit<FinancialSnapshot, "priority">,
-  investmentSituation: string | null
+  snapshot: Omit<FinancialSnapshot, "priority">
 ): FinancialSnapshot["priority"] {
   if (snapshot.debt.shouldPrioritizeDebt) {
     return {
@@ -614,21 +617,6 @@ function getPriority(
     };
   }
 
-  const normalizedInvestmentSituation = normalizeText(investmentSituation ?? "");
-
-  if (
-    normalizedInvestmentSituation.includes("quiero aprender") &&
-    (snapshot.emergencyFund.status === "solid" ||
-      snapshot.emergencyFund.status === "strong")
-  ) {
-    return {
-      key: "learn_investing",
-      title: "Aprender antes de invertir",
-      description:
-        "Puedes empezar entendiendo riesgo, plazo y liquidez antes de tomar decisiones."
-    };
-  }
-
   return {
     key: "keep_tracking",
     title: "Mantener claridad mensual",
@@ -649,10 +637,12 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const estimatedMonthlyExpenses = estimateExpensesFromRange(onboarding.expensesRange);
   const estimatedCurrentSavings = estimateSavingsFromRange(onboarding.savingsRange);
   const estimatedGoalTargetAmount = estimateGoalTargetAmountFromRange(
-    primaryGoal?.amountRange ?? onboarding.goalAmountRange
+    primaryGoal?.amountRange ?? null
   );
   const estimatedSmallExpenses = estimateSmallExpensesFromRange(onboarding.smallExpensesRange);
   const reportedNoSmallExpenses = onboarding.hasSmallExpenses === "No";
+  const monthlyExpensesIncludesSmallExpenses =
+    onboarding.monthlyExpensesIncludesSmallExpenses === true;
   const withheldSavings =
     normalizeText(onboarding.savingsRange ?? "").includes("prefiero");
 
@@ -683,14 +673,20 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const registeredDebtSummary = getRegisteredDebtSummary({
     debts: onboarding.debts,
     debtPaymentShare: onboarding.debtPaymentShare,
+    hasDebts: onboarding.hasDebts,
     expenseCategoryAmounts: onboarding.expenseCategoryAmounts,
+    reportedMonthlyPayment: exactValues.monthlyDebtPayments,
+    reportedMonthlyPaymentRange: onboarding.debtMonthlyPaymentRange,
     monthlyIncome
   });
   const debtLevel =
     registeredDebtSummary.source !== "none" ? registeredDebtSummary.level : selectedDebtLevel;
   const totalMonthlyOutflow =
-    monthlyExpenses !== null && smallExpenses !== null
-      ? monthlyExpenses + smallExpenses + registeredDebtSummary.monthlyPaymentTotal
+    monthlyExpenses !== null &&
+    (monthlyExpensesIncludesSmallExpenses || smallExpenses !== null)
+      ? monthlyExpenses +
+        (monthlyExpensesIncludesSmallExpenses ? 0 : (smallExpenses ?? 0)) +
+        registeredDebtSummary.monthlyPaymentTotal
       : null;
 
   const monthlyMargin =
@@ -779,6 +775,7 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
     cashflow: {
       monthlyIncome,
       monthlyExpenses,
+      monthlyExpensesIncludesSmallExpenses,
       monthlyDebtPayments: registeredDebtSummary.monthlyPaymentTotal,
       totalMonthlyOutflow,
       monthlyMargin,
@@ -798,7 +795,7 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
       label: emergencyFundLabels[emergencyFundStatus]
     },
     goal: {
-      name: primaryGoal?.title ?? onboarding.financialGoal,
+      name: primaryGoal?.title ?? null,
       targetAmount: goalTargetAmount,
       currentSavings: goalCurrentSavings,
       progressPercentage: goalProgressPercentage,
@@ -811,12 +808,18 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
       amount: smallExpenses,
       level: smallExpensesLevel,
       opportunityAmount: smallExpensesOpportunity,
-      label: reportedNoSmallExpenses
-        ? "No identificaste gastos pequeños frecuentes"
-        : smallExpensesLabels[smallExpensesLevel],
-      recommendation: reportedNoSmallExpenses
-        ? "Indicaste que no identificas gastos pequeños frecuentes. No usamos este rubro para crear aportes."
-        : "Podrías revisar una parte de estos gastos, sin eliminarlos todos."
+      label:
+        monthlyExpensesIncludesSmallExpenses && smallExpenses === null
+          ? "Incluidos en gastos mensuales"
+          : reportedNoSmallExpenses
+            ? "No identificaste gastos pequeños frecuentes"
+            : smallExpensesLabels[smallExpensesLevel],
+      recommendation:
+        monthlyExpensesIncludesSmallExpenses && smallExpenses === null
+          ? "Ya están considerados dentro del gasto mensual. Puedes detallarlos después sin que se sumen dos veces."
+          : reportedNoSmallExpenses
+            ? "Indicaste que no identificas gastos pequeños frecuentes. No usamos este rubro para crear aportes."
+            : "Podrías revisar una parte de estos gastos, sin eliminarlos todos."
     },
     debt: {
       level: debtLevel,
@@ -830,12 +833,15 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
       remainingTotal: registeredDebtSummary.remainingTotal,
       debtToIncomeRatio: registeredDebtSummary.debtToIncomeRatio,
       reportedPaymentShare: registeredDebtSummary.reportedPaymentShare,
+      reportedMonthlyPaymentRange: registeredDebtSummary.reportedMonthlyPaymentRange,
+      reportedPaymentKind: registeredDebtSummary.reportedPaymentKind,
+      isPaymentEstimated: registeredDebtSummary.isPaymentEstimated,
       hasCategoryDebtReference: registeredDebtSummary.hasCategoryDebtReference,
       hasPossibleDuplicate: registeredDebtSummary.hasPossibleDuplicate
     }
   };
 
-  const priority = getPriority(baseSnapshot, onboarding.investmentSituation);
+  const priority = getPriority(baseSnapshot);
 
   return {
     ...baseSnapshot,
@@ -1046,9 +1052,9 @@ export function generateMonthlyActions(
       },
       {
         id: "confirm-goal-priority",
-        title: "Confirmar si tu meta sigue siendo la prioridad",
-        description: "Revisa si tu objetivo actual todavía es el más importante.",
-        why: "Las prioridades cambian, y el plan debe seguir tu realidad.",
+        title: "Confirmar si tu meta principal sigue vigente",
+        description: "Revisa si todavía quieres enfocarte primero en ese objetivo.",
+        why: "Tus objetivos pueden cambiar, y el plan debe seguir tu realidad.",
         estimatedImpact: "Mantiene el plan alineado contigo.",
         difficulty: "Baja",
         category: "Meta"

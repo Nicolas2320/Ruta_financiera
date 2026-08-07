@@ -1,23 +1,7 @@
-import type { ComponentType } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import {
-  Apple,
-  BusFront,
-  Cable,
-  CalendarCheck,
-  CircleEllipsis,
-  Frown,
-  Gamepad2,
-  GraduationCap,
-  HandHeart,
-  House,
-  Meh,
-  ShoppingBag,
-  Smile,
-  Users
-} from "lucide-react-native";
+import { Frown, Meh, Smile } from "lucide-react-native";
 import {
   Pressable,
   ScrollView,
@@ -28,7 +12,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
-import { CategoryChip } from "../components/ui/CategoryChip";
 import { ContextHeader } from "../components/ui/ContextHeader";
 import { ExactAmountField } from "../components/ui/ExactAmountField";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
@@ -38,10 +21,6 @@ import { colors, radius, shadows, spacing, typography } from "../constants/theme
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
-  getRecurringExpenseCategories,
-  syncDebtExpenseCategory
-} from "../utils/debtCalculations";
-import {
   formatCOP,
   getExpenseRangeForAmount,
   hasExactFinancialValue,
@@ -49,13 +28,6 @@ import {
 } from "../utils/financialRanges";
 
 const expensesCupReceipt = require("../assets/illustrations/expenses-cup-receipt.png");
-
-type IconProps = {
-  color?: string;
-  fill?: string;
-  size?: number;
-  strokeWidth?: number;
-};
 
 const expenseRanges = [
   "Menos de $1.000.000",
@@ -72,80 +44,6 @@ function normalizeExpenseRange(expensesRange: string | null) {
     ? expensesRange
     : null;
 }
-
-const expenseCategories: Array<{
-  label: string;
-  icon: ComponentType<IconProps>;
-  color: string;
-  backgroundColor: string;
-}> = [
-  {
-    label: "Arriendo",
-    icon: House,
-    color: "#7C3AED",
-    backgroundColor: "#EFE7FF"
-  },
-  {
-    label: "Alimentación",
-    icon: Apple,
-    color: "#2F9E57",
-    backgroundColor: "#E8F8EF"
-  },
-  {
-    label: "Transporte",
-    icon: BusFront,
-    color: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  {
-    label: "Servicios públicos",
-    icon: Cable,
-    color: "#1C7ED6",
-    backgroundColor: "#E5F2FF"
-  },
-  {
-    label: "Educación",
-    icon: GraduationCap,
-    color: "#2563EB",
-    backgroundColor: "#EAF1FF"
-  },
-  {
-    label: "Salud",
-    icon: HandHeart,
-    color: "#EF4444",
-    backgroundColor: "#FFE8E8"
-  },
-  {
-    label: "Familia",
-    icon: Users,
-    color: "#7C3AED",
-    backgroundColor: "#EFE7FF"
-  },
-  {
-    label: "Entretenimiento",
-    icon: Gamepad2,
-    color: "#F59E0B",
-    backgroundColor: "#FFF5E7"
-  },
-  {
-    label: "Suscripciones",
-    icon: CalendarCheck,
-    color: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  {
-    label: "Compras",
-    icon: ShoppingBag,
-    color: "#EF4444",
-    backgroundColor: "#FFE8E8"
-  },
-  {
-    label: "Otros",
-    icon: CircleEllipsis,
-    color: "#64748B",
-    backgroundColor: "#EEF2F7"
-  }
-];
 
 const expenseFeelings = [
   {
@@ -177,7 +75,7 @@ const expenseFeelings = [
 export default function ExpensesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string }>();
-  const { isPhone, screenPadding } = useResponsiveLayout();
+  const { screenPadding } = useResponsiveLayout();
   const {
     exactValues,
     onboarding,
@@ -190,9 +88,6 @@ export default function ExpensesScreen() {
   const isEditMode = isSpendingEditMode || isProfileEditMode;
   const [selectedExpenseRange, setSelectedExpenseRange] = useState<string | null>(
     normalizeExpenseRange(onboarding.expensesRange)
-  );
-  const [selectedCategories, setSelectedCategories] = useState<string[]>(
-    getRecurringExpenseCategories(onboarding.expenseCategories)
   );
   const [selectedExpenseFeeling, setSelectedExpenseFeeling] = useState<string | null>(
     onboarding.expensesFeeling
@@ -214,7 +109,6 @@ export default function ExpensesScreen() {
 
     hasHydratedStoredAnswers.current = true;
     setSelectedExpenseRange(normalizeExpenseRange(onboarding.expensesRange));
-    setSelectedCategories(getRecurringExpenseCategories(onboarding.expenseCategories));
     setSelectedExpenseFeeling(onboarding.expensesFeeling);
     setUsesExactExpenses(hasExactFinancialValue(exactValues.monthlyExpenses));
     setExactExpensesInput(
@@ -229,19 +123,8 @@ export default function ExpensesScreen() {
   const canContinue = Boolean(
     (usesExactExpenses
       ? parsedExactExpenses !== null && parsedExactExpenses > 0
-      : selectedExpenseRange) &&
-      selectedCategories.length > 0 &&
-      selectedExpenseFeeling
+      : selectedExpenseRange) && selectedExpenseFeeling
   );
-  const showSideBySide = !isPhone;
-
-  const toggleCategory = (category: string) => {
-    setSelectedCategories((currentCategories) =>
-      currentCategories.includes(category)
-        ? currentCategories.filter((currentCategory) => currentCategory !== category)
-        : [...currentCategories, category]
-    );
-  };
 
   const handleExactExpensesChange = (value: string) => {
     const parsedValue = parseCOPInput(value);
@@ -250,7 +133,6 @@ export default function ExpensesScreen() {
 
   const handleContinue = async () => {
     if (
-      selectedCategories.length === 0 ||
       !selectedExpenseFeeling ||
       (usesExactExpenses
         ? parsedExactExpenses === null || parsedExactExpenses <= 0
@@ -258,13 +140,6 @@ export default function ExpensesScreen() {
     ) {
       return;
     }
-
-    const syncedExpenseData = syncDebtExpenseCategory({
-      debts: onboarding.debts,
-      expenseCategories: selectedCategories,
-      expenseCategoryAmounts: onboarding.expenseCategoryAmounts,
-      preserveExistingReference: true
-    });
 
     const nextExactValues = { ...exactValues };
     const expensesRange = usesExactExpenses
@@ -280,8 +155,8 @@ export default function ExpensesScreen() {
     const saved = await saveOnboardingAndExactValues(
       {
         expensesRange,
-        ...syncedExpenseData,
-        expensesFeeling: selectedExpenseFeeling
+        expensesFeeling: selectedExpenseFeeling,
+        monthlyExpensesIncludesSmallExpenses: true
       },
       nextExactValues
     );
@@ -293,9 +168,9 @@ export default function ExpensesScreen() {
     router.push(
       isSpendingEditMode
         ? "/spending"
-        : isProfileEditMode
+          : isProfileEditMode
           ? { pathname: "/summary", params: { mode: "edit" } }
-          : "/small-expenses"
+          : "/savings-debts"
     );
   };
 
@@ -324,79 +199,56 @@ export default function ExpensesScreen() {
           {!isEditMode ? (
           <StepHeader
             currentStep={4}
-            nextAccessibilityLabel="Continuar hacia gastos hormiga"
+            nextAccessibilityLabel="Continuar hacia ahorros y deudas"
             nextDisabled={!canContinue}
             onBack={() => router.replace("/income")}
             onNext={handleContinue}
             title="Gastos"
-            totalSteps={7}
+            totalSteps={6}
           />
           ) : null}
 
           <HeroInfoCard
-            badge="Podrás ajustar tus gastos más adelante."
+            badge="Puedes elegir un rango o ingresar una cifra."
             image={expensesCupReceipt}
             imageStyle={styles.heroImage}
-            text="Puedes elegir un rango o ingresar una cifra. Aquí contamos tus gastos habituales, sin sumar deudas ni gastos pequeños."
+            text="Incluye todos tus gastos habituales, también las compras pequeñas que se repiten. No incluyas cuotas de deudas o préstamos."
             title="Tus gastos mensuales"
           />
 
-          <View style={[styles.midsection, showSideBySide && styles.midsectionRow]}>
-            <View style={[styles.card, showSideBySide && styles.rangePanel]}>
-              <Text style={styles.questionTitle}>¿Cuál es tu rango de gastos mensuales?</Text>
-              <Text style={styles.helperText}>
-                Incluye gastos principales o vitales. Las cuotas de deuda y los gastos pequeños se
-                calculan aparte.
-              </Text>
-              <View style={styles.compactList}>
-                {expenseRanges.map((expenseRange) => (
-                  <SelectableCard
-                    key={expenseRange}
-                    onPress={() => {
-                      setUsesExactExpenses(false);
-                      setSelectedExpenseRange(expenseRange);
-                    }}
-                    selected={!usesExactExpenses && selectedExpenseRange === expenseRange}
-                    style={styles.compactOption}
-                    title={expenseRange}
-                  />
-                ))}
+          <View style={styles.card}>
+            <Text style={styles.questionTitle}>En un mes normal, ¿cuánto gastas aproximadamente?</Text>
+            <Text style={styles.helperText}>
+              Piensa en todo lo que gastas durante el mes. No sumes cuotas de deudas o préstamos;
+              las revisaremos por separado.
+            </Text>
+            <View style={styles.compactList}>
+              {expenseRanges.map((expenseRange) => (
                 <SelectableCard
-                  onPress={() => setUsesExactExpenses(true)}
-                  selected={usesExactExpenses}
+                  key={expenseRange}
+                  onPress={() => {
+                    setUsesExactExpenses(false);
+                    setSelectedExpenseRange(expenseRange);
+                  }}
+                  selected={!usesExactExpenses && selectedExpenseRange === expenseRange}
                   style={styles.compactOption}
-                  title={exactExpenseOption}
+                  title={expenseRange}
                 />
-              </View>
-              {usesExactExpenses ? (
-                <ExactAmountField
-                  accessibilityLabel="Gastos principales al mes"
-                  onChangeText={handleExactExpensesChange}
-                  value={exactExpensesInput}
-                />
-              ) : null}
+              ))}
+              <SelectableCard
+                onPress={() => setUsesExactExpenses(true)}
+                selected={usesExactExpenses}
+                style={styles.compactOption}
+                title={exactExpenseOption}
+              />
             </View>
-
-            <View style={[styles.card, showSideBySide && styles.categoryPanel]}>
-              <Text style={styles.questionTitle}>¿Cuáles son tus gastos principales?</Text>
-              <Text style={styles.helperText}>
-                Elige gastos habituales que no tengan un saldo pendiente. Los préstamos y
-                créditos se registran en Deudas.
-              </Text>
-              <View style={styles.categoryGrid}>
-                {expenseCategories.map((category) => (
-                  <CategoryChip
-                    key={category.label}
-                    backgroundColor={category.backgroundColor}
-                    color={category.color}
-                    icon={category.icon}
-                    label={category.label}
-                    onPress={() => toggleCategory(category.label)}
-                    selected={selectedCategories.includes(category.label)}
-                  />
-                ))}
-              </View>
-            </View>
+            {usesExactExpenses ? (
+              <ExactAmountField
+                accessibilityLabel="Gastos mensuales"
+                onChangeText={handleExactExpensesChange}
+                value={exactExpensesInput}
+              />
+            ) : null}
           </View>
 
           <View style={styles.card}>
@@ -416,7 +268,7 @@ export default function ExpensesScreen() {
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel={
-                isEditMode ? "Guardar cambios de gastos" : "Continuar hacia gastos hormiga"
+                isEditMode ? "Guardar cambios de gastos" : "Continuar hacia ahorros y deudas"
               }
               disabled={!canContinue}
               iconPosition="right"
@@ -517,22 +369,6 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.small,
     marginTop: -spacing.xs
   },
-  midsection: {
-    gap: spacing.md
-  },
-  midsectionRow: {
-    alignItems: "stretch",
-    flexDirection: "row",
-    gap: spacing.sm
-  },
-  rangePanel: {
-    flex: 0.82,
-    paddingHorizontal: spacing.sm
-  },
-  categoryPanel: {
-    flex: 1.22,
-    paddingHorizontal: spacing.sm
-  },
   compactList: {
     gap: spacing.xs
   },
@@ -540,11 +376,6 @@ const styles = StyleSheet.create({
     minHeight: 42,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
-  },
-  categoryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.xs
   },
   feelingGrid: {
     flexDirection: "row",

@@ -71,7 +71,7 @@ export default function PrivacyScreen() {
             onBack={() => router.replace("/")}
             onNext={() => router.push("/profile")}
             title="Privacidad y confianza"
-            totalSteps={7}
+            totalSteps={6}
           />
 
           <View style={styles.heroCard}>

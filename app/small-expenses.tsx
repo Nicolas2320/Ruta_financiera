@@ -8,18 +8,10 @@ import {
   Home,
   LineChart,
   PieChart,
-  Store,
-  CarTaxiFront,
-  CircleEllipsis,
   MessageCircleQuestionMark,
-  Hamburger,
-  CreditCard,
   ArrowDown,
-  Gamepad2,
   Leaf,
   Search,
-  ShoppingBag,
-  Smartphone,
   HandCoins,
   Target,
   Timer,
@@ -30,12 +22,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
 import { PrimaryButton } from "../components/PrimaryButton";
-import { CategoryChip } from "../components/ui/CategoryChip";
 import { ContextHeader } from "../components/ui/ContextHeader";
 import { ExactAmountField } from "../components/ui/ExactAmountField";
 import { HeroInfoCard } from "../components/ui/HeroInfoCard";
 import { SelectableCard } from "../components/ui/SelectableCard";
-import { StepHeader } from "../components/ui/StepHeader";
 import { colors, radius, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
@@ -80,90 +70,6 @@ const smallExpensePresence = [
     backgroundColor: "#F1E8FF"
   }
 ] as const;
-
-const smallExpenseCategories: Array<{
-  label: string;
-  icon: ComponentType<IconProps>;
-  color: string;
-  backgroundColor: string;
-}> = [
-  {
-    label: "Cafés, snacks y salidas",
-    icon: Hamburger,
-    color: "#9A5B20",
-    backgroundColor: "#FFF3E4"
-  },
-  {
-    label: "Domicilios o comida rápida",
-    icon: Store,
-    color: "#F97316",
-    backgroundColor: "#FFF1E7"
-  },
-  {
-    label: "Transporte extra",
-    icon: CarTaxiFront,
-    color: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  {
-    label: "Suscripciones y apps",
-    icon: Smartphone,
-    color: "#6D28D9",
-    backgroundColor: "#F1E8FF"
-  },
-  {
-    label: "Pequeñas compras",
-    icon: ShoppingBag,
-    color: colors.support,
-    backgroundColor: colors.supportSoft
-  },
-  {
-    label: "Entretenimiento digital",
-    icon: Gamepad2,
-    color: "#4F46E5",
-    backgroundColor: "#EEF2FF"
-  },
-  {
-    label: "Comisiones o recargos",
-    icon: CreditCard,
-    color: "#0E7490",
-    backgroundColor: "#E6F7FB"
-  },
-  {
-    label: "Otros",
-    icon: CircleEllipsis,
-    color: "#64748B",
-    backgroundColor: "#EEF2F7"
-  }
-];
-
-const smallExpenseCategoryAliases: Record<string, string> = {
-  "Cafés o snacks": "Cafés, snacks y salidas",
-  "Salidas": "Cafés, snacks y salidas",
-  "Antojos": "Cafés, snacks y salidas",
-  "Domicilios": "Domicilios o comida rápida",
-  "Suscripciones": "Suscripciones y apps",
-  "Apps o servicios digitales": "Suscripciones y apps",
-  "Compras pequeñas": "Pequeñas compras",
-  "Juegos o entretenimiento digital": "Entretenimiento digital"
-};
-
-function normalizeSmallExpenseCategories(categories: string[]) {
-  const availableCategories = smallExpenseCategories.map((category) => category.label);
-
-  return categories.reduce<string[]>((normalizedCategories, category) => {
-    const normalizedCategory = smallExpenseCategoryAliases[category] ?? category;
-
-    if (
-      availableCategories.includes(normalizedCategory) &&
-      !normalizedCategories.includes(normalizedCategory)
-    ) {
-      normalizedCategories.push(normalizedCategory);
-    }
-
-    return normalizedCategories;
-  }, []);
-}
 
 const smallExpenseRanges = [
   "Menos de $100.000",
@@ -258,17 +164,10 @@ export default function SmallExpensesScreen() {
   const isProfileEditMode = source === "profile";
   const isDashboardEditMode = source === "dashboard";
   const isImprovePlanEditMode = source === "improve-plan";
-  const isEditMode =
-    isSpendingEditMode ||
-    isProfileEditMode ||
-    isDashboardEditMode ||
-    isImprovePlanEditMode;
+  const isStandaloneMode = !source;
   const navigate = (route: Route) => router.push(route);
   const [selectedPresence, setSelectedPresence] = useState<string | null>(
     onboarding.hasSmallExpenses
-  );
-  const [selectedCategories, setSelectedCategories] = useState<string[]>(
-    normalizeSmallExpenseCategories(onboarding.smallExpenseCategories)
   );
   const [selectedRange, setSelectedRange] = useState<string | null>(
     normalizeSmallExpenseRange(onboarding.smallExpensesRange)
@@ -293,9 +192,6 @@ export default function SmallExpensesScreen() {
 
     hasHydratedStoredAnswers.current = true;
     setSelectedPresence(onboarding.hasSmallExpenses);
-    setSelectedCategories(
-      normalizeSmallExpenseCategories(onboarding.smallExpenseCategories)
-    );
     setSelectedRange(normalizeSmallExpenseRange(onboarding.smallExpensesRange));
     setSelectedIntention(onboarding.smallExpensesIntention);
     setUsesExactSmallExpenses(
@@ -309,7 +205,6 @@ export default function SmallExpensesScreen() {
     );
   }, [exactValues.smallExpenses, onboarding, onboardingSyncStatus]);
 
-  const needsCategory = selectedPresence === "Sí";
   const shouldShowDetails = selectedPresence !== "No";
   const parsedExactSmallExpenses = parseCOPInput(exactSmallExpensesInput);
   const canContinue = Boolean(
@@ -318,27 +213,17 @@ export default function SmallExpensesScreen() {
         ((usesExactSmallExpenses
           ? parsedExactSmallExpenses !== null && parsedExactSmallExpenses > 0
           : selectedRange) &&
-          selectedIntention &&
-          (!needsCategory || selectedCategories.length > 0)))
+          selectedIntention))
   );
 
   const handlePresenceSelect = (presence: string) => {
     setSelectedPresence(presence);
 
     if (presence === "No") {
-      setSelectedCategories([]);
       setSelectedRange(null);
       setSelectedIntention(null);
       setUsesExactSmallExpenses(false);
     }
-  };
-
-  const toggleCategory = (category: string) => {
-    setSelectedCategories((currentCategories) =>
-      currentCategories.includes(category)
-        ? currentCategories.filter((currentCategory) => currentCategory !== category)
-        : [...currentCategories, category]
-    );
   };
 
   const handleExactSmallExpensesChange = (value: string) => {
@@ -358,13 +243,6 @@ export default function SmallExpensesScreen() {
           ? parsedExactSmallExpenses === null || parsedExactSmallExpenses <= 0
           : !selectedRange))
     ) {
-      return;
-    }
-
-    const categoriesToSave =
-      selectedPresence === "No" ? [] : normalizeSmallExpenseCategories(selectedCategories);
-
-    if (needsCategory && categoriesToSave.length === 0) {
       return;
     }
 
@@ -389,7 +267,6 @@ export default function SmallExpensesScreen() {
     const saved = await saveOnboardingAndExactValues(
       {
         hasSmallExpenses: selectedPresence,
-        smallExpenseCategories: categoriesToSave,
         smallExpensesRange,
         smallExpensesIntention: selectedPresence === "No" ? null : selectedIntention
       },
@@ -409,7 +286,7 @@ export default function SmallExpensesScreen() {
             ? "/improve-plan"
             : isProfileEditMode
               ? { pathname: "/summary", params: { mode: "edit" } }
-              : "/savings-debts"
+              : "/spending"
     );
   };
 
@@ -422,42 +299,29 @@ export default function SmallExpensesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          {isEditMode ? (
-            <ContextHeader
-              onBack={() =>
-                router.push(
-                  isSpendingEditMode
-                    ? "/spending"
-                    : isDashboardEditMode
-                      ? "/dashboard"
-                      : isImprovePlanEditMode
-                        ? "/improve-plan"
-                        : { pathname: "/summary", params: { mode: "edit" } }
-                )
-              }
-              subtitle={
-                isSpendingEditMode
-                  ? "Volverás a Gastos."
+          <ContextHeader
+            onBack={() =>
+              router.push(
+                isSpendingEditMode || isStandaloneMode
+                  ? "/spending"
                   : isDashboardEditMode
-                    ? "Volverás al Dashboard."
+                    ? "/dashboard"
                     : isImprovePlanEditMode
-                      ? "Volverás a Mejorar mi plan."
-                      : "Volverás al perfil financiero."
-              }
-              title="Editar gastos pequeños"
-            />
-          ) : null}
-          {!isEditMode ? (
-          <StepHeader
-            currentStep={5}
-            nextAccessibilityLabel="Continuar hacia ahorros y deudas"
-            nextDisabled={!canContinue}
-            onBack={() => router.replace("/expenses")}
-            onNext={handleContinue}
-            title="Gastos hormiga"
-            totalSteps={7}
+                      ? "/improve-plan"
+                      : { pathname: "/summary", params: { mode: "edit" } }
+              )
+            }
+            subtitle={
+              isSpendingEditMode || isStandaloneMode
+                ? "Volverás a Gastos."
+                : isDashboardEditMode
+                  ? "Volverás al Dashboard."
+                  : isImprovePlanEditMode
+                    ? "Volverás a Mejorar mi plan."
+                    : "Volverás al perfil financiero."
+            }
+            title="Gastos pequeños"
           />
-          ) : null}
 
           <HeroInfoCard
             badge="Tú decides qué gastos conservar y cuáles ajustar."
@@ -495,36 +359,15 @@ export default function SmallExpensesScreen() {
             </View>
           </View>
 
-          {shouldShowDetails ? (
-            <View style={styles.card}>
-              <Text style={styles.questionTitle}>¿En qué categorías crees que se van?</Text>
-              <Text style={styles.helperText}>
-                Puedes elegir varias categorías. Si respondiste “Sí”, elige al menos una.
-              </Text>
-              <View style={styles.categoryGrid}>
-                {smallExpenseCategories.map((category) => (
-                  <CategoryChip
-                    key={category.label}
-                    backgroundColor={category.backgroundColor}
-                    color={category.color}
-                    icon={category.icon}
-                    label={category.label}
-                    onPress={() => toggleCategory(category.label)}
-                    selected={selectedCategories.includes(category.label)}
-                    style={styles.smallChip}
-                  />
-                ))}
-              </View>
-            </View>
-          ) : (
+          {!shouldShowDetails ? (
             <View style={styles.softCard}>
-              <Text style={styles.questionTitle}>No hace falta detallar categorías ahora</Text>
+              <Text style={styles.questionTitle}>Puedes dejarlo así por ahora</Text>
               <Text style={styles.softText}>
                 Si más adelante notas consumos pequeños repetidos, puedes volver y revisarlos sin
                 problema.
               </Text>
             </View>
-          )}
+          ) : null}
 
           {shouldShowDetails ? (
             <View style={styles.twoColumnSection}>
@@ -591,16 +434,12 @@ export default function SmallExpensesScreen() {
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel={
-                isEditMode
-                  ? "Guardar cambios de gastos pequeños"
-                  : "Continuar hacia ahorros y deudas"
-              }
+              accessibilityLabel="Guardar cambios de gastos pequeños"
               disabled={!canContinue}
               iconPosition="right"
               onPress={handleContinue}
               style={styles.primaryButton}
-              title={isEditMode ? "Guardar cambios" : "Continuar"}
+              title="Guardar cambios"
             />
             <PrimaryButton
               accessibilityLabel="Volver a la pantalla anterior"
@@ -613,7 +452,7 @@ export default function SmallExpensesScreen() {
           </View>
         </View>
       </ScrollView>
-      {isSpendingEditMode || isDashboardEditMode ? (
+      {isSpendingEditMode || isDashboardEditMode || isStandaloneMode ? (
         <>
         <BottomNavigation activeRoute={isDashboardEditMode ? "/dashboard" : "/spending"} />
         <View style={styles.hidden}>
@@ -674,13 +513,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.question
   },
-  helperText: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.caption,
-    marginTop: -spacing.sm
-  },
   softText: {
     color: colors.textMuted,
     fontSize: typography.body,
@@ -699,15 +531,6 @@ const styles = StyleSheet.create({
     height: 42,
     justifyContent: "center",
     width: 42
-  },
-  categoryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  smallChip: {
-    flexBasis: "46%",
-    minWidth: 145
   },
   twoColumnSection: {
     gap: spacing.md

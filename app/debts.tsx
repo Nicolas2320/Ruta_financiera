@@ -66,6 +66,7 @@ import {
   getRegisteredDebtSummary,
   syncDebtExpenseCategory,
   type DebtLevel,
+  type ReportedDebtPaymentKind,
   type NewDebtViability
 } from "../utils/debtCalculations";
 import {
@@ -77,6 +78,7 @@ import {
 } from "../utils/debtPayments";
 import { calculateFinancialSnapshot } from "../utils/financialCalculations";
 import { formatCOP, formatSignedCOP, parseCOPInput } from "../utils/financialRanges";
+import { resolvePlanPreference } from "../utils/planPreference";
 
 type IconProps = {
   color?: string;
@@ -629,11 +631,13 @@ function getDebtInsight({
   count,
   level,
   monthlyPaymentTotal,
+  reportedPaymentKind,
   source
 }: {
   count: number;
   level: DebtLevel;
   monthlyPaymentTotal: number;
+  reportedPaymentKind: ReportedDebtPaymentKind | null;
   source: string;
 }) {
   if (source === "category" && monthlyPaymentTotal > 0) {
@@ -641,9 +645,15 @@ function getDebtInsight({
   }
 
   if (source === "reported") {
+    if (reportedPaymentKind === "exact") {
+      return "Usamos el pago mensual total que informaste, aunque todavía no hayas registrado cada deuda por separado.";
+    }
+
     return monthlyPaymentTotal > 0
-      ? "Esta cifra es una referencia calculada desde el rango que reportaste, no una cuota confirmada."
-      : "Conservamos el rango que reportaste; falta una referencia de ingresos para convertirlo en un monto.";
+      ? reportedPaymentKind === "range"
+        ? "Esta cifra es una referencia calculada desde el rango que reportaste, no una cuota confirmada."
+        : "Esta cifra es una referencia estimada desde la proporción de ingresos que reportaste anteriormente."
+      : "Conservamos tu respuesta anterior; falta una referencia de ingresos para convertirla en un monto.";
   }
 
   if (count === 0) {
@@ -1770,18 +1780,28 @@ export default function DebtsScreen() {
     () => calculateFinancialSnapshot({ onboarding, exactValues }),
     [exactValues, onboarding]
   );
+  const planPreference = useMemo(
+    () => resolvePlanPreference({ exactValues, onboarding }),
+    [exactValues, onboarding]
+  );
   const debtSummary = useMemo(
     () =>
       getRegisteredDebtSummary({
         debts,
         debtPaymentShare: onboarding.debtPaymentShare,
+        hasDebts: onboarding.hasDebts,
         expenseCategoryAmounts: onboarding.expenseCategoryAmounts,
+        reportedMonthlyPayment: exactValues.monthlyDebtPayments,
+        reportedMonthlyPaymentRange: onboarding.debtMonthlyPaymentRange,
         monthlyIncome: snapshot.cashflow.monthlyIncome
       }),
     [
       debts,
       onboarding.debtPaymentShare,
+      onboarding.hasDebts,
+      onboarding.debtMonthlyPaymentRange,
       onboarding.expenseCategoryAmounts,
+      exactValues.monthlyDebtPayments,
       snapshot.cashflow.monthlyIncome
     ]
   );
@@ -2066,7 +2086,7 @@ export default function DebtsScreen() {
             <View style={styles.heroTextGroup}>
               <Text style={styles.heroKicker}>Pagas al mes en deudas</Text>
               <Text style={[styles.heroAmount, { color: getToneColors(summaryTone).text }]}>
-                {debtSummary.source === "reported" && debtSummary.monthlyPaymentTotal > 0
+                {debtSummary.isPaymentEstimated && debtSummary.monthlyPaymentTotal > 0
                   ? `${formatCOP(debtSummary.monthlyPaymentTotal)} aprox.`
                   : getDebtTotalLabel(debtSummary.monthlyPaymentTotal)}
               </Text>
@@ -2077,6 +2097,7 @@ export default function DebtsScreen() {
                       count: debtSummary.count,
                       level: debtSummary.level,
                       monthlyPaymentTotal: debtSummary.monthlyPaymentTotal,
+                      reportedPaymentKind: debtSummary.reportedPaymentKind,
                       source: debtSummary.source
                     })}
               </Text>
@@ -2096,7 +2117,7 @@ export default function DebtsScreen() {
               tone={summaryTone}
               value={getDebtRatioLabel(
                 debtSummary.debtToIncomeRatio,
-                debtSummary.source === "reported"
+                debtSummary.reportedPaymentKind === "share"
                   ? debtSummary.reportedPaymentShare
                   : null
               )}
@@ -2119,6 +2140,15 @@ export default function DebtsScreen() {
                   : "Por calcular"
               }
             />
+            {planPreference.hasExplicitPreference &&
+            planPreference.usesResolvedDistribution &&
+            planPreference.distribution?.sourceMode === "detailed" ? (
+              <SummaryMetric
+                label="Extra mensual según simulación"
+                tone={planPreference.extraDebtPayment > 0 ? "primary" : "neutral"}
+                value={formatCOP(planPreference.extraDebtPayment)}
+              />
+            ) : null}
           </View>
 
           <SectionCard

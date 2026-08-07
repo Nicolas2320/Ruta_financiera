@@ -39,8 +39,10 @@ type IconProps = {
   strokeWidth?: number;
 };
 
+type PlanFinancialValueKey = Exclude<ExactFinancialValueKey, "monthlyDebtPayments">;
+
 type FieldConfig = {
-  id: ExactFinancialValueKey;
+  id: PlanFinancialValueKey;
   label: string;
   helper: string;
   icon: ComponentType<IconProps>;
@@ -53,7 +55,7 @@ type FieldConfig = {
   };
 };
 
-type InputValues = Record<ExactFinancialValueKey, string>;
+type InputValues = Record<PlanFinancialValueKey, string>;
 
 const fields: FieldConfig[] = [
   {
@@ -226,7 +228,7 @@ function getValuesToSave(
   return values;
 }
 
-function getComparableExactValue(values: ExactFinancialValues, fieldId: ExactFinancialValueKey) {
+function getComparableExactValue(values: ExactFinancialValues, fieldId: PlanFinancialValueKey) {
   const value = values[fieldId];
   return hasExactFinancialValue(value) ? value : null;
 }
@@ -250,6 +252,8 @@ export default function ImprovePlanScreen() {
     onboarding.financialGuidanceMode
   );
   const reportedNoSmallExpenses = onboarding.hasSmallExpenses === "No";
+  const monthlyExpensesIncludeSmallExpenses =
+    onboarding.monthlyExpensesIncludesSmallExpenses === true;
   const effectiveExactValues = useMemo(
     () =>
       reportedNoSmallExpenses
@@ -258,11 +262,43 @@ export default function ImprovePlanScreen() {
     [exactValues, reportedNoSmallExpenses]
   );
   const visibleFields = useMemo(
-    () =>
-      reportedNoSmallExpenses
+    () => {
+      const availableFields = reportedNoSmallExpenses
         ? fields.filter((field) => field.id !== "smallExpenses")
-        : fields,
-    [reportedNoSmallExpenses]
+        : fields;
+
+      if (!monthlyExpensesIncludeSmallExpenses) {
+        return availableFields;
+      }
+
+      return availableFields.map((field) => {
+        if (field.id === "monthlyExpenses") {
+          return {
+            ...field,
+            label: "Gastos mensuales",
+            helper: "Todos tus gastos habituales, incluidas las compras pequeñas que se repiten.",
+            education: {
+              ...field.education,
+              avoid: "No incluyas cuotas de préstamos o tarjetas; se calculan por separado."
+            }
+          };
+        }
+
+        if (field.id === "smallExpenses") {
+          return {
+            ...field,
+            helper: "Desglose opcional que ya forma parte de tus gastos mensuales.",
+            education: {
+              ...field.education,
+              avoid: "Este monto sirve para analizar esos consumos y no volverá a sumarse al total mensual."
+            }
+          };
+        }
+
+        return field;
+      });
+    },
+    [monthlyExpensesIncludeSmallExpenses, reportedNoSmallExpenses]
   );
   const [inputValues, setInputValues] = useState<InputValues>(() =>
     getInitialInputValues(effectiveExactValues)
@@ -280,6 +316,13 @@ export default function ImprovePlanScreen() {
   const valuesToSave = useMemo(
     () => getValuesToSave(inputValues, reportedNoSmallExpenses),
     [inputValues, reportedNoSmallExpenses]
+  );
+  const persistedValuesToSave = useMemo(
+    () =>
+      hasExactFinancialValue(exactValues.monthlyDebtPayments)
+        ? { ...valuesToSave, monthlyDebtPayments: exactValues.monthlyDebtPayments }
+        : valuesToSave,
+    [exactValues.monthlyDebtPayments, valuesToSave]
   );
   const effectiveDraftValues = useMemo(
     () =>
@@ -301,7 +344,7 @@ export default function ImprovePlanScreen() {
     [effectiveDraftValues, effectiveExactValues]
   );
 
-  const handleInputChange = (fieldId: ExactFinancialValueKey, value: string) => {
+  const handleInputChange = (fieldId: PlanFinancialValueKey, value: string) => {
     const parsedValue = parseCOPInput(value);
     setHasEdited(true);
     setFeedback(null);
@@ -315,7 +358,7 @@ export default function ImprovePlanScreen() {
     setIsSaving(true);
     setFeedback(null);
 
-    const saved = await saveExactValues(valuesToSave);
+    const saved = await saveExactValues(persistedValuesToSave);
     setIsSaving(false);
 
     if (!saved) {

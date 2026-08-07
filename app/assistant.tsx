@@ -53,6 +53,8 @@ import {
 } from "../utils/monthlyPlan";
 import {
   getPlanPreferenceGoalBudget,
+  getPlanPreferenceGoalPlanOptions,
+  getPlanPreferencePreferredGoalId,
   resolvePlanPreference
 } from "../utils/planPreference";
 
@@ -389,13 +391,16 @@ function buildAssistantFinancialContext({
       expensesToIncomeRatio: snapshot.cashflow.expensesToIncomeRatio,
       suggestedMonthlyContribution: snapshot.cashflow.suggestedMonthlyContribution,
       suggestedMonthlyContributionMeaning:
-        "Aporte sugerido desde el margen mensual; no es necesariamente la bolsa manual ni el aporte asignado a una meta."
+        "Aporte sugerido desde el margen mensual; no es necesariamente la referencia manual ni el aporte finalmente asignado a una meta."
     },
     debt: {
       debtToIncomeRatio: snapshot.debt.debtToIncomeRatio,
       label: snapshot.debt.label,
       level: snapshot.debt.level,
+      isPaymentEstimated: snapshot.debt.isPaymentEstimated,
       monthlyPaymentTotal: snapshot.debt.monthlyPaymentTotal,
+      reportedMonthlyPaymentRange: snapshot.debt.reportedMonthlyPaymentRange,
+      reportedPaymentKind: snapshot.debt.reportedPaymentKind,
       reportedPaymentShare: snapshot.debt.reportedPaymentShare,
       shouldPrioritizeDebt: snapshot.debt.shouldPrioritizeDebt,
       source: snapshot.debt.source
@@ -417,7 +422,6 @@ function buildAssistantFinancialContext({
       estimatedMonthsToGoal:
         primaryGoalAllocation?.estimatedMonthsToGoal ?? snapshot.goal.estimatedMonthsToGoal,
       name: primaryGoalAllocation?.goal.title ?? snapshot.goal.name,
-      priority: primaryGoalAllocation?.goal.priority ?? onboarding.goalPriority,
       progressPercentage:
         primaryGoalAllocation?.progressPercentage ?? snapshot.goal.progressPercentage,
       remainingAmount: primaryGoalAllocation?.remainingAmount ?? snapshot.goal.remainingAmount,
@@ -443,9 +447,6 @@ function buildAssistantFinancialContext({
       primaryGoalMonthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
       remainingBudget: goalPlan.remainingBudget
     },
-    investment: {
-      situation: onboarding.investmentSituation
-    },
     monthlyPlan: {
       actions: actionContexts,
       completedActions: completedCount,
@@ -455,7 +456,7 @@ function buildAssistantFinancialContext({
       primaryGoalMonthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
       primaryGoalMonthlyContributionLabel: "Aporte meta",
       primaryGoalMonthlyContributionMeaning:
-        "Aporte asignado a la meta principal dentro de la bolsa de metas. En la UI aparece como Aporte meta.",
+        "Aporte mensual asignado a la meta principal dentro de la referencia disponible. En la UI aparece como Aporte meta.",
       progressPercentage,
       realContributionThisMonth,
       referenceMonthlyContribution,
@@ -533,12 +534,10 @@ export default function AssistantScreen() {
     const data = getMonthlyPlanData(onboarding);
     const metrics = getMonthlyPlanMetrics(data, exactValues);
     const planPreference = resolvePlanPreference({ exactValues, onboarding });
-    const preferredGoalId =
-      planPreference.hasExplicitPreference &&
-      planPreference.isApplicable &&
-      planPreference.strategy === "prioritize_goal"
-        ? planPreference.goalId
-        : null;
+    const preferredGoalId = getPlanPreferencePreferredGoalId({
+      onboarding,
+      preference: planPreference
+    });
     const preferredPlanPriorityKey =
       planPreference.hasExplicitPreference && planPreference.isApplicable
         ? planPreference.priorityKey
@@ -547,10 +546,11 @@ export default function AssistantScreen() {
       onboarding,
       getPlanPreferenceGoalBudget({
         fallbackMonthlyBudget: metrics.snapshot.cashflow.suggestedMonthlyContribution,
-        preference: planPreference
+        preference: planPreference,
+        preferredGoalId
       }),
       exactValues,
-      { preferredGoalId }
+      getPlanPreferenceGoalPlanOptions(planPreference, preferredGoalId)
     );
     const primaryGoalAllocation =
       goalPlan.allocations.find((allocation) => allocation.goal.id === preferredGoalId) ??
@@ -560,7 +560,8 @@ export default function AssistantScreen() {
     const monthlyGoalContext: MonthlyGoalContext = {
       title: primaryGoalAllocation?.goal.title ?? data.financialGoal,
       monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
-      estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null
+      estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null,
+      hasRegisteredContribution: (primaryGoalAllocation?.currentAmount ?? 0) > 0
     };
     const periodKey = getMonthlyPlanPeriodKey();
     const suggestedActions = getMonthlyActions(

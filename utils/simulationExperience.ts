@@ -32,6 +32,7 @@ export type SimulationExperience = {
 
 function getReportedDebtMode(onboarding: OnboardingData, debtDataSource: DebtDataSource) {
   if (
+    onboarding.hasDebts === false ||
     onboarding.debtSituation === "No tengo deudas" ||
     onboarding.debtPaymentShare === "No pago deudas"
   ) {
@@ -102,15 +103,22 @@ export function buildSimulationExperience({
   const activeDebts = onboarding.debts.filter((debt) => !isDebtPaid(debt));
   const debtSummary = getRegisteredDebtSummary({
     debtPaymentShare: onboarding.debtPaymentShare,
+    hasDebts: onboarding.hasDebts,
     debts: onboarding.debts,
     expenseCategoryAmounts: onboarding.expenseCategoryAmounts,
+    reportedMonthlyPayment: exactValues?.monthlyDebtPayments,
+    reportedMonthlyPaymentRange: onboarding.debtMonthlyPaymentRange,
     monthlyIncome: snapshot.cashflow.monthlyIncome
   });
   const monthlyIncome = snapshot.cashflow.monthlyIncome;
   const monthlyOperatingCosts =
-    snapshot.cashflow.monthlyExpenses !== null && snapshot.values.smallExpenses !== null
-      ? snapshot.cashflow.monthlyExpenses + snapshot.values.smallExpenses
-      : null;
+    snapshot.cashflow.monthlyExpenses === null
+      ? null
+      : snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
+        ? snapshot.cashflow.monthlyExpenses
+        : snapshot.values.smallExpenses !== null
+          ? snapshot.cashflow.monthlyExpenses + snapshot.values.smallExpenses
+          : null;
   const reportedRatioRange = getReportedDebtPaymentRatioRange(
     onboarding.debtPaymentShare
   );
@@ -143,7 +151,9 @@ export function buildSimulationExperience({
           maximum: debtSummary.monthlyPaymentTotal,
           minimum: debtSummary.monthlyPaymentTotal
         }
-      : mode === "goal_only"
+      : debtSummary.source === "reported" && debtSummary.reportedPaymentBounds
+        ? debtSummary.reportedPaymentBounds
+        : mode === "goal_only"
         ? { maximum: 0, minimum: 0 }
         : getAmountRangeFromRatio({ monthlyIncome, ratioRange: reportedRatioRange });
   const monthlyMarginRange = getMonthlyMarginRange({

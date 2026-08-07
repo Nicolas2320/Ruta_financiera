@@ -1,21 +1,7 @@
-import type { ComponentType, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import {
-  CircleQuestionMark,
-  BookOpen,
-  Calendar,
-  CalendarArrowDown,
-  CalendarCheck2,
-  ChartColumnIncreasing,
-  ChartPie,
-  GraduationCap,
-  Shield,
-  Sprout,
-  CalendarArrowUp,
-  Ban
-} from "lucide-react-native";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -28,53 +14,16 @@ import { StepHeader } from "../components/ui/StepHeader";
 import { colors, shadows, spacing, typography } from "../constants/theme";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import type { OnboardingData } from "../types/financial";
 import {
   formatCOP,
+  getDebtMonthlyPaymentRangeForAmount,
   getSavingsRangeForAmount,
   hasExactFinancialValue,
   parseCOPInput
 } from "../utils/financialRanges";
 
 const financialFoundation = require("../assets/illustrations/financial-foundation.png");
-
-const defaultOptionIconColor = "#6A7892";
-const defaultOptionIconBackground = "#EEF2F7";
-const uncertaintyIconColor = "#8B5CF6";
-const uncertaintyIconBackground = "#F1E8FF";
-const statusIconColors = {
-  critical: "#EF4444",
-  high: "#F97316",
-  medium: "#EAB308",
-  low: "#22C55E",
-  strong: "#047857"
-};
-const statusIconBackgrounds = {
-  critical: "#FEE2E2",
-  high: "#FFEDD5",
-  medium: "#FEF3C7",
-  low: "#DCFCE7",
-  strong: "#D1FAE5"
-};
-const debtIconColors = {
-  none: statusIconColors.strong,
-  low: statusIconColors.low,
-  medium: statusIconColors.medium,
-  high: statusIconColors.high,
-  critical: statusIconColors.critical
-};
-const debtIconBackgrounds = {
-  none: statusIconBackgrounds.strong,
-  low: statusIconBackgrounds.low,
-  medium: statusIconBackgrounds.medium,
-  high: statusIconBackgrounds.high,
-  critical: statusIconBackgrounds.critical
-};
-
-type IconProps = {
-  color?: string;
-  size?: number;
-  strokeWidth?: number;
-};
 
 const savingsRanges = [
   "No tengo ahorros",
@@ -88,130 +37,46 @@ const savingsRanges = [
 
 const exactSavingsOption = "Ingresar cifra";
 
-const emergencyCoverageOptions = [
-  {
-    title: "No podría cubrirlos",
-    icon: Shield,
-    color: statusIconColors.critical,
-    backgroundColor: statusIconBackgrounds.critical
-  },
-  {
-    title: "Menos de 1 mes",
-    icon: CalendarArrowDown,
-    color: statusIconColors.high,
-    backgroundColor: statusIconBackgrounds.high
-  },
-  {
-    title: "1 – 3 meses",
-    icon: Calendar,
-    color: statusIconColors.medium,
-    backgroundColor: statusIconBackgrounds.medium
-  },
-  {
-    title: "3 – 6 meses",
-    icon: CalendarCheck2,
-    color: statusIconColors.low,
-    backgroundColor: statusIconBackgrounds.low
-  },
-  {
-    title: "Más de 6 meses",
-    icon: CalendarArrowUp,
-    color: statusIconColors.strong,
-    backgroundColor: statusIconBackgrounds.strong
-  },
-  {
-    title: "No estoy seguro",
-    icon: CircleQuestionMark,
-    color: uncertaintyIconColor,
-    backgroundColor: uncertaintyIconBackground
-  }
+const debtMonthlyPaymentRanges = [
+  "Menos de $250.000",
+  "$250.000 – $500.000",
+  "$500.000 – $1.000.000",
+  "$1.000.000 – $2.000.000",
+  "Más de $2.000.000"
 ] as const;
 
-const debtSituations = [
-  "No tengo deudas",
-  "Tengo deudas, pero las pago sin problema",
-  "A veces me cuesta pagarlas",
-  "Son una preocupación importante",
-  "Prefiero no responder"
-] as const;
+const exactDebtPaymentOption = "Ingresar cifra";
 
-const debtPaymentShares = [
-  {
-    title: "No pago deudas",
-    icon: ChartPie,
-    color: debtIconColors.none,
-    backgroundColor: debtIconBackgrounds.none
-  },
-  {
-    title: "Menos del 10%",
-    icon: ChartPie,
-    color: debtIconColors.low,
-    backgroundColor: debtIconBackgrounds.low
-  },
-  {
-    title: "10% – 20%",
-    icon: ChartPie,
-    color: debtIconColors.medium,
-    backgroundColor: debtIconBackgrounds.medium
-  },
-  {
-    title: "20% – 40%",
-    icon: ChartPie,
-    color: debtIconColors.high,
-    backgroundColor: debtIconBackgrounds.high
-  },
-  {
-    title: "Más del 40%",
-    icon: ChartPie,
-    color: debtIconColors.critical,
-    backgroundColor: debtIconBackgrounds.critical
-  },
-  {
-    title: "No estoy seguro",
-    icon: CircleQuestionMark,
-    color: uncertaintyIconColor,
-    backgroundColor: uncertaintyIconBackground
-  },
-  {
-    title: "Prefiero no responder",
-    icon: Ban,
-    color: defaultOptionIconColor,
-    backgroundColor: defaultOptionIconBackground
-  }
-] as const;
+function normalizeDebtMonthlyPaymentRange(range: string | null) {
+  return debtMonthlyPaymentRanges.includes(
+    range as (typeof debtMonthlyPaymentRanges)[number]
+  )
+    ? range
+    : null;
+}
 
-const investmentSituations = [
-  {
-    title: "No tengo inversiones",
-    icon: Sprout,
-    color: statusIconColors.low,
-    backgroundColor: statusIconBackgrounds.low
-  },
-  {
-    title: "No, pero quiero aprender",
-    icon: GraduationCap,
-    color: "#F97316",
-    backgroundColor: "#FFEDD5"
-  },
-  {
-    title: "Sí, pero no entiendo bien cómo funcionan",
-    icon: BookOpen,
-    color: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  {
-    title: "Sí, y las entiendo",
-    icon: ChartColumnIncreasing,
-    color: statusIconColors.strong,
-    backgroundColor: statusIconBackgrounds.strong
-  },
-  {
-    title: "Prefiero no responder",
-    icon: Ban,
-    color: defaultOptionIconColor,
-    backgroundColor: defaultOptionIconBackground
+function inferHasDebts(onboarding: OnboardingData) {
+  if (typeof onboarding.hasDebts === "boolean") {
+    return onboarding.hasDebts;
   }
-] as const;
+
+  if (
+    onboarding.debts.length > 0 ||
+    onboarding.debtMonthlyPaymentRange ||
+    (onboarding.debtSituation && onboarding.debtSituation !== "No tengo deudas")
+  ) {
+    return true;
+  }
+
+  if (
+    onboarding.debtSituation === "No tengo deudas" ||
+    onboarding.debtPaymentShare === "No pago deudas"
+  ) {
+    return false;
+  }
+
+  return null;
+}
 
 export default function SavingsDebtsScreen() {
   const router = useRouter();
@@ -228,18 +93,11 @@ export default function SavingsDebtsScreen() {
   const [selectedSavingsRange, setSelectedSavingsRange] = useState<string | null>(
     onboarding.savingsRange
   );
-  const [selectedEmergencyCoverage, setSelectedEmergencyCoverage] = useState<string | null>(
-    onboarding.emergencyCoverage
+  const [selectedHasDebts, setSelectedHasDebts] = useState<boolean | null>(
+    inferHasDebts(onboarding)
   );
-  const [selectedDebtSituation, setSelectedDebtSituation] = useState<string | null>(
-    onboarding.debtSituation
-  );
-  const [selectedDebtPaymentShare, setSelectedDebtPaymentShare] = useState<string | null>(
-    onboarding.debtPaymentShare ??
-      (onboarding.debtSituation === "No tengo deudas" ? "No pago deudas" : null)
-  );
-  const [selectedInvestmentSituation, setSelectedInvestmentSituation] = useState<string | null>(
-    onboarding.investmentSituation
+  const [selectedDebtPaymentRange, setSelectedDebtPaymentRange] = useState<string | null>(
+    normalizeDebtMonthlyPaymentRange(onboarding.debtMonthlyPaymentRange)
   );
   const [usesExactSavings, setUsesExactSavings] = useState(
     hasExactFinancialValue(exactValues.currentSavings)
@@ -247,6 +105,17 @@ export default function SavingsDebtsScreen() {
   const [exactSavingsInput, setExactSavingsInput] = useState(
     hasExactFinancialValue(exactValues.currentSavings)
       ? formatCOP(exactValues.currentSavings)
+      : ""
+  );
+  const [usesExactDebtPayment, setUsesExactDebtPayment] = useState(
+    inferHasDebts(onboarding) === true &&
+      hasExactFinancialValue(exactValues.monthlyDebtPayments) &&
+      exactValues.monthlyDebtPayments > 0
+  );
+  const [exactDebtPaymentInput, setExactDebtPaymentInput] = useState(
+    hasExactFinancialValue(exactValues.monthlyDebtPayments) &&
+      exactValues.monthlyDebtPayments > 0
+      ? formatCOP(exactValues.monthlyDebtPayments)
       : ""
   );
   const hasHydratedStoredAnswers = useRef(onboardingSyncStatus === "saved");
@@ -258,44 +127,48 @@ export default function SavingsDebtsScreen() {
 
     hasHydratedStoredAnswers.current = true;
     setSelectedSavingsRange(onboarding.savingsRange);
-    setSelectedEmergencyCoverage(onboarding.emergencyCoverage);
-    setSelectedDebtSituation(onboarding.debtSituation);
-    setSelectedDebtPaymentShare(
-      onboarding.debtPaymentShare ??
-        (onboarding.debtSituation === "No tengo deudas" ? "No pago deudas" : null)
+    setSelectedHasDebts(inferHasDebts(onboarding));
+    setSelectedDebtPaymentRange(
+      normalizeDebtMonthlyPaymentRange(onboarding.debtMonthlyPaymentRange)
     );
-    setSelectedInvestmentSituation(onboarding.investmentSituation);
     setUsesExactSavings(hasExactFinancialValue(exactValues.currentSavings));
     setExactSavingsInput(
       hasExactFinancialValue(exactValues.currentSavings)
         ? formatCOP(exactValues.currentSavings)
         : ""
     );
-  }, [exactValues.currentSavings, onboarding, onboardingSyncStatus]);
+    setUsesExactDebtPayment(
+      inferHasDebts(onboarding) === true &&
+        hasExactFinancialValue(exactValues.monthlyDebtPayments) &&
+        exactValues.monthlyDebtPayments > 0
+    );
+    setExactDebtPaymentInput(
+      hasExactFinancialValue(exactValues.monthlyDebtPayments) &&
+        exactValues.monthlyDebtPayments > 0
+        ? formatCOP(exactValues.monthlyDebtPayments)
+        : ""
+    );
+  }, [exactValues.currentSavings, exactValues.monthlyDebtPayments, onboarding, onboardingSyncStatus]);
 
   const parsedExactSavings = parseCOPInput(exactSavingsInput);
+  const parsedExactDebtPayment = parseCOPInput(exactDebtPaymentInput);
 
   const canContinue = Boolean(
     (usesExactSavings ? parsedExactSavings !== null : selectedSavingsRange) &&
-      selectedEmergencyCoverage &&
-      selectedDebtSituation &&
-      selectedDebtPaymentShare &&
-      selectedInvestmentSituation
+      selectedHasDebts !== null &&
+      (!selectedHasDebts ||
+        (usesExactDebtPayment
+          ? parsedExactDebtPayment !== null && parsedExactDebtPayment > 0
+          : selectedDebtPaymentRange))
   );
 
-  const handleDebtSituationSelect = (situation: string) => {
-    if (
-      selectedDebtSituation === "No tengo deudas" &&
-      situation !== "No tengo deudas" &&
-      selectedDebtPaymentShare === "No pago deudas"
-    ) {
-      setSelectedDebtPaymentShare(null);
-    }
+  const handleDebtPresenceSelect = (hasDebts: boolean) => {
+    setSelectedHasDebts(hasDebts);
 
-    setSelectedDebtSituation(situation);
-
-    if (situation === "No tengo deudas") {
-      setSelectedDebtPaymentShare("No pago deudas");
+    if (!hasDebts) {
+      setSelectedDebtPaymentRange(null);
+      setUsesExactDebtPayment(false);
+      setExactDebtPaymentInput("");
     }
   };
 
@@ -304,13 +177,19 @@ export default function SavingsDebtsScreen() {
     setExactSavingsInput(parsedValue === null ? "" : formatCOP(parsedValue));
   };
 
+  const handleExactDebtPaymentChange = (value: string) => {
+    const parsedValue = parseCOPInput(value);
+    setExactDebtPaymentInput(parsedValue === null ? "" : formatCOP(parsedValue));
+  };
+
   const handleContinue = async () => {
     if (
       (usesExactSavings ? parsedExactSavings === null : !selectedSavingsRange) ||
-      !selectedEmergencyCoverage ||
-      !selectedDebtSituation ||
-      !selectedDebtPaymentShare ||
-      !selectedInvestmentSituation
+      selectedHasDebts === null ||
+      (selectedHasDebts &&
+        (usesExactDebtPayment
+          ? parsedExactDebtPayment === null || parsedExactDebtPayment <= 0
+          : !selectedDebtPaymentRange))
     ) {
       return;
     }
@@ -326,13 +205,25 @@ export default function SavingsDebtsScreen() {
       delete nextExactValues.currentSavings;
     }
 
+    const debtMonthlyPaymentRange = !selectedHasDebts
+      ? null
+      : usesExactDebtPayment && parsedExactDebtPayment !== null
+        ? getDebtMonthlyPaymentRangeForAmount(parsedExactDebtPayment)
+        : selectedDebtPaymentRange;
+
+    if (selectedHasDebts && usesExactDebtPayment && parsedExactDebtPayment !== null) {
+      nextExactValues.monthlyDebtPayments = parsedExactDebtPayment;
+    } else {
+      delete nextExactValues.monthlyDebtPayments;
+    }
+
     const saved = await saveOnboardingAndExactValues(
       {
         savingsRange,
-        emergencyCoverage: selectedEmergencyCoverage,
-        debtSituation: selectedDebtSituation,
-        debtPaymentShare: selectedDebtPaymentShare,
-        investmentSituation: selectedInvestmentSituation
+        hasDebts: selectedHasDebts,
+        debtMonthlyPaymentRange,
+        debtSituation: selectedHasDebts ? "Tengo deudas" : "No tengo deudas",
+        debtPaymentShare: selectedHasDebts ? null : "No pago deudas"
       },
       nextExactValues
     );
@@ -362,22 +253,22 @@ export default function SavingsDebtsScreen() {
           ) : null}
           {!isProfileEditMode ? (
             <StepHeader
-              currentStep={6}
+              currentStep={5}
               nextAccessibilityLabel="Continuar hacia meta financiera"
               nextDisabled={!canContinue}
-              onBack={() => router.replace("/small-expenses")}
+              onBack={() => router.replace("/expenses")}
               onNext={handleContinue}
               title="Ahorros y deudas"
-              totalSteps={7}
+              totalSteps={6}
             />
           ) : null}
 
           <HeroInfoCard
-            badge="Puedes elegir “Prefiero no responder” si algún dato te incomoda."
+            badge="Puedes elegir un rango si prefieres no dar una cifra exacta."
             image={financialFoundation}
             imageStyle={styles.heroImage}
-            text="Puedes usar rangos aproximados o ingresar una cifra de tus ahorros si ya la tienes clara. Con eso podemos entender si conviene priorizar ahorro, deudas o inversión."
-            title={"Tu punto de partida\nfinanciero"}
+            text="Con tus ahorros y lo que pagas al mes en deudas podemos estimar tu margen y tu respaldo actual."
+            title="Ahorros y deudas"
           />
 
           <SectionCard
@@ -414,112 +305,59 @@ export default function SavingsDebtsScreen() {
           </SectionCard>
 
           <SectionCard
-            helper="Es tu respaldo ante imprevistos."
-            title="¿Cuánto tiempo podrías cubrir tus gastos esenciales sin ingresos?"
-          >
-            <View style={styles.tileGrid}>
-              {emergencyCoverageOptions.map((coverage) => {
-                const Icon = coverage.icon;
-
-                return (
-                  <SelectableCard
-                    key={coverage.title}
-                    leading={
-                      <OptionIcon
-                        backgroundColor={coverage.backgroundColor}
-                        color={coverage.color}
-                        icon={Icon}
-                      />
-                    }
-                    onPress={() => setSelectedEmergencyCoverage(coverage.title)}
-                    selected={selectedEmergencyCoverage === coverage.title}
-                    style={styles.compactTile}
-                    title={coverage.title}
-                    variant="center"
-                  />
-                );
-              })}
-            </View>
-          </SectionCard>
-
-          <SectionCard
-            helper="No estás solo. Lo importante es saber cómo te sientes."
-            title="¿Cómo describirías tus deudas actualmente?"
+            helper="Incluye tarjetas de crédito, préstamos y compras financiadas que todavía debes."
+            title="¿Actualmente tienes deudas o préstamos por pagar?"
           >
             <View style={styles.moneyGrid}>
-              {debtSituations.map((situation) => (
+              <SelectableCard
+                onPress={() => handleDebtPresenceSelect(false)}
+                selected={selectedHasDebts === false}
+                style={styles.moneyOption}
+                title="No tengo deudas"
+              />
+              <SelectableCard
+                onPress={() => handleDebtPresenceSelect(true)}
+                selected={selectedHasDebts === true}
+                style={styles.moneyOption}
+                title="Sí, tengo deudas"
+              />
+            </View>
+          </SectionCard>
+
+          {selectedHasDebts ? (
+            <SectionCard
+              helper="Suma únicamente las cuotas que pagas cada mes, no el saldo total que todavía debes."
+              title="En total, ¿cuánto pagas al mes por esas deudas?"
+            >
+              <View style={styles.moneyGrid}>
+                {debtMonthlyPaymentRanges.map((range) => (
+                  <SelectableCard
+                    key={range}
+                    onPress={() => {
+                      setUsesExactDebtPayment(false);
+                      setSelectedDebtPaymentRange(range);
+                    }}
+                    selected={!usesExactDebtPayment && selectedDebtPaymentRange === range}
+                    style={styles.moneyOption}
+                    title={range}
+                  />
+                ))}
                 <SelectableCard
-                  key={situation}
-                  onPress={() => handleDebtSituationSelect(situation)}
-                  selected={selectedDebtSituation === situation}
+                  onPress={() => setUsesExactDebtPayment(true)}
+                  selected={usesExactDebtPayment}
                   style={styles.moneyOption}
-                  title={situation}
+                  title={exactDebtPaymentOption}
                 />
-              ))}
-            </View>
-          </SectionCard>
-
-          <SectionCard
-            helper="Incluye tarjetas, préstamos o créditos."
-            title="¿Qué parte de tus ingresos mensuales se va pagando deudas?"
-          >
-            <View style={styles.tileGrid}>
-              {debtPaymentShares.map((share) => {
-                const Icon = share.icon;
-
-                return (
-                  <SelectableCard
-                    key={share.title}
-                    leading={
-                      <OptionIcon
-                        backgroundColor={share.backgroundColor}
-                        color={share.color}
-                        icon={Icon}
-                      />
-                    }
-                    onPress={() => setSelectedDebtPaymentShare(share.title)}
-                    selected={selectedDebtPaymentShare === share.title}
-                    style={
-                      share.title === "Prefiero no responder"
-                        ? styles.fullWidthTile
-                        : styles.compactTile
-                    }
-                    title={share.title}
-                    variant="center"
-                  />
-                );
-              })}
-            </View>
-          </SectionCard>
-
-          <SectionCard
-            helper="Invertir te ayuda a hacer crecer tu dinero."
-            title="¿Tienes inversiones actualmente?"
-          >
-            <View style={styles.tileGrid}>
-              {investmentSituations.map((situation) => {
-                const Icon = situation.icon;
-
-                return (
-                  <SelectableCard
-                    key={situation.title}
-                    leading={
-                      <OptionIcon
-                        backgroundColor={situation.backgroundColor}
-                        color={situation.color}
-                        icon={Icon}
-                      />
-                    }
-                    onPress={() => setSelectedInvestmentSituation(situation.title)}
-                    selected={selectedInvestmentSituation === situation.title}
-                    style={styles.investmentTile}
-                    title={situation.title}
-                    variant="center"
-                  />
-                );
-              })}
-            </View>
-          </SectionCard>
+              </View>
+              {usesExactDebtPayment ? (
+                <ExactAmountField
+                  accessibilityLabel="Pago mensual total de deudas"
+                  onChangeText={handleExactDebtPaymentChange}
+                  value={exactDebtPaymentInput}
+                />
+              ) : null}
+            </SectionCard>
+          ) : null}
 
           <View style={styles.actions}>
             <PrimaryButton
@@ -561,22 +399,6 @@ function SectionCard({
         <Text style={styles.sectionHelper}>{helper}</Text>
       </View>
       <View style={styles.sectionBody}>{children}</View>
-    </View>
-  );
-}
-
-function OptionIcon({
-  icon: Icon,
-  color,
-  backgroundColor
-}: {
-  icon: ComponentType<IconProps>;
-  color: string;
-  backgroundColor: string;
-}) {
-  return (
-    <View style={[styles.optionIconBubble, { backgroundColor }]}>
-      <Icon color={color} size={24} strokeWidth={2.3} />
     </View>
   );
 }
@@ -639,32 +461,6 @@ const styles = StyleSheet.create({
     flexBasis: "47%",
     flexGrow: 1,
     minHeight: 50
-  },
-  tileGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  optionIconBubble: {
-    alignItems: "center",
-    borderRadius: 999,
-    height: 48,
-    justifyContent: "center",
-    width: 48
-  },
-  compactTile: {
-    flexBasis: "30%",
-    flexGrow: 1,
-    minHeight: 106
-  },
-  fullWidthTile: {
-    flexBasis: "100%",
-    minHeight: 52
-  },
-  investmentTile: {
-    flexBasis: "30%",
-    flexGrow: 1,
-    minHeight: 122
   },
   actions: {
     gap: spacing.sm,

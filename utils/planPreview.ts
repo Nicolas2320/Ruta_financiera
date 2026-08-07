@@ -1,4 +1,8 @@
-import type { ExactFinancialValues, OnboardingData } from "../types/financial";
+import type {
+  ExactFinancialValues,
+  OnboardingData,
+  SimulationPlanStrategy
+} from "../types/financial";
 import { formatCOP, formatSignedCOP } from "./financialRanges";
 import { getGoalPlanFromOnboarding } from "./goalPlanning";
 import { formatTargetMonth } from "./monthYear";
@@ -8,7 +12,12 @@ import {
   getMonthlyPlanData,
   getMonthlyPlanMetrics
 } from "./monthlyPlan";
-import { resolvePlanPreference } from "./planPreference";
+import {
+  getPlanPreferenceGoalBudget,
+  getPlanPreferenceGoalPlanOptions,
+  getPlanPreferencePreferredGoalId,
+  resolvePlanPreference
+} from "./planPreference";
 
 export type PlanPreviewData = {
   actionCount: number;
@@ -26,7 +35,7 @@ export type PlanPreviewData = {
   routeEstimateLabel: string;
   selectedReferenceIsApplicable: boolean;
   selectedReferenceLabel: string | null;
-  selectedStrategy: "diagnosis_recommended" | "prioritize_goal";
+  selectedStrategy: SimulationPlanStrategy;
 };
 
 export function getPlanPreviewData(
@@ -36,18 +45,22 @@ export function getPlanPreviewData(
   const data = getMonthlyPlanData(onboarding);
   const metrics = getMonthlyPlanMetrics(data, exactValues);
   const planPreference = resolvePlanPreference({ exactValues, onboarding });
-  const preferredGoalId =
-    planPreference.isApplicable && planPreference.strategy === "prioritize_goal"
-      ? planPreference.goalId
-      : null;
+  const preferredGoalId = getPlanPreferencePreferredGoalId({
+    onboarding,
+    preference: planPreference
+  });
   const planPriorityKey = planPreference.isApplicable
     ? planPreference.priorityKey
     : metrics.snapshot.priority.key;
   const goalPlan = getGoalPlanFromOnboarding(
     onboarding,
-    planPreference.monthlyReference,
+    getPlanPreferenceGoalBudget({
+      fallbackMonthlyBudget: metrics.snapshot.cashflow.suggestedMonthlyContribution,
+      preference: planPreference,
+      preferredGoalId
+    }),
     exactValues,
-    { preferredGoalId }
+    getPlanPreferenceGoalPlanOptions(planPreference, preferredGoalId)
   );
   const primaryGoalAllocation =
     goalPlan.allocations.find((allocation) => allocation.goal.id === preferredGoalId) ??
@@ -59,15 +72,18 @@ export function getPlanPreviewData(
   const monthlyGoalContext = {
     title: goalTitle,
     monthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
-    estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null
+    estimatedMonthsToGoal: primaryGoalAllocation?.estimatedMonthsToGoal ?? null,
+    hasRegisteredContribution: (primaryGoalAllocation?.currentAmount ?? 0) > 0
   };
   const focus = getMonthlyFocus(data, metrics, planPriorityKey, monthlyGoalContext);
   const actions = getMonthlyActions(data, metrics, planPriorityKey, monthlyGoalContext);
   const firstAction = actions[0];
   const monthlyMargin = metrics.estimatedMargin;
   const suggestedContribution =
-    primaryGoalAllocation?.monthlyContribution ??
-    metrics.snapshot.cashflow.suggestedMonthlyContribution;
+    planPriorityKey === "advance_goal"
+      ? primaryGoalAllocation?.monthlyContribution ??
+        metrics.snapshot.cashflow.suggestedMonthlyContribution
+      : planPreference.monthlyReference;
   const estimatedMonths =
     primaryGoalAllocation?.estimatedMonthsToGoal ??
     metrics.snapshot.goal.estimatedMonthsToGoal;

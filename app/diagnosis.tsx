@@ -25,15 +25,10 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import {
   calculateFinancialSnapshot,
-  getSmallExpensesMonthlySummary,
   type FinancialSnapshot,
   type SnapshotSource
 } from "../utils/financialCalculations";
-import {
-  formatCOP,
-  formatSignedCOP,
-  type FinancialRangeEstimate
-} from "../utils/financialRanges";
+import { formatCOP, formatSignedCOP } from "../utils/financialRanges";
 import type { ExactFinancialValues } from "../types/financial";
 
 type OnboardingSnapshot = ReturnType<typeof useOnboarding>["onboarding"];
@@ -45,7 +40,7 @@ type FinancialDisplay = {
   helper: string;
 };
 
-type PriorityKey = "debt" | "emergency" | "expenses" | "smallExpenses" | "investment" | "goal";
+type PriorityKey = "debt" | "emergency" | "expenses" | "goal";
 
 type MainPriority = {
   key: PriorityKey;
@@ -62,36 +57,16 @@ type FinancialMetrics = {
   expenseValue: number | null;
   totalOutflowValue: number | null;
   currentSavingsValue: number | null;
-  smallExpenseEstimate: FinancialRangeEstimate;
   estimatedMargin: number | null;
   expensePercentage: number | null;
-  smallExpensePercentage: number | null;
   estimatedMarginLabel: string;
   expensePercentageLabel: string;
   expenseRatioInterpretation: string;
-  smallExpensesMetricLabel: string;
-  smallExpensesDetail: string;
   debtPaymentLabel: string;
   debtPaymentInterpretation: string;
-  emergencyLabel: string;
   canEstimateMonthlyFlow: boolean;
   isCashflowExact: boolean;
 };
-
-function isLowEmergencyCoverage(emergencyCoverage: string | null) {
-  return emergencyCoverage === "No podría cubrirlos" || emergencyCoverage === "Menos de 1 mes";
-}
-
-function hasDebtConcern(debtSituation: string | null) {
-  return (
-    debtSituation === "Son una preocupación importante" ||
-    debtSituation === "A veces me cuesta pagarlas"
-  );
-}
-
-function hasHighDebtPaymentShare(debtPaymentShare: string | null) {
-  return debtPaymentShare === "Más del 40%" || debtPaymentShare === "20% – 40%";
-}
 
 function toPercentWidth(value: number): `${number}%` {
   return `${Math.max(0, Math.min(value, 100))}%`;
@@ -117,52 +92,32 @@ function getExpenseRatioInterpretation(expensePercentage: number | null) {
   return "Tus salidas podrían superar tus ingresos.";
 }
 
-function getDebtPaymentInterpretation(debtPaymentShare: string | null) {
-  if (debtPaymentShare === "No pago deudas") {
+function getDebtPaymentInterpretation(debt: FinancialSnapshot["debt"]) {
+  if (debt.level === "none") {
     return "Sin peso mensual de deuda.";
   }
 
-  if (debtPaymentShare === "Menos del 10%") {
+  if (debt.level === "low") {
     return "Peso bajo.";
   }
 
-  if (debtPaymentShare === "10% – 20%") {
+  if (debt.level === "medium") {
     return "Peso moderado.";
   }
 
-  if (debtPaymentShare === "20% – 40%") {
+  if (debt.level === "high") {
     return "Peso alto.";
   }
 
-  if (debtPaymentShare === "Más del 40%") {
-    return "Peso muy alto.";
-  }
-
-  if (debtPaymentShare === "No estoy seguro") {
-    return "Conviene estimarlo.";
-  }
-
-  if (debtPaymentShare === "Prefiero no responder") {
-    return "No evaluado.";
-  }
-
-  return "No disponible";
+  return "Por evaluar.";
 }
 
-function getDebtPaymentLabel(debtPaymentShare: string | null) {
-  if (!debtPaymentShare) {
-    return "No disponible";
+function getDebtPaymentLabel(debt: FinancialSnapshot["debt"]) {
+  if (debt.monthlyPaymentTotal > 0) {
+    return `${formatCOP(debt.monthlyPaymentTotal)}${debt.isPaymentEstimated ? " aprox." : ""}`;
   }
 
-  if (
-    debtPaymentShare === "No pago deudas" ||
-    debtPaymentShare === "No estoy seguro" ||
-    debtPaymentShare === "Prefiero no responder"
-  ) {
-    return debtPaymentShare;
-  }
-
-  return `${debtPaymentShare} de ingresos`;
+  return debt.level === "none" ? "Sin pagos de deuda" : "Por calcular";
 }
 
 function toFinancialDisplaySource(source: SnapshotSource): FinancialDisplay["source"] {
@@ -230,8 +185,12 @@ function getFinancialMetrics(
     value: snapshot.cashflow.monthlyIncome
   });
   const expenseDisplay = getSnapshotDisplay({
-    exactLabel: "Gastos principales al mes",
-    estimatedLabel: "Rango de gastos principales",
+    exactLabel: snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
+      ? "Gastos mensuales"
+      : "Gastos principales al mes",
+    estimatedLabel: snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
+      ? "Rango de gastos mensuales"
+      : "Rango de gastos principales",
     source: snapshot.sourceMap.monthlyExpenses,
     value: snapshot.cashflow.monthlyExpenses
   });
@@ -241,36 +200,21 @@ function getFinancialMetrics(
     source: snapshot.sourceMap.currentSavings,
     value: snapshot.values.currentSavings
   });
-  const smallExpenseEstimate: FinancialRangeEstimate = {
-    min: null,
-    max: null,
-    midpoint: snapshot.values.smallExpenses,
-    label:
-      snapshot.values.smallExpenses !== null
-        ? snapshot.sourceMap.smallExpenses === "exact"
-          ? formatCOP(snapshot.values.smallExpenses)
-          : `${formatCOP(snapshot.values.smallExpenses)} aprox.`
-        : "No disponible"
-  };
   const incomeMidpoint = snapshot.cashflow.monthlyIncome;
   const expenseMidpoint = snapshot.cashflow.monthlyExpenses;
   const currentSavingsValue = snapshot.values.currentSavings;
-  const smallExpenseMidpoint = snapshot.values.smallExpenses;
   const estimatedMargin = snapshot.cashflow.monthlyMargin;
   const expensePercentage =
     snapshot.cashflow.expensesToIncomeRatio !== null
       ? Math.round(snapshot.cashflow.expensesToIncomeRatio * 100)
       : null;
-  const smallExpensePercentage =
-    incomeMidpoint !== null && incomeMidpoint > 0 && smallExpenseMidpoint !== null
-      ? Math.round((smallExpenseMidpoint / incomeMidpoint) * 100)
-      : null;
   const isCashflowExact =
     snapshot.sourceMap.monthlyIncome === "exact" &&
     snapshot.sourceMap.monthlyExpenses === "exact" &&
-    (snapshot.sourceMap.smallExpenses === "exact" ||
+    (snapshot.cashflow.monthlyExpensesIncludesSmallExpenses ||
+      snapshot.sourceMap.smallExpenses === "exact" ||
       snapshot.sourceMap.smallExpenses === "reported_none") &&
-    snapshot.debt.source !== "reported";
+    !snapshot.debt.isPaymentEstimated;
 
   let estimatedMarginLabel = "No disponible";
 
@@ -279,23 +223,6 @@ function getFinancialMetrics(
       ? formatSignedCOP(estimatedMargin)
       : `${formatSignedCOP(estimatedMargin)} aprox.`;
   }
-
-  const smallExpensesMetricLabel =
-    onboarding.hasSmallExpenses === "No"
-      ? "No identificados"
-      : snapshot.sourceMap.smallExpenses === "exact" && smallExpenseMidpoint !== null
-        ? formatCOP(smallExpenseMidpoint)
-        : onboarding.smallExpensesRange ?? "No disponible";
-  const smallExpensesDetail =
-    onboarding.hasSmallExpenses === "No"
-      ? "No usamos gastos pequeños para estimar aportes o escenarios."
-      : smallExpensePercentage !== null
-      ? snapshot.sourceMap.smallExpenses === "exact"
-        ? `Según el valor ingresado: cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
-        : `Cerca del ${smallExpensePercentage}% de tus ingresos mensuales.`
-      : onboarding.smallExpensesRange
-        ? "Rango seleccionado, sin porcentaje calculado."
-        : "No disponible";
 
   return {
     snapshot,
@@ -306,10 +233,8 @@ function getFinancialMetrics(
     expenseValue: expenseMidpoint,
     totalOutflowValue: snapshot.cashflow.totalMonthlyOutflow,
     currentSavingsValue,
-    smallExpenseEstimate,
     estimatedMargin,
     expensePercentage,
-    smallExpensePercentage,
     estimatedMarginLabel,
     expensePercentageLabel:
       expensePercentage !== null
@@ -318,11 +243,8 @@ function getFinancialMetrics(
           : `${expensePercentage}% aprox.`
         : "No disponible",
     expenseRatioInterpretation: getExpenseRatioInterpretation(expensePercentage),
-    smallExpensesMetricLabel,
-    smallExpensesDetail,
-    debtPaymentLabel: getDebtPaymentLabel(onboarding.debtPaymentShare),
-    debtPaymentInterpretation: getDebtPaymentInterpretation(onboarding.debtPaymentShare),
-    emergencyLabel: onboarding.emergencyCoverage ?? "No disponible",
+    debtPaymentLabel: getDebtPaymentLabel(snapshot.debt),
+    debtPaymentInterpretation: getDebtPaymentInterpretation(snapshot.debt),
     canEstimateMonthlyFlow: estimatedMargin !== null && expensePercentage !== null,
     isCashflowExact
   };
@@ -358,13 +280,27 @@ function getDeclaredGoalContext(
 }
 
 function getMainPriority(metrics: FinancialMetrics): MainPriority {
+  if (metrics.snapshot.priority.key === "review_small_expenses") {
+    return metrics.snapshot.goal.status === "completed_or_ready"
+      ? {
+          key: "goal",
+          title: "Mantener claridad mensual",
+          text: "Revisar tu plan cada mes te ayuda a mantener tus decisiones alineadas con tus metas."
+        }
+      : {
+          key: "goal",
+          title: "Avanzar hacia tu meta",
+          text: "Tu plan puede enfocarse en separar un monto mensual adecuado para tu objetivo."
+        };
+  }
+
   const priorityKeyMap: Record<FinancialSnapshot["priority"]["key"], PriorityKey> = {
     debt_pressure: "debt",
     organize_cashflow: "expenses",
     build_emergency_fund: "emergency",
-    review_small_expenses: "smallExpenses",
+    review_small_expenses: "goal",
     advance_goal: "goal",
-    learn_investing: "investment",
+    learn_investing: "goal",
     keep_tracking: "goal"
   };
 
@@ -375,140 +311,40 @@ function getMainPriority(metrics: FinancialMetrics): MainPriority {
   };
 }
 
-function getSmallExpensesMessages(onboarding: OnboardingSnapshot, metrics: FinancialMetrics) {
-  if (onboarding.hasSmallExpenses === "Sí") {
-    const categories =
-      onboarding.smallExpenseCategories.length > 0
-        ? onboarding.smallExpenseCategories.join(", ")
-        : "categorías por revisar";
-    const messages = [
-      `Identificaste pequeños gastos frecuentes en: ${categories}.`,
-      getSmallExpensesMonthlySummary({
-        amount: metrics.snapshot.values.smallExpenses,
-        range: onboarding.smallExpensesRange,
-        source: metrics.snapshot.sourceMap.smallExpenses
-      })
-    ];
-
-    if (metrics.smallExpensePercentage !== null) {
-      messages.push(`Esto podría representar cerca del ${metrics.smallExpensePercentage}% de tus ingresos estimados.`);
-    }
-
-    messages.push(`Tu intención actual es: ${onboarding.smallExpensesIntention ?? "No respondido"}.`);
-    messages.push(
-      "No significa que debas eliminarlos. La idea es decidir cuáles quieres mantener, limitar o redirigir a una meta."
-    );
-
-    return messages;
-  }
-
-  if (onboarding.hasSmallExpenses === "No") {
-    return [
-      "No identificaste gastos pequeños frecuentes. Puedes revisar esta sección más adelante si notas consumos repetidos."
-    ];
-  }
-
-  if (onboarding.hasSmallExpenses === "No estoy seguro") {
-    return [
-      "Podrías observar tus pequeños gastos durante una semana para entender si tienen impacto en tu presupuesto."
-    ];
-  }
-
-  return ["No tenemos suficiente información sobre pequeños gastos frecuentes todavía."];
-}
-
-function getDebtMessage(onboarding: OnboardingSnapshot) {
-  if (
-    onboarding.debtSituation === "Prefiero no responder" ||
-    onboarding.debtPaymentShare === "Prefiero no responder"
-  ) {
-    return "No evaluamos tus deudas porque preferiste no responder.";
-  }
-
-  if (onboarding.debtSituation === "No tengo deudas") {
+function getDebtMessage(metrics: FinancialMetrics) {
+  if (metrics.snapshot.debt.level === "none") {
     return "No reportaste deudas actualmente.";
   }
 
-  if (
-    onboarding.debtSituation === "A veces me cuesta pagarlas" ||
-    onboarding.debtSituation === "Son una preocupación importante" ||
-    onboarding.debtPaymentShare === "Más del 40%"
-  ) {
+  if (metrics.snapshot.debt.level === "high") {
     return "Tus deudas podrían estar limitando tu capacidad para avanzar hacia otras metas.";
   }
 
-  if (
-    onboarding.debtSituation === "Tengo deudas, pero las pago sin problema" &&
-    (onboarding.debtPaymentShare === "Menos del 10%" || onboarding.debtPaymentShare === "10% – 20%")
-  ) {
+  if (metrics.snapshot.debt.level === "low") {
     return "Tus deudas parecen manejables, pero conviene monitorear cuánto pesan cada mes.";
   }
 
-  if (onboarding.debtPaymentShare === "No estoy seguro") {
-    return "Conviene estimar cuánto pesan tus pagos de deudas dentro de tus ingresos mensuales.";
-  }
-
-  if (onboarding.debtSituation) {
+  if (metrics.snapshot.debt.level === "medium") {
     return "Tus deudas requieren seguimiento para entender cuánto margen mensual te dejan.";
   }
 
   return "No tenemos suficiente información sobre tus deudas todavía.";
 }
 
-function getDebtActionMessage(onboarding: OnboardingSnapshot) {
-  if (
-    onboarding.debtSituation === "Prefiero no responder" ||
-    onboarding.debtPaymentShare === "Prefiero no responder" ||
-    onboarding.debtSituation === "No tengo deudas" ||
-    onboarding.debtPaymentShare === "No pago deudas"
-  ) {
+function getDebtActionMessage(metrics: FinancialMetrics) {
+  if (metrics.snapshot.debt.level === "none") {
     return null;
   }
 
-  if (onboarding.debtPaymentShare === "No estoy seguro") {
-    return "Acción sugerida: estima cuánto pagas al mes en deudas y compáralo con tu ingreso mensual antes de asumir nuevos compromisos.";
-  }
-
-  if (
-    onboarding.debtSituation === "A veces me cuesta pagarlas" ||
-    onboarding.debtPaymentShare === "10% – 20%"
-  ) {
+  if (metrics.snapshot.debt.level === "medium") {
     return "Acción sugerida: este mes lista tus pagos de deuda, fecha límite y pago mínimo. Evita tomar deuda nueva hasta saber cuánto pesa realmente.";
   }
 
-  if (
-    onboarding.debtSituation === "Son una preocupación importante" ||
-    onboarding.debtPaymentShare === "20% – 40%" ||
-    onboarding.debtPaymentShare === "Más del 40%"
-  ) {
+  if (metrics.snapshot.debt.level === "high") {
     return "Acción sugerida: identifica cuál deuda genera más presión por cuota, interés o urgencia y revísala antes de acelerar otras metas.";
   }
 
   return null;
-}
-
-function getInvestmentMessage(investmentSituation: string | null) {
-  if (investmentSituation === "No tengo inversiones") {
-    return "Antes de invertir, puede ser útil fortalecer tu ahorro y entender conceptos básicos.";
-  }
-
-  if (investmentSituation === "No, pero quiero aprender") {
-    return "Podrías empezar aprendiendo conceptos como riesgo, plazo, liquidez y diversificación.";
-  }
-
-  if (investmentSituation === "Sí, pero no entiendo bien cómo funcionan") {
-    return "Podrías revisar qué tipo de inversiones tienes y qué riesgos asumes.";
-  }
-
-  if (investmentSituation === "Sí, y las entiendo") {
-    return "Puedes usar simulaciones más adelante para comparar escenarios educativos.";
-  }
-
-  if (investmentSituation === "Prefiero no responder") {
-    return "No evaluamos tu situación de inversión.";
-  }
-
-  return "No tenemos suficiente información sobre inversiones todavía.";
 }
 
 function getMeaningMessage(priority: MainPriority) {
@@ -524,18 +360,10 @@ function getMeaningMessage(priority: MainPriority) {
     return "En tu caso, revisar tu flujo mensual puede ayudarte a identificar qué gastos son esenciales, cuáles son variables y dónde podría aparecer margen para ahorrar.";
   }
 
-  if (priority.key === "smallExpenses") {
-    return "En tu caso, los gastos pequeños no son el problema por sí solos. La oportunidad está en decidir cuáles quieres conservar y cuáles podrías limitar para acercarte a una meta.";
-  }
-
-  if (priority.key === "investment") {
-    return "En tu caso, aprender conceptos básicos antes de tomar decisiones puede ayudarte a comparar escenarios con más calma y entender mejor el riesgo.";
-  }
-
   return "En tu caso, ya puedes empezar a traducir tu meta en una acción concreta y pequeña para esta semana, usando tus rangos como una primera referencia.";
 }
 
-function getMetricTone(label: string, metrics: FinancialMetrics, onboarding: OnboardingSnapshot) {
+function getMetricTone(label: string, metrics: FinancialMetrics) {
   if (label === "Margen mensual") {
     if (metrics.estimatedMargin === null) {
       return "neutral";
@@ -557,7 +385,11 @@ function getMetricTone(label: string, metrics: FinancialMetrics, onboarding: Onb
       return "neutral";
     }
 
-    if (metrics.currentSavingsValue <= 0 || isLowEmergencyCoverage(onboarding.emergencyCoverage)) {
+    if (
+      metrics.currentSavingsValue <= 0 ||
+      metrics.snapshot.emergencyFund.status === "none" ||
+      metrics.snapshot.emergencyFund.status === "starter"
+    ) {
       return "warning";
     }
 
@@ -565,11 +397,11 @@ function getMetricTone(label: string, metrics: FinancialMetrics, onboarding: Onb
   }
 
   if (label === "Peso de deudas") {
-    if (hasHighDebtPaymentShare(onboarding.debtPaymentShare) || hasDebtConcern(onboarding.debtSituation)) {
+    if (metrics.snapshot.debt.level === "high" || metrics.snapshot.debt.level === "medium") {
       return "warning";
     }
 
-    return onboarding.debtPaymentShare === "No pago deudas" || onboarding.debtPaymentShare === "Menos del 10%"
+    return metrics.snapshot.debt.level === "none" || metrics.snapshot.debt.level === "low"
       ? "positive"
       : "neutral";
   }
@@ -647,20 +479,7 @@ export default function DiagnosisScreen() {
     () => getDeclaredGoalContext(onboarding, metrics, priority),
     [metrics, onboarding, priority]
   );
-  const smallExpensesMessages = useMemo(
-    () => getSmallExpensesMessages(onboarding, metrics),
-    [onboarding, metrics]
-  );
   const expenseBarWidth = metrics.expensePercentage ?? 0;
-  const smallExpensesBarWidth = Math.min(
-    metrics.smallExpensePercentage ?? 0,
-    expenseBarWidth,
-    100
-  );
-  const otherExpensesPercentage = Math.max(
-    0,
-    expenseBarWidth - (metrics.smallExpensePercentage ?? 0)
-  );
   const marginPercentage = 100 - expenseBarWidth;
   const expensesAreHigh = metrics.expensePercentage !== null && metrics.expensePercentage >= 85;
   const hasPositiveMargin = metrics.estimatedMargin !== null && metrics.estimatedMargin > 0;
@@ -689,8 +508,8 @@ export default function DiagnosisScreen() {
     metrics.expensePercentage !== null
       ? metrics.expensePercentage > 100
         ? `Por cada $100 que entra, salen cerca de $${metrics.expensePercentage}.`
-        : `Por cada $100 que entra, aproximadamente $${metrics.expensePercentage} se utiliza en gastos principales, gastos pequeños y deudas.`
-      : "Compara lo que entra durante el mes con tus gastos principales, gastos pequeños y cuotas de deuda.";
+        : `Por cada $100 que entra, aproximadamente $${metrics.expensePercentage} se utiliza en gastos registrados y deudas.`
+      : "Compara lo que entra durante el mes con tus gastos registrados y cuotas de deuda.";
   const indicators = [
     {
       label: "Margen mensual",
@@ -715,11 +534,6 @@ export default function DiagnosisScreen() {
       detail: metrics.currentSavingsDisplay.helper
     },
     {
-      label: "Pequeños gastos",
-      value: metrics.smallExpensesMetricLabel,
-      detail: metrics.smallExpensesDetail
-    },
-    {
       label: "Peso de deudas",
       value: metrics.debtPaymentLabel,
       detail: metrics.debtPaymentInterpretation
@@ -727,7 +541,7 @@ export default function DiagnosisScreen() {
   ];
   const emergencyMessage =
     metrics.snapshot.emergencyFund.coverageMonths !== null
-      ? `${metrics.snapshot.emergencyFund.label}. Con estos datos, tu ahorro cubre cerca de ${metrics.snapshot.emergencyFund.coverageMonths.toFixed(1).replace(".0", "")} meses de gastos principales.`
+      ? `${metrics.snapshot.emergencyFund.label}. Con estos datos, tu ahorro cubre cerca de ${metrics.snapshot.emergencyFund.coverageMonths.toFixed(1).replace(".0", "")} meses de gastos mensuales registrados.`
       : metrics.snapshot.emergencyFund.label;
   const emergencyCoverageLabel =
     metrics.snapshot.emergencyFund.coverageMonths !== null
@@ -747,12 +561,12 @@ export default function DiagnosisScreen() {
           : "neutral";
   const emergencyPlainLanguage =
     metrics.snapshot.emergencyFund.coverageMonths === null
-      ? "Necesitamos tu ahorro actual y tus gastos principales para estimar cuántos meses podrías cubrir."
+      ? "Necesitamos tu ahorro actual y tus gastos mensuales para estimar cuántos meses podrías cubrir."
       : metrics.snapshot.emergencyFund.coverageMonths < 1
         ? "Tu ahorro todavía no cubriría un mes completo de gastos."
         : `Si tus ingresos se interrumpieran, tu ahorro podría cubrir cerca de ${emergencyCoverageLabel}.`;
-  const debtMessage = getDebtMessage(onboarding);
-  const debtActionMessage = getDebtActionMessage(onboarding);
+  const debtMessage = getDebtMessage(metrics);
+  const debtActionMessage = getDebtActionMessage(metrics);
   const debtLevelLabel =
     metrics.snapshot.debt.level === "none"
       ? "Sin presión de deuda reportada"
@@ -788,7 +602,8 @@ export default function DiagnosisScreen() {
   const shouldShowDebtDetailsCta =
     metrics.snapshot.debt.level === "medium" ||
     metrics.snapshot.debt.level === "high" ||
-    onboarding.debtPaymentShare === "No estoy seguro";
+    (metrics.snapshot.debt.source === "reported" &&
+      metrics.snapshot.debt.registeredDebtCount === 0);
   const debtDetailsCtaLabel =
     metrics.snapshot.debt.registeredDebtCount > 0
       ? "Ver deudas registradas"
@@ -836,7 +651,7 @@ export default function DiagnosisScreen() {
                 <MetricCard
                   key={indicator.label}
                   label={indicator.label}
-                  tone={getMetricTone(indicator.label, metrics, onboarding)}
+                  tone={getMetricTone(indicator.label, metrics)}
                   value={indicator.value}
                 />
               ))}
@@ -880,7 +695,7 @@ export default function DiagnosisScreen() {
                       }
                     ]}
                     closeLabel="Cerrar"
-                    definition="El margen mensual es lo que queda al restar gastos principales, gastos pequeños y cuotas de deuda de los ingresos."
+                    definition="El margen mensual es lo que queda al restar los gastos registrados y las cuotas de deuda de los ingresos."
                     guidanceMode={guidanceMode}
                     plainLanguage={flowPlainLanguage}
                     resultDescription={flowResultDescription}
@@ -903,11 +718,10 @@ export default function DiagnosisScreen() {
                 <View style={styles.valueRows}>
                   <ValueRow label={metrics.incomeDisplay.label} value={metrics.incomeDisplay.value} />
                   <ValueRow label={metrics.expenseDisplay.label} value={metrics.expenseDisplay.value} />
-                  <ValueRow label="Gastos pequeños" value={metrics.smallExpensesMetricLabel} />
                   <ValueRow
                     label="Cuotas de deuda"
                     value={`${formatCOP(metrics.snapshot.cashflow.monthlyDebtPayments)}${
-                      metrics.snapshot.debt.source === "reported" ? " aprox." : ""
+                      metrics.snapshot.debt.isPaymentEstimated ? " aprox." : ""
                     }`}
                   />
                   <ValueRow
@@ -945,26 +759,13 @@ export default function DiagnosisScreen() {
                       { width: toPercentWidth(expenseBarWidth) }
                     ]}
                   />
-                  {smallExpensesBarWidth > 0 ? (
-                    <View
-                      style={[
-                        styles.flowBarSmallExpenses,
-                        expensesAreHigh && styles.flowBarSmallExpensesWarning,
-                        { width: toPercentWidth(smallExpensesBarWidth) }
-                      ]}
-                    />
-                  ) : null}
                 </View>
 
                 <View style={styles.legendRow}>
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, styles.legendDotExpenses]} />
-                    <Text style={styles.legendText}>Gastos ({otherExpensesPercentage}%)</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, styles.legendDotSmallExpenses]} />
                     <Text style={styles.legendText}>
-                      Pequeños gastos ({metrics.smallExpensePercentage ?? 0}%)
+                      Gastos y deudas ({expenseBarWidth}%)
                     </Text>
                   </View>
                   <View style={styles.legendItem}>
@@ -1039,17 +840,6 @@ export default function DiagnosisScreen() {
           </InfoCard>
 
           <InfoCard
-            icon={<ClipboardCheck color={colors.primary} size={18} strokeWidth={2.4} />}
-            title="Pequeños gastos"
-          >
-            {smallExpensesMessages.map((message) => (
-              <Text key={message} style={styles.text}>
-                {message}
-              </Text>
-            ))}
-          </InfoCard>
-
-          <InfoCard
             headerAction={
               <FinancialEducationModal
                 accessibilityLabel="Explicar la presión de deuda"
@@ -1060,13 +850,13 @@ export default function DiagnosisScreen() {
                 <FinancialEducationStory
                   calculationItems={[
                     {
-                      label: "Situación declarada",
-                      value: onboarding.debtSituation ?? "No disponible"
+                      label: "Pago mensual",
+                      value: metrics.debtPaymentLabel
                     },
                     {
-                      label: "Peso mensual",
+                      label: "Frente a tus ingresos",
                       operator: "+",
-                      value: metrics.debtPaymentLabel
+                      value: debtRatioLabel
                     },
                     {
                       emphasis: true,
@@ -1077,7 +867,7 @@ export default function DiagnosisScreen() {
                   ]}
                   calculationTitle="Qué usamos para evaluarla"
                   closeLabel="Cerrar"
-                  definition="La presión de deuda combina la dificultad de pago declarada con la parte del ingreso destinada cada mes a deudas."
+                  definition="La presión de deuda compara los pagos mensuales de deuda con tus ingresos y considera el estado de las deudas que hayas detallado."
                   estimateLabel={
                     metrics.snapshot.debt.source === "none"
                       ? "Según tus respuestas"
@@ -1098,7 +888,7 @@ export default function DiagnosisScreen() {
               </FinancialEducationModal>
             }
             icon={<Landmark color={colors.primary} size={18} strokeWidth={2.4} />}
-            title="Deudas e inversiones"
+            title="Deudas"
           >
             <View style={styles.subsection}>
               <Text style={styles.subsectionTitle}>Deudas</Text>
@@ -1122,10 +912,6 @@ export default function DiagnosisScreen() {
                   </Text>
                 </View>
               ) : null}
-            </View>
-            <View style={styles.subsection}>
-              <Text style={styles.subsectionTitle}>Inversiones</Text>
-              <Text style={styles.text}>{getInvestmentMessage(onboarding.investmentSituation)}</Text>
             </View>
           </InfoCard>
 
@@ -1354,18 +1140,6 @@ const styles = StyleSheet.create({
   flowBarExpensesWarning: {
     backgroundColor: "#F97316"
   },
-  flowBarSmallExpenses: {
-    backgroundColor: "#F59E0B",
-    borderBottomLeftRadius: radius.pill,
-    borderTopLeftRadius: radius.pill,
-    height: "100%",
-    left: 0,
-    position: "absolute",
-    top: 0
-  },
-  flowBarSmallExpensesWarning: {
-    backgroundColor: "#B45309"
-  },
   legendRow: {
     flexDirection: "row",
     gap: spacing.xs,
@@ -1388,9 +1162,6 @@ const styles = StyleSheet.create({
   },
   legendDotMargin: {
     backgroundColor: colors.support
-  },
-  legendDotSmallExpenses: {
-    backgroundColor: "#F59E0B"
   },
   legendText: {
     color: colors.textMuted,

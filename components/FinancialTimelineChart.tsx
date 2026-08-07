@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -211,14 +212,30 @@ function RangeButton({
 
 export function FinancialTimelineChart({
   focus,
+  onSelectedGoalChange,
+  selectedGoalId: controlledSelectedGoalId,
   timeline
 }: {
   focus: FinancialTimelineFocus;
+  onSelectedGoalChange?: (goalId: string) => void;
+  selectedGoalId?: string | null;
   timeline: FinancialScenarioTimeline;
 }) {
   const [layoutWidth, setLayoutWidth] = useState(0);
   const [range, setRange] = useState<"all" | "near">("near");
   const [selectedIndexState, setSelectedIndex] = useState(0);
+  const [internalSelectedGoalId, setInternalSelectedGoalId] = useState(
+    timeline.trackedGoal?.goalId ?? timeline.trackedGoals[0]?.goalId ?? ""
+  );
+  const selectedGoalId = controlledSelectedGoalId ?? internalSelectedGoalId;
+  const selectedTrackedGoal =
+    timeline.trackedGoals.find((goal) => goal.goalId === selectedGoalId) ??
+    timeline.trackedGoal ??
+    timeline.trackedGoals[0] ??
+    null;
+  const selectedGoalCompletionMonth = selectedTrackedGoal
+    ? timeline.goalCompletionMonths[selectedTrackedGoal.goalId] ?? null
+    : null;
   const displayMonths = useMemo(
     () => getFinancialTimelineDisplayMonths(timeline),
     [timeline]
@@ -229,19 +246,24 @@ export function FinancialTimelineChart({
     }
 
     const relevantIndexes = [
-      timeline.goalCompletionMonth,
-      timeline.trackedGoal?.targetMonth
+      selectedGoalCompletionMonth,
+      selectedTrackedGoal?.targetMonth
     ]
       .filter((month): month is string => Boolean(month))
       .map((month) => displayMonths.findIndex((item) => item.month === month))
       .filter((index) => index >= 0);
+
+    if (relevantIndexes.length === 0) {
+      return Math.min(displayMonths.length, NEAR_MONTH_COUNT + 1);
+    }
+
     const lastRelevantIndex = Math.max(0, ...relevantIndexes);
 
     return Math.min(
       displayMonths.length,
       Math.max(3, lastRelevantIndex + 1)
     );
-  }, [displayMonths, focus, timeline.goalCompletionMonth, timeline.trackedGoal]);
+  }, [displayMonths, focus, selectedGoalCompletionMonth, selectedTrackedGoal]);
   const canChangeRange =
     focus !== "goal" && displayMonths.length > NEAR_MONTH_COUNT + 1;
   const months = useMemo(
@@ -267,7 +289,19 @@ export function FinancialTimelineChart({
 
   useEffect(() => {
     setSelectedIndex(0);
-  }, [focus, months[0]?.month, range]);
+  }, [focus, months[0]?.month, range, selectedTrackedGoal?.goalId]);
+
+  useEffect(() => {
+    if (
+      timeline.trackedGoals.length > 0 &&
+      !timeline.trackedGoals.some((goal) => goal.goalId === selectedGoalId)
+    ) {
+      const fallbackGoalId =
+        timeline.trackedGoal?.goalId ?? timeline.trackedGoals[0]?.goalId ?? "";
+      setInternalSelectedGoalId(fallbackGoalId);
+      onSelectedGoalChange?.(fallbackGoalId);
+    }
+  }, [onSelectedGoalChange, selectedGoalId, timeline.trackedGoal?.goalId, timeline.trackedGoals]);
 
   const chart = useMemo(() => {
     const viewWidth = layoutWidth > 0 ? Math.max(280, layoutWidth) : DEFAULT_VIEW_WIDTH;
@@ -285,8 +319,10 @@ export function FinancialTimelineChart({
     );
     const maximumGoal = Math.max(
       1,
-      ...months.map((month) => month.trackedGoalAmount ?? 0),
-      timeline.trackedGoal?.targetAmount ?? 0
+      ...months.map((month) =>
+        selectedTrackedGoal ? month.goalAmounts[selectedTrackedGoal.goalId] ?? 0 : 0
+      ),
+      selectedTrackedGoal?.targetAmount ?? 0
     );
     const debtLane = showsDebt
       ? isCombined
@@ -307,11 +343,13 @@ export function FinancialTimelineChart({
     const goalPoints = goalLane
       ? months.map((month, index) => ({
           x: xForIndex(index),
-          y: goalLane.yForValue(month.trackedGoalAmount ?? 0)
+          y: goalLane.yForValue(
+            selectedTrackedGoal ? month.goalAmounts[selectedTrackedGoal.goalId] ?? 0 : 0
+          )
         }))
       : [];
-    const targetMonthIndex = timeline.trackedGoal?.targetMonth
-      ? months.findIndex((month) => month.month === timeline.trackedGoal?.targetMonth)
+    const targetMonthIndex = selectedTrackedGoal?.targetMonth
+      ? months.findIndex((month) => month.month === selectedTrackedGoal.targetMonth)
       : -1;
 
     return {
@@ -329,7 +367,7 @@ export function FinancialTimelineChart({
       viewWidth,
       xForIndex
     };
-  }, [isCombined, layoutWidth, months, showsDebt, showsGoal, timeline.trackedGoal]);
+  }, [isCombined, layoutWidth, months, selectedTrackedGoal, showsDebt, showsGoal]);
 
   if (!selectedMonth) {
     return null;
@@ -337,6 +375,10 @@ export function FinancialTimelineChart({
 
   const handleLayout = (event: LayoutChangeEvent) => {
     setLayoutWidth(event.nativeEvent.layout.width);
+  };
+  const handleGoalSelection = (goalId: string) => {
+    setInternalSelectedGoalId(goalId);
+    onSelectedGoalChange?.(goalId);
   };
   const handlePress = (event: NativeSyntheticEvent<NativeTouchEvent>) => {
     if (layoutWidth <= 0 || months.length <= 1) {
@@ -393,6 +435,24 @@ export function FinancialTimelineChart({
   return (
     <View style={styles.container}>
       <View style={styles.chartToolbar}>
+        {showsGoal && timeline.trackedGoals.length > 1 ? (
+          <ScrollView
+            accessibilityLabel="Seleccionar meta a visualizar"
+            contentContainerStyle={styles.goalSelectorContent}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.goalSelectorViewport}
+          >
+            {timeline.trackedGoals.map((goal) => (
+              <RangeButton
+                active={goal.goalId === selectedTrackedGoal?.goalId}
+                key={goal.goalId}
+                label={goal.title}
+                onPress={() => handleGoalSelection(goal.goalId)}
+              />
+            ))}
+          </ScrollView>
+        ) : null}
         {canChangeRange ? (
           <View style={styles.rangeControls}>
             <RangeButton
@@ -407,7 +467,7 @@ export function FinancialTimelineChart({
             />
           </View>
         ) : null}
-        {showsGoal && timeline.trackedGoal?.targetMonth ? (
+        {showsGoal && selectedTrackedGoal?.targetMonth ? (
           <View style={styles.targetGuide}>
             <View style={styles.targetLegend} />
             <Text style={styles.guideText}>Fecha objetivo</Text>
@@ -425,7 +485,7 @@ export function FinancialTimelineChart({
           focus === "debt"
             ? "Evolución de la deuda pendiente"
             : focus === "goal"
-              ? "Evolución del dinero reunido para la meta"
+              ? `Evolución del dinero reunido para ${selectedTrackedGoal?.title ?? "la meta"}`
               : "Evolución de la deuda pendiente y el dinero reunido"
         }
         accessibilityRole="adjustable"
@@ -437,7 +497,11 @@ export function FinancialTimelineChart({
             selectedMonth.endingKnownDebtBalance
           )}${
             showsGoal
-              ? ` y dinero reunido ${formatCOP(selectedMonth.trackedGoalAmount ?? 0)}`
+              ? ` y dinero reunido ${formatCOP(
+                  selectedTrackedGoal
+                    ? selectedMonth.goalAmounts[selectedTrackedGoal.goalId] ?? 0
+                    : 0
+                )}`
               : ""
           }`
         }}
@@ -632,7 +696,11 @@ export function FinancialTimelineChart({
                     x={tooltipX + 10}
                     y={tooltipY + 53}
                   >
-                    {`Meta ${formatCompactCOP(selectedMonth.trackedGoalAmount ?? 0)}`}
+                    {`Meta ${formatCompactCOP(
+                      selectedTrackedGoal
+                        ? selectedMonth.goalAmounts[selectedTrackedGoal.goalId] ?? 0
+                        : 0
+                    )}`}
                   </SvgText>
                 </>
               ) : focus === "goal" ? (
@@ -645,7 +713,11 @@ export function FinancialTimelineChart({
                     x={tooltipX + 10}
                     y={tooltipY + 36}
                   >
-                    {formatCOP(selectedMonth.trackedGoalAmount ?? 0)}
+                    {formatCOP(
+                      selectedTrackedGoal
+                        ? selectedMonth.goalAmounts[selectedTrackedGoal.goalId] ?? 0
+                        : 0
+                    )}
                   </SvgText>
                   <SvgText
                     fill={colors.surface}
@@ -714,6 +786,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
+  },
+  goalSelectorViewport: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.pill,
+    flexGrow: 0,
+    maxWidth: "100%",
+    width: "100%"
+  },
+  goalSelectorContent: {
+    flexDirection: "row",
+    gap: 2,
+    padding: 3
   },
   rangeControls: {
     backgroundColor: colors.surfaceMuted,

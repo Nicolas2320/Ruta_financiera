@@ -12,10 +12,10 @@ import { formatCOP } from "../utils/financialRanges";
 import { formatTargetMonth } from "../utils/monthYear";
 
 const strategyNotes: Record<DistributionStrategyId, string> = {
-  current_reference: "Mantiene lo registrado; el dinero libre puede quedar sin un destino nuevo.",
-  reduce_interest: "Ataca primero la deuda costosa; la meta espera mientras tanto.",
-  accelerate_goal: "Concentra el margen en la meta; la deuda conserva sus cuotas requeridas.",
-  split_debt_goal: "Avanza en ambos frentes; al completar la meta, reasigna lo libre a deuda."
+  current_reference: "Mantiene las cuotas de deuda y no asigna dinero mensual a metas.",
+  reduce_interest: "Todo el dinero disponible se reparte entre tus deudas.",
+  accelerate_goal: "Todo el dinero disponible se reparte entre tus metas.",
+  split_debt_goal: "Reparte el dinero con los porcentajes elegidos entre deudas y metas."
 };
 
 const bestLabels: Record<DistributionComparisonCriterion, string> = {
@@ -41,7 +41,7 @@ function getGoalResult(scenario: DistributionScenarioPresentation) {
     return "Sin meta";
   }
 
-  return hasGoalContributions(scenario) ? "Más de 10 años" : "Sin aportes";
+  return hasGoalContributions(scenario) ? "Más de 10 años" : "Dinero no repartido";
 }
 
 function getDebtResult(scenario: DistributionScenarioPresentation) {
@@ -141,9 +141,7 @@ function ComparisonRow({
           value={
             comparison.totalInterestCharged === null
               ? "No disponible"
-              : `${formatCOP(comparison.totalInterestCharged)}${
-                  comparison.hasUnknownInterestRates ? "*" : ""
-                }`
+              : formatCOP(comparison.totalInterestCharged)
           }
         />
         <ComparisonMetric
@@ -169,7 +167,6 @@ export function DistributionComparisonSummary({
 }) {
   const comparison = buildDistributionComparison(scenarios);
   const comparisonById = new Map(comparison.map((row) => [row.id, row]));
-  const hasUnknownInterestRates = comparison.some((row) => row.hasUnknownInterestRates);
 
   return (
     <View style={styles.container}>
@@ -193,17 +190,6 @@ export function DistributionComparisonSummary({
         })}
       </View>
 
-      <View style={styles.explanation}>
-        <Text style={styles.explanationText}>
-          “Máximo hacia deudas” incluye cuotas requeridas, pagos liberados y dinero
-          reasignado después de completar la meta; no es una nueva cuota obligatoria.
-        </Text>
-        {hasUnknownInterestRates ? (
-          <Text style={styles.explanationWarning}>
-            * Hay tasas sin definir; la comparación de intereses es parcial.
-          </Text>
-        ) : null}
-      </View>
     </View>
   );
 }
@@ -314,21 +300,4 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.small
   },
-  explanation: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.md,
-    gap: spacing.xs,
-    padding: spacing.sm
-  },
-  explanationText: {
-    color: colors.textMuted,
-    fontSize: typography.small,
-    lineHeight: typography.lineHeight.small
-  },
-  explanationWarning: {
-    color: "#B45309",
-    fontSize: typography.small,
-    fontWeight: typography.weight.bold,
-    lineHeight: typography.lineHeight.small
-  }
 });

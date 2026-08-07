@@ -3,6 +3,7 @@ import type {
   ProjectionDebtInput,
   ProjectionGoalInput
 } from "./financialProjectionInput";
+import { allocateMonthlyGoalBudget } from "./goalAllocationPolicy";
 
 export type ProtectedMarginPreference =
   | { mode: "automatic" }
@@ -27,7 +28,7 @@ export type DistributionIssueCode =
   | "invalid_protected_margin"
   | "unknown_interest_rate"
   | "missing_debt_balance"
-  | "no_interest_bearing_debt"
+  | "no_known_debt_balance"
   | "missing_goal"
   | "missing_goal_target";
 
@@ -90,10 +91,10 @@ export type DistributionScenarioSet = {
 };
 
 const strategyLabels: Record<DistributionStrategyId, string> = {
-  current_reference: "Así estás hoy",
-  reduce_interest: "Reducir intereses",
-  accelerate_goal: "Acelerar una meta",
-  split_debt_goal: "Avanzar en deuda y meta"
+  current_reference: "Sin repartición",
+  reduce_interest: "Repartir solo a deudas",
+  accelerate_goal: "Repartir solo a metas",
+  split_debt_goal: "Repartir a deudas y metas"
 };
 
 function safeNonNegative(value: number | null | undefined) {
@@ -120,21 +121,6 @@ function getOperatingCosts(input: FinancialProjectionInput) {
   return mainExpenses === null || smallExpenses === null
     ? null
     : mainExpenses + smallExpenses;
-}
-
-function getActiveGoal(
-  goals: ProjectionGoalInput[],
-  selectedGoalId: string | null | undefined
-) {
-  const activeGoals = goals.filter(
-    (goal) => goal.status !== "completed" && goal.status !== "paused"
-  );
-
-  if (selectedGoalId) {
-    return activeGoals.find((goal) => goal.id === selectedGoalId) ?? null;
-  }
-
-  return activeGoals.find((goal) => goal.isPrimary) ?? activeGoals[0] ?? null;
 }
 
 function getGoalRemainingAmount(goal: ProjectionGoalInput) {
@@ -176,7 +162,7 @@ export function calculateProtectedMargin({
       issues: [
         {
           code: "invalid_protected_margin",
-          message: "El margen protegido personalizado debe ser un monto válido."
+          message: "El dinero libre personalizado debe ser un monto válido."
         }
       ],
       result: { amount: 0, mode: preference.mode, requestedAmount: null }
@@ -213,31 +199,6 @@ function getBaseDebtAllocations(
   });
 }
 
-function getManualGoalAllocations(goals: ProjectionGoalInput[]) {
-  return goals.reduce<GoalMonthlyAllocation[]>((allocations, goal) => {
-    if (goal.status === "completed" || goal.status === "paused") {
-      return allocations;
-    }
-
-    const manualAmount = safeNonNegative(goal.manualMonthlyContribution);
-
-    if (manualAmount === null || manualAmount <= 0) {
-      return allocations;
-    }
-
-    const remainingAmount = getGoalRemainingAmount(goal);
-    const amount = remainingAmount === null ? manualAmount : Math.min(manualAmount, remainingAmount);
-
-    allocations.push({
-      amount,
-      goalId: goal.id,
-      title: goal.title
-    });
-
-    return allocations;
-  }, []);
-}
-
 function sumDebtPayments(allocations: DebtMonthlyAllocation[]) {
   return allocations.reduce((total, allocation) => total + allocation.totalPayment, 0);
 }
@@ -258,9 +219,7 @@ function getDistributionPoolBreakdown(
     );
     return total + Math.max(0, plannedPayment - requiredPayment);
   }, 0);
-  const voluntaryGoalContributions = sumGoalContributions(
-    getManualGoalAllocations(input.goals)
-  );
+  const voluntaryGoalContributions = 0;
   const registeredFlexibleTotal = voluntaryDebtPayments + voluntaryGoalContributions;
 
   return {
@@ -276,57 +235,64 @@ function getReferenceScenario(
   input: FinancialProjectionInput,
   preference: ProtectedMarginPreference
 ): DistributionScenario {
-  const operatingCosts = getOperatingCosts(input);
-  const monthlyIncome = safeNonNegative(input.cashflow.monthlyIncome);
-  const debtAllocations = getBaseDebtAllocations(input.debts, "planned");
-  const goalAllocations = getManualGoalAllocations(input.goals);
+  const base = getStrategyBase(input, preference);
+  const plannedDebtAllocations = getBaseDebtAllocations(input.debts, "planned");
+  const debtAllocations = base.debtAllocations.map((allocation) => {
+    const plannedAllocation = plannedDebtAllocations.find(
+      (candidate) => candidate.debtId === allocation.debtId
+    );
+    const plannedPayment = Math.max(
+      allocation.basePayment,
+      plannedAllocation?.totalPayment ?? allocation.basePayment
+    );
 
-  if (operatingCosts === null || monthlyIncome === null) {
+    return {
+      ...allocation,
+      extraPayment: Math.max(0, plannedPayment - allocation.basePayment),
+      totalPayment: plannedPayment
+    };
+  });
+  const goalAllocations: GoalMonthlyAllocation[] = [];
+
+  if (base.status === "incomplete") {
     return {
       debtAllocations,
       debtShare: null,
       distributableAmount: 0,
       goalAllocations,
       id: "current_reference",
-      issues: [{ code: "missing_cashflow", message: "Faltan ingresos o gastos mensuales." }],
+      issues: base.issues,
       label: strategyLabels.current_reference,
       monthlyBalance: null,
-      protectedMargin: { amount: 0, mode: preference.mode, requestedAmount: null },
-      poolBreakdown: null,
+      protectedMargin: base.protectedMargin,
+      poolBreakdown: base.poolBreakdown,
       status: "incomplete",
-      surplusBeforeProtection: null,
+      surplusBeforeProtection: base.surplusBeforeProtection,
       unassignedAmount: 0
     };
   }
 
-  const monthlyBalance =
-    monthlyIncome -
-    operatingCosts -
-    sumDebtPayments(debtAllocations) -
+  const assignedAmount =
+    debtAllocations.reduce((total, allocation) => total + allocation.extraPayment, 0) +
     sumGoalContributions(goalAllocations);
-  const surplusBeforeProtection = Math.max(0, monthlyBalance);
-  const protectedMarginResult = calculateProtectedMargin({
-    preference,
-    surplusBeforeProtection
-  });
   const unassignedAmount = Math.max(
     0,
-    surplusBeforeProtection - protectedMarginResult.result.amount
+    base.distributableAmount - assignedAmount
   );
 
   return {
     debtAllocations,
     debtShare: null,
-    distributableAmount: unassignedAmount,
+    distributableAmount: base.distributableAmount,
     goalAllocations,
     id: "current_reference",
-    issues: protectedMarginResult.issues,
+    issues: base.issues,
     label: strategyLabels.current_reference,
-    monthlyBalance,
-    protectedMargin: protectedMarginResult.result,
-    poolBreakdown: null,
-    status: monthlyBalance <= 0 ? "no_surplus" : "ready",
-    surplusBeforeProtection,
+    monthlyBalance: getMonthlyBalance({ base, debtAllocations, goalAllocations }),
+    protectedMargin: base.protectedMargin,
+    poolBreakdown: base.poolBreakdown,
+    status: base.status,
+    surplusBeforeProtection: base.surplusBeforeProtection,
     unassignedAmount
   };
 }
@@ -424,7 +390,7 @@ function getDebtStrategyIssues(input: FinancialProjectionInput) {
       issues.push({
         code: "unknown_interest_rate",
         entityId: debt.id,
-        message: `Falta confirmar la tasa de ${debt.title}.`
+        message: `La tasa de ${debt.title} no está indicada; usamos 0% en esta simulación.`
       });
     }
 
@@ -440,7 +406,7 @@ function getDebtStrategyIssues(input: FinancialProjectionInput) {
   }, []);
 }
 
-function allocateExtraToInterestDebts({
+function allocateExtraToDebts({
   allocations,
   amount,
   debts
@@ -457,8 +423,6 @@ function allocateExtraToInterestDebts({
   const eligibleDebts = debts
     .filter(
       (debt) =>
-        debt.annualInterestRate !== null &&
-        debt.annualInterestRate > 0 &&
         debt.remainingAmount !== null &&
         debt.remainingAmount > 0
     )
@@ -496,28 +460,34 @@ function allocateExtraToInterestDebts({
   return { allocations: nextAllocations, unallocatedAmount: remainingAmount };
 }
 
-function allocateToGoal({
+function allocateToGoals({
   amount,
-  goal
+  goals,
+  referenceDate
 }: {
   amount: number;
-  goal: ProjectionGoalInput;
+  goals: ProjectionGoalInput[];
+  referenceDate: string;
 }) {
-  const remainingGoalAmount = getGoalRemainingAmount(goal);
-
-  if (remainingGoalAmount === null) {
-    return { allocation: null, unallocatedAmount: amount };
-  }
-
-  const allocatedAmount = Math.min(Math.max(0, amount), remainingGoalAmount);
+  const result = allocateMonthlyGoalBudget({
+    goals: goals
+      .filter((goal) => goal.targetAmount !== null)
+      .map((goal) => ({
+        currentAmount: goal.currentAmount,
+        goalId: goal.id,
+        isPrimary: goal.isPrimary,
+        status: goal.status,
+        targetAmount: goal.targetAmount,
+        targetMonth: goal.targetMonth,
+        title: goal.title
+      })),
+    monthlyBudget: amount,
+    referenceDate
+  });
 
   return {
-    allocation: {
-      amount: allocatedAmount,
-      goalId: goal.id,
-      title: goal.title
-    } satisfies GoalMonthlyAllocation,
-    unallocatedAmount: Math.max(0, amount - allocatedAmount)
+    allocations: result.allocations satisfies GoalMonthlyAllocation[],
+    unallocatedAmount: result.unassignedAmount
   };
 }
 
@@ -578,26 +548,26 @@ function getReduceInterestScenario(
   }
 
   const debtIssues = getDebtStrategyIssues(input);
-  const hasInterestBearingDebt = input.debts.some(
-    (debt) => (debt.annualInterestRate ?? 0) > 0 && (debt.remainingAmount ?? 0) > 0
+  const hasKnownDebtBalance = input.debts.some(
+    (debt) => (debt.remainingAmount ?? 0) > 0
   );
 
-  if (!hasInterestBearingDebt) {
+  if (!hasKnownDebtBalance) {
     return {
       ...scenario,
       issues: [
         ...base.issues,
         ...debtIssues,
         {
-          code: "no_interest_bearing_debt",
-          message: "No hay una deuda con tasa conocida mayor que cero para priorizar."
+          code: "no_known_debt_balance",
+          message: "Necesitamos al menos un saldo pendiente para calcular pagos adicionales."
         }
       ],
       status: "not_applicable"
     };
   }
 
-  const allocated = allocateExtraToInterestDebts({
+  const allocated = allocateExtraToDebts({
     allocations: base.debtAllocations,
     amount: base.distributableAmount,
     debts: input.debts
@@ -618,12 +588,10 @@ function getReduceInterestScenario(
 
 function getAccelerateGoalScenario({
   base,
-  input,
-  selectedGoalId
+  input
 }: {
   base: StrategyBase;
   input: FinancialProjectionInput;
-  selectedGoalId?: string | null;
 }): DistributionScenario {
   const scenario = createBaseScenario("accelerate_goal", base);
 
@@ -631,32 +599,40 @@ function getAccelerateGoalScenario({
     return scenario;
   }
 
-  const goal = getActiveGoal(input.goals, selectedGoalId);
+  const activeGoals = input.goals.filter(
+    (goal) => goal.status !== "completed" && goal.status !== "paused"
+  );
 
-  if (!goal) {
+  if (activeGoals.length === 0) {
     return {
       ...scenario,
-      issues: [{ code: "missing_goal", message: "Elige una meta activa para acelerarla." }],
+      issues: [{ code: "missing_goal", message: "Crea o activa una meta para proyectarla." }],
       status: "not_applicable"
     };
   }
 
-  if (getGoalRemainingAmount(goal) === null) {
+  const goalWithoutTarget = activeGoals.find((goal) => getGoalRemainingAmount(goal) === null);
+
+  if (goalWithoutTarget) {
     return {
       ...scenario,
       issues: [
         {
           code: "missing_goal_target",
-          entityId: goal.id,
-          message: `Falta definir el monto objetivo de ${goal.title}.`
+          entityId: goalWithoutTarget.id,
+          message: `Falta definir el monto objetivo de ${goalWithoutTarget.title}.`
         }
       ],
       status: "incomplete"
     };
   }
 
-  const goalResult = allocateToGoal({ amount: base.distributableAmount, goal });
-  const goalAllocations = goalResult.allocation ? [goalResult.allocation] : [];
+  const goalResult = allocateToGoals({
+    amount: base.distributableAmount,
+    goals: activeGoals,
+    referenceDate: input.asOfDate
+  });
+  const goalAllocations = goalResult.allocations;
 
   return {
     ...scenario,
@@ -673,13 +649,11 @@ function getAccelerateGoalScenario({
 function getSplitScenario({
   base,
   debtShare,
-  input,
-  selectedGoalId
+  input
 }: {
   base: StrategyBase;
   debtShare: number;
   input: FinancialProjectionInput;
-  selectedGoalId?: string | null;
 }): DistributionScenario {
   const normalizedDebtShare = normalizeSplitDebtShare(debtShare);
   const scenario = {
@@ -691,30 +665,33 @@ function getSplitScenario({
     return scenario;
   }
 
-  const goal = getActiveGoal(input.goals, selectedGoalId);
-  const hasEligibleDebt = input.debts.some(
-    (debt) => (debt.annualInterestRate ?? 0) > 0 && (debt.remainingAmount ?? 0) > 0
+  const activeGoals = input.goals.filter(
+    (goal) => goal.status !== "completed" && goal.status !== "paused"
   );
-  const goalRemainingAmount = goal ? getGoalRemainingAmount(goal) : null;
+  const hasEligibleDebt = input.debts.some(
+    (debt) => (debt.remainingAmount ?? 0) > 0
+  );
 
-  if (!goal) {
+  if (activeGoals.length === 0) {
     return {
       ...scenario,
       issues: [
-        { code: "missing_goal", message: "Elige una meta activa para repartir el dinero." }
+        { code: "missing_goal", message: "Crea o activa una meta para repartir el dinero." }
       ],
       status: "not_applicable"
     };
   }
 
-  if (goalRemainingAmount === null) {
+  const goalWithoutTarget = activeGoals.find((goal) => getGoalRemainingAmount(goal) === null);
+
+  if (goalWithoutTarget) {
     return {
       ...scenario,
       issues: [
         {
           code: "missing_goal_target",
-          entityId: goal.id,
-          message: `Falta definir el monto objetivo de ${goal.title}.`
+          entityId: goalWithoutTarget.id,
+          message: `Falta definir el monto objetivo de ${goalWithoutTarget.title}.`
         }
       ],
       status: "incomplete"
@@ -726,8 +703,8 @@ function getSplitScenario({
       ...scenario,
       issues: [
         {
-          code: "no_interest_bearing_debt",
-          message: "No hay una deuda con tasa conocida mayor que cero para repartir."
+          code: "no_known_debt_balance",
+          message: "Necesitamos al menos un saldo pendiente para repartir dinero hacia deudas."
         }
       ],
       status: "not_applicable"
@@ -736,17 +713,19 @@ function getSplitScenario({
 
   const debtBudget = base.distributableAmount * normalizedDebtShare;
   const goalBudget = base.distributableAmount - debtBudget;
-  let debtResult = allocateExtraToInterestDebts({
+  let debtResult = allocateExtraToDebts({
     allocations: base.debtAllocations,
     amount: debtBudget,
     debts: input.debts
   });
-  let goalResult = goal
-    ? allocateToGoal({ amount: goalBudget + debtResult.unallocatedAmount, goal })
-    : { allocation: null, unallocatedAmount: goalBudget + debtResult.unallocatedAmount };
+  let goalResult = allocateToGoals({
+    amount: goalBudget + debtResult.unallocatedAmount,
+    goals: activeGoals,
+    referenceDate: input.asOfDate
+  });
 
   if (goalResult.unallocatedAmount > 0 && hasEligibleDebt) {
-    debtResult = allocateExtraToInterestDebts({
+    debtResult = allocateExtraToDebts({
       allocations: debtResult.allocations,
       amount: goalResult.unallocatedAmount,
       debts: input.debts
@@ -754,7 +733,7 @@ function getSplitScenario({
     goalResult = { ...goalResult, unallocatedAmount: debtResult.unallocatedAmount };
   }
 
-  const goalAllocations = goalResult.allocation ? [goalResult.allocation] : [];
+  const goalAllocations = goalResult.allocations;
 
   return {
     ...scenario,
@@ -773,20 +752,18 @@ function getSplitScenario({
 export function buildDistributionScenarios({
   input,
   protectedMarginPreference = { mode: "automatic" },
-  selectedGoalId,
   splitDebtShare = 0.5
 }: {
   input: FinancialProjectionInput;
   protectedMarginPreference?: ProtectedMarginPreference;
-  selectedGoalId?: string | null;
   splitDebtShare?: number;
 }): DistributionScenarioSet {
   const base = getStrategyBase(input, protectedMarginPreference);
 
   return {
-    accelerateGoal: getAccelerateGoalScenario({ base, input, selectedGoalId }),
+    accelerateGoal: getAccelerateGoalScenario({ base, input }),
     currentReference: getReferenceScenario(input, protectedMarginPreference),
     reduceInterest: getReduceInterestScenario(input, base),
-    splitDebtGoal: getSplitScenario({ base, debtShare: splitDebtShare, input, selectedGoalId })
+    splitDebtGoal: getSplitScenario({ base, debtShare: splitDebtShare, input })
   };
 }

@@ -32,6 +32,7 @@ export type DistributionScenarioPresentation = {
   extraDebtPayment: number;
   goalContribution: number;
   goalProjection: GoalDistributionProjection | null;
+  goalProjections: GoalDistributionProjection[];
   id: DistributionStrategyId;
   issueCodes: DistributionScenario["issues"][number]["code"][];
   issueMessages: string[];
@@ -49,24 +50,24 @@ const scenarioCopy: Record<
   { badge: string; description: string }
 > = {
   current_reference: {
-    badge: "Referencia",
+    badge: "Sin repartir",
     description:
-      "Mantiene las cuotas y aportes que ya registraste. No decide un destino nuevo para el dinero libre."
+      "Proyecta las cuotas de deuda que registraste. Los aportes hechos a tus metas actualizan su avance, pero no se repiten como aportes mensuales."
   },
   reduce_interest: {
-    badge: "Deuda",
+    badge: "Solo deudas",
     description:
-      "Mantiene las cuotas requeridas y dirige el dinero disponible a las deudas con mayor tasa conocida."
+      "Mantiene las cuotas requeridas y usa el dinero disponible para adelantar el pago de tus deudas."
   },
   accelerate_goal: {
-    badge: "Meta",
+    badge: "Solo metas",
     description:
-      "Mantiene las cuotas requeridas y dirige el dinero disponible a una meta activa, sin asumir un préstamo nuevo."
+      "Mantiene las cuotas requeridas y reparte el dinero disponible según el saldo, la fecha y la prioridad de cada meta."
   },
   split_debt_goal: {
-    badge: "Reparto ajustable",
+    badge: "Deudas y metas",
     description:
-      "Mantiene las cuotas requeridas y reparte el dinero disponible entre una deuda costosa y una meta activa."
+      "Mantiene las cuotas requeridas y reparte el dinero disponible entre deudas y todas tus metas activas."
   }
 };
 
@@ -105,16 +106,14 @@ function getGoalByAllocation(
 }
 
 function getGoalProjection({
+  goal,
   input,
-  scenario,
   timeline
 }: {
+  goal: ProjectionGoalInput | null;
   input: FinancialProjectionInput;
-  scenario: DistributionScenario;
   timeline: FinancialScenarioTimeline;
 }): GoalDistributionProjection | null {
-  const goal = getGoalByAllocation(input, scenario);
-
   if (!goal || goal.targetAmount === null || timeline.months.length === 0) {
     return null;
   }
@@ -130,8 +129,9 @@ function getGoalProjection({
     monthsUntilTarget !== null && monthsUntilTarget <= 0
       ? goal.currentAmount
       : contributionsThroughTarget.at(-1)?.endingAmount ?? goal.currentAmount;
-  const completionMonth = timeline.goalCompletionMonth
-    ? timeline.months.find((month) => month.month === timeline.goalCompletionMonth)
+  const goalCompletionMonth = timeline.goalCompletionMonths[goal.id] ?? null;
+  const completionMonth = goalCompletionMonth
+    ? timeline.months.find((month) => month.month === goalCompletionMonth)
     : null;
 
   return {
@@ -155,21 +155,40 @@ export function presentDistributionScenario({
   scenario: DistributionScenario;
 }): DistributionScenarioPresentation {
   const copy = scenarioCopy[scenario.id];
+  const visibleIssues = scenario.issues.filter(
+    (issue) => issue.code !== "unknown_interest_rate"
+  );
   const timeline = buildFinancialScenarioTimeline({ input, scenario });
   const debtSharePercent =
     scenario.debtShare === null ? null : Math.round(scenario.debtShare * 100);
+  const badge =
+    scenario.id === "split_debt_goal" && debtSharePercent !== null
+      ? `${debtSharePercent}% deudas · ${100 - debtSharePercent}% metas`
+      : copy.badge;
+  const goalProjections = timeline.trackedGoals
+    .map((trackedGoal) =>
+      getGoalProjection({
+        goal: input.goals.find((goal) => goal.id === trackedGoal.goalId) ?? null,
+        input,
+        timeline
+      })
+    )
+    .filter((projection): projection is GoalDistributionProjection => projection !== null);
+  const primaryGoal = getGoalByAllocation(input, scenario);
 
   return {
-    badge: copy.badge,
+    badge,
     baseDebtPayments: sumBaseDebtPayments(scenario),
     description: copy.description,
     debtSharePercent,
     extraDebtPayment: sumExtraDebtPayments(scenario),
     goalContribution: sumGoalContributions(scenario),
-    goalProjection: getGoalProjection({ input, scenario, timeline }),
+    goalProjection:
+      getGoalProjection({ goal: primaryGoal, input, timeline }) ?? goalProjections[0] ?? null,
+    goalProjections,
     id: scenario.id,
-    issueCodes: scenario.issues.map((issue) => issue.code),
-    issueMessages: scenario.issues.map((issue) => issue.message),
+    issueCodes: visibleIssues.map((issue) => issue.code),
+    issueMessages: visibleIssues.map((issue) => issue.message),
     label: scenario.label,
     monthlyBalance: scenario.monthlyBalance,
     protectedMargin: scenario.protectedMargin.amount,

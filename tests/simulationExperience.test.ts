@@ -81,4 +81,32 @@ describe("buildSimulationExperience", () => {
     expect(experience.planningMonthlyMargin).toBeNull();
     expect(experience.recommendedMonthlyContribution).toBe(0);
   });
+
+  it("uses the selected monthly payment range as cautious simulation bounds", () => {
+    const experience = buildSimulationExperience({
+      exactValues: exactCashflow,
+      onboarding: makeOnboarding({
+        hasDebts: true,
+        debtMonthlyPaymentRange: "$250.000 \u2013 $500.000"
+      })
+    });
+
+    expect(experience.debtDataSource).toBe("reported");
+    expect(experience.debtPaymentRange).toEqual({ maximum: 500_000, minimum: 250_000 });
+    expect(experience.monthlyMarginRange).toEqual({ maximum: 1_150_000, minimum: 900_000 });
+    expect(experience.planningMonthlyMargin).toBe(900_000);
+  });
+
+  it("keeps an exact monthly debt payment exact in simulation", () => {
+    const experience = buildSimulationExperience({
+      exactValues: { ...exactCashflow, monthlyDebtPayments: 650_000 },
+      onboarding: makeOnboarding({
+        hasDebts: true,
+        debtMonthlyPaymentRange: "$500.000 \u2013 $1.000.000"
+      })
+    });
+
+    expect(experience.debtPaymentRange).toEqual({ maximum: 650_000, minimum: 650_000 });
+    expect(experience.monthlyMarginRange).toEqual({ maximum: 750_000, minimum: 750_000 });
+  });
 });

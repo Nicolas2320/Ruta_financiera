@@ -8,6 +8,7 @@ import type {
 import { getOnboardingGoals } from "../types/financial";
 import { isDebtPaid } from "./debtPayments";
 import { calculateFinancialSnapshot, type SnapshotSource } from "./financialCalculations";
+import { getGoalAmountRangeEstimate } from "./financialRanges";
 import { getMonthsUntilTargetMonth } from "./monthYear";
 
 export type ProjectionDataOwner = "income" | "expenses" | "debts" | "goals" | "planning";
@@ -57,11 +58,11 @@ export type ProjectionDebtInput = {
 export type ProjectionGoalInput = {
   id: string;
   title: string;
+  amountRange: string | null;
   targetAmount: number | null;
+  targetAmountSource: "exact" | "range" | "missing";
   currentAmount: number;
-  manualMonthlyContribution: number | null;
   targetMonth: string | null;
-  priority: string | null;
   isPrimary: boolean;
   status: FinancialGoal["status"];
 };
@@ -109,14 +110,27 @@ function getRequiredMonthlyPayment(
 }
 
 function toProjectionGoal(goal: FinancialGoal): ProjectionGoalInput {
+  const exactTargetAmount =
+    typeof goal.targetAmount === "number" &&
+    Number.isFinite(goal.targetAmount) &&
+    goal.targetAmount > 0
+      ? goal.targetAmount
+      : null;
+  const rangeTargetAmount = getGoalAmountRangeEstimate(goal.amountRange).midpoint;
+
   return {
     id: goal.id,
     title: goal.title,
-    targetAmount: goal.targetAmount ?? null,
+    amountRange: goal.amountRange ?? null,
+    targetAmount: exactTargetAmount ?? rangeTargetAmount,
+    targetAmountSource:
+      exactTargetAmount !== null
+        ? "exact"
+        : rangeTargetAmount !== null
+          ? "range"
+          : "missing",
     currentAmount: goal.currentAmount ?? 0,
-    manualMonthlyContribution: goal.manualMonthlyContribution ?? null,
     targetMonth: goal.targetMonth ?? null,
-    priority: goal.priority,
     isPrimary: goal.isPrimary === true,
     status: goal.status
   };
@@ -248,7 +262,9 @@ export function buildFinancialProjectionInput({
   );
   const monthlyIncome = snapshot.cashflow.monthlyIncome;
   const baselineMonthlyExpenses = snapshot.cashflow.monthlyExpenses;
-  const smallMonthlyExpenses = snapshot.values.smallExpenses;
+  const smallMonthlyExpenses = snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
+    ? 0
+    : snapshot.values.smallExpenses;
   const totalMonthlyExpenses =
     baselineMonthlyExpenses !== null && smallMonthlyExpenses !== null
       ? baselineMonthlyExpenses + smallMonthlyExpenses + plannedDebtPaymentsTotal
@@ -261,7 +277,9 @@ export function buildFinancialProjectionInput({
   } else {
     issues.push({
       code: "missing_expenses",
-      message: "Registra tus gastos principales al mes para proyectar escenarios.",
+      message: snapshot.cashflow.monthlyExpensesIncludesSmallExpenses
+        ? "Registra tus gastos mensuales para proyectar escenarios."
+        : "Registra tus gastos principales al mes para proyectar escenarios.",
       owner: "expenses",
       ownerRoute: "/improve-plan",
       severity: "blocking"

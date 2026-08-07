@@ -146,6 +146,28 @@ describe("calculateFinancialSnapshot", () => {
     expect(snapshot.priority.key).toBe("organize_cashflow");
   });
 
+  it("does not add small expenses twice when the monthly total already includes them", () => {
+    const snapshot = calculateFinancialSnapshot({
+      onboarding: makeOnboarding({
+        monthlyExpensesIncludesSmallExpenses: true,
+        debtSituation: "No tengo deudas",
+        debtPaymentShare: "No pago deudas"
+      }),
+      exactValues: {
+        monthlyIncome: 4_000_000,
+        monthlyExpenses: 2_000_000,
+        smallExpenses: 300_000
+      }
+    });
+
+    expect(snapshot.cashflow).toMatchObject({
+      monthlyExpensesIncludesSmallExpenses: true,
+      totalMonthlyOutflow: 2_000_000,
+      monthlyMargin: 2_000_000
+    });
+    expect(snapshot.values.smallExpenses).toBe(300_000);
+  });
+
   it("prioritizes a high registered debt before a cashflow deficit", () => {
     const snapshot = calculateFinancialSnapshot({
       onboarding: makeOnboarding({
@@ -292,5 +314,31 @@ describe("calculateFinancialSnapshot", () => {
       level: "high"
     });
     expect(snapshot.priority.key).toBe("debt_pressure");
+  });
+
+  it("subtracts the exact onboarding debt payment from the monthly margin", () => {
+    const snapshot = calculateFinancialSnapshot({
+      onboarding: makeOnboarding({
+        hasDebts: true,
+        debtMonthlyPaymentRange: "$500.000 \u2013 $1.000.000",
+        monthlyExpensesIncludesSmallExpenses: true
+      }),
+      exactValues: {
+        monthlyDebtPayments: 650_000,
+        monthlyExpenses: 2_000_000,
+        monthlyIncome: 4_000_000
+      }
+    });
+
+    expect(snapshot.debt).toMatchObject({
+      source: "reported",
+      monthlyPaymentTotal: 650_000,
+      reportedPaymentKind: "exact",
+      isPaymentEstimated: false
+    });
+    expect(snapshot.cashflow).toMatchObject({
+      totalMonthlyOutflow: 2_650_000,
+      monthlyMargin: 1_350_000
+    });
   });
 });
