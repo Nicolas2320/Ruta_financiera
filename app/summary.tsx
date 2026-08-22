@@ -254,15 +254,14 @@ export default function SummaryScreen() {
               </View>
 
               <View style={styles.heroCopy}>
-                {isEditMode ? <Text style={styles.kicker}>Perfil financiero</Text> : null}
                 <Text style={styles.title}>
                   {isEditMode ? "Editar tus respuestas" : "Resumen antes del diagnóstico"}
                 </Text>
-                <Text style={styles.subtitle}>
-                  {isEditMode
-                    ? "Actualiza el contexto que usamos para adaptar tus recomendaciones."
-                    : "Confirma la información que usaremos para crear tu primera orientación financiera."}
-                </Text>
+                {!isEditMode ? (
+                  <Text style={styles.subtitle}>
+                    Confirma la información que usaremos para crear tu primera orientación financiera.
+                  </Text>
+                ) : null}
               </View>
             </View>
 
@@ -270,20 +269,20 @@ export default function SummaryScreen() {
               <ShieldCheck color={colors.support} size={18} strokeWidth={2.4} />
               <Text style={styles.supportText}>
                 {isEditMode
-                  ? "Estos cambios actualizan tu perfil y recalculan las pantallas que dependen de tus respuestas."
+                  ? "Al guardar, tu diagnóstico, simulación y plan mensual pueden recalcularse con las respuestas nuevas."
                   : "Puedes ajustar cualquier respuesta antes de continuar. No necesitas que todo sea exacto."}
               </Text>
             </View>
           </View>
 
-          <View style={styles.noticeCard}>
-            <ShieldCheck color={colors.primary} size={20} strokeWidth={2.4} />
-            <Text style={styles.noticeText}>
-              {isEditMode
-                ? "Al cambiar estas respuestas, tu diagnóstico, simulación y plan mensual pueden recalcularse."
-                : "Con esta información generaremos un diagnóstico educativo. No es una asesoría financiera ni una promesa de resultados."}
-            </Text>
-          </View>
+          {!isEditMode ? (
+            <View style={styles.noticeCard}>
+              <ShieldCheck color={colors.primary} size={20} strokeWidth={2.4} />
+              <Text style={styles.noticeText}>
+                Con esta información generaremos un diagnóstico educativo. No es una asesoría financiera ni una promesa de resultados.
+              </Text>
+            </View>
+          ) : null}
 
           <SummarySection
             description="El nombre que usamos para personalizar tu experiencia."

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
-  AlertTriangle,
   BookOpen,
   ChevronRight,
   ClipboardList,
@@ -81,10 +80,7 @@ export default function SettingsScreen() {
             <View style={styles.iconWrap}>
               <Settings color={colors.primary} size={28} strokeWidth={2.4} />
             </View>
-            <Text style={styles.title}>Configuracion</Text>
-            <Text style={styles.subtitle}>
-              Gestiona la sesión de prueba y revisa el estado de sincronización.
-            </Text>
+            <Text style={styles.title}>Configuración</Text>
           </View>
 
           <View style={styles.card}>
@@ -160,8 +156,9 @@ export default function SettingsScreen() {
           <Pressable
             accessibilityLabel="Mejorar mi plan financiero"
             accessibilityRole="button"
-            onPress={() => router.push("/improve-plan")}
-            style={({ pressed }) => [styles.settingsLinkCard, pressed && styles.pressed]}
+            accessibilityState={{ disabled: true }}
+            disabled
+            style={[styles.settingsLinkCard, styles.settingsLinkCardDisabled]}
           >
             <View style={styles.settingsLinkIcon}>
               <LineChart color={colors.primary} size={24} strokeWidth={2.4} />
@@ -172,7 +169,7 @@ export default function SettingsScreen() {
                 Edita ingreso, gastos mensuales y ahorro general. El detalle de gastos pequeños es opcional.
               </Text>
             </View>
-            <ChevronRight color={colors.primary} size={22} strokeWidth={2.5} />
+            <ChevronRight color={colors.textSubtle} size={22} strokeWidth={2.5} />
           </Pressable>
 
           <Pressable
@@ -193,19 +190,7 @@ export default function SettingsScreen() {
             <ChevronRight color={colors.primary} size={22} strokeWidth={2.5} />
           </Pressable>
 
-          <View style={[styles.card, styles.dataCard]}>
-            <View style={styles.dataHeader}>
-              <View style={styles.warningIcon}>
-                <AlertTriangle color="#B45309" size={22} strokeWidth={2.4} />
-              </View>
-              <View style={styles.settingsLinkBody}>
-                <Text style={styles.settingsLinkTitle}>Datos financieros</Text>
-                <Text style={styles.settingsLinkText}>
-                  Borra respuestas, metas, montos exactos y avances del plan. Tu cuenta no se elimina.
-                </Text>
-              </View>
-            </View>
-
+          <View style={styles.resetSection}>
             {confirmingReset ? (
               <View style={styles.resetConfirmBox}>
                 <Text style={styles.resetConfirmTitle}>Confirmar borrado</Text>
@@ -240,23 +225,23 @@ export default function SettingsScreen() {
                     ]}
                   >
                     <Text style={styles.resetDangerText}>
-                      {isResetting ? "Borrando..." : "Borrar datos financieros"}
+                      {isResetting ? "Borrando..." : "Borrar mis datos"}
                     </Text>
                   </Pressable>
                 </View>
               </View>
             ) : (
               <Pressable
-                accessibilityLabel="Borrar datos financieros"
+                accessibilityLabel="Borrar mis datos financieros"
                 accessibilityRole="button"
                 onPress={() => {
                   setConfirmingReset(true);
                   setResetFeedback(null);
                 }}
-                style={({ pressed }) => [styles.resetOutlineButton, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.resetButton, pressed && styles.pressed]}
               >
-                <Trash2 color="#B42318" size={19} strokeWidth={2.4} />
-                <Text style={styles.resetOutlineText}>Borrar datos financieros</Text>
+                <Trash2 color={colors.danger} size={20} strokeWidth={2.4} />
+                <Text style={styles.resetButtonText}>Borrar mis datos</Text>
               </Pressable>
             )}
 
@@ -346,11 +331,6 @@ const styles = StyleSheet.create({
     fontSize: typography.title,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.title
-  },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: typography.subtitle,
-    lineHeight: typography.lineHeight.subtitle
   },
   accountRow: {
     alignItems: "center",
@@ -473,6 +453,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.lg
   },
+  settingsLinkCardDisabled: {
+    opacity: 0.5
+  },
   settingsLinkIcon: {
     alignItems: "center",
     backgroundColor: colors.primarySoft,
@@ -498,40 +481,27 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.medium,
     lineHeight: typography.lineHeight.caption
   },
-  dataCard: {
-    borderColor: "#FED7AA",
-    gap: spacing.md
+  resetSection: {
+    gap: spacing.sm
   },
-  dataHeader: {
+  resetButton: {
+    ...shadows.card,
     alignItems: "center",
-    flexDirection: "row",
-    gap: spacing.md
-  },
-  warningIcon: {
-    alignItems: "center",
-    backgroundColor: colors.warningSoft,
-    borderRadius: radius.pill,
-    height: 48,
-    justifyContent: "center",
-    width: 48
-  },
-  resetOutlineButton: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: "#FFF7ED",
-    borderColor: "#FED7AA",
+    backgroundColor: colors.dangerSoft,
+    borderColor: colors.dangerBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: "row",
     gap: spacing.sm,
-    minHeight: 46,
-    paddingHorizontal: spacing.md
+    justifyContent: "center",
+    minHeight: 52,
+    paddingHorizontal: spacing.lg
   },
-  resetOutlineText: {
-    color: "#B42318",
-    fontSize: typography.caption,
+  resetButtonText: {
+    color: colors.danger,
+    fontSize: typography.button,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
+    lineHeight: typography.lineHeight.button
   },
   resetConfirmBox: {
     backgroundColor: "#FFF7ED",

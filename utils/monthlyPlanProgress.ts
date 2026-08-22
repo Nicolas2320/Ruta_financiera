@@ -70,18 +70,45 @@ function getTrackedProgressRecord({
   };
 }
 
-function getDecisionProgressRecord(selectedAt: string): ActionProgressRecord {
+function getSimulationStrategyLabel(preference: SimulationPlanPreference) {
+  if (preference.strategy === "diagnosis_recommended") {
+    return "Recomendación del diagnóstico";
+  }
+
+  if (preference.strategy === "prioritize_goal" || preference.strategy === "accelerate_goal") {
+    return "Repartir solo a metas";
+  }
+
+  if (preference.strategy === "current_reference") {
+    return "Sin repartición";
+  }
+
+  if (preference.strategy === "reduce_interest") {
+    return "Repartir solo a deudas";
+  }
+
+  if (preference.debtShare !== null) {
+    const debtPercentage = Math.round(preference.debtShare * 100);
+    return `Repartir ${debtPercentage}% a deudas y ${100 - debtPercentage}% a metas`;
+  }
+
+  return "Repartir a deudas y metas";
+}
+
+function getDecisionProgressRecord(
+  preference: SimulationPlanPreference
+): ActionProgressRecord {
   return {
     status: "completed",
     evidence: {
       type: "decision",
       label: "Estrategia guardada",
       amount: null,
-      detail: "Escenario guardado este mes"
+      detail: getSimulationStrategyLabel(preference)
     },
-    startedAt: selectedAt,
-    completedAt: selectedAt,
-    updatedAt: selectedAt
+    startedAt: preference.selectedAt,
+    completedAt: preference.selectedAt,
+    updatedAt: preference.selectedAt
   };
 }
 
@@ -224,7 +251,7 @@ export function getEffectiveMonthlyPlanProgress({
     simulationPlanPreference?.selectedAt.startsWith(periodKey)
   ) {
     effectiveCompletedActions[getMonthlyActionProgressId(planProgressKey, scenarioAction.id)] =
-      getDecisionProgressRecord(simulationPlanPreference.selectedAt);
+      getDecisionProgressRecord(simulationPlanPreference);
   }
 
   const completedCount = actions.filter((action) =>

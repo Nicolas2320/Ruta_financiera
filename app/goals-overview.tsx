@@ -8,6 +8,7 @@ import {
   Calendar,
   Car,
   ChartColumnIncreasing,
+  ChevronRight,
   ChevronDown,
   ChevronUp,
   CheckCircle2,
@@ -57,7 +58,7 @@ import {
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
 import { getGoalBudgetPresentation } from "../utils/goalBudgetPresentation";
 import { formatTargetMonth } from "../utils/monthYear";
-import { applyGoalContribution, getGoalContributionPeriodSummary } from "../utils/goalContributions";
+import { applyGoalContribution } from "../utils/goalContributions";
 import {
   formatGoalContribution,
   getAllocationProgress,
@@ -77,7 +78,6 @@ import {
   getMonthlyActionProgressId,
   getMonthlyPlanData,
   getMonthlyPlanMetrics,
-  getMonthlyPlanPeriodKey,
   getMonthlyPlanPriorityKey,
   getMonthlyPlanProgressKey,
   type MonthlyGoalContext
@@ -1136,14 +1136,16 @@ function GoalCard({
           </Pressable>
         ) : null}
         {allocation.goal.status !== "completed" ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={onComplete}
-            style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
-          >
-            <CheckCircle2 color={colors.primary} size={15} strokeWidth={2.4} />
-            <Text style={styles.smallActionText}>Completar</Text>
-          </Pressable>
+          allocation.remainingAmount !== null ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onComplete}
+              style={({ pressed }) => [styles.smallAction, pressed && styles.pressed]}
+            >
+              <CheckCircle2 color={colors.primary} size={15} strokeWidth={2.4} />
+              <Text style={styles.smallActionText}>Completar</Text>
+            </Pressable>
+          ) : null
         ) : (
           <Pressable
             accessibilityRole="button"
@@ -1424,16 +1426,6 @@ export default function GoalsOverviewScreen() {
   const monthlyGoalContributionProgressId = monthlyGoalContributionAction
     ? getMonthlyActionProgressId(monthlyPlanProgressKey, monthlyGoalContributionAction.id)
     : null;
-  const periodKey = getMonthlyPlanPeriodKey();
-  const totalGoalContributionsThisMonth = goalPlan.allocations.reduce(
-    (total, allocation) =>
-      total +
-      Math.min(
-        getGoalContributionPeriodSummary(allocation.goal, periodKey).amount,
-        Math.max(allocation.currentAmount, 0)
-      ),
-    0
-  );
   const isCompletedAllocation = (allocation: GoalAllocation) =>
     allocation.viability === "completed" || allocation.goal.status === "completed";
   const isPausedAllocation = (allocation: GoalAllocation) =>
@@ -1457,6 +1449,9 @@ export default function GoalsOverviewScreen() {
   );
   const investedInGoalsLabel =
     totalInvestedInGoals > 0 ? formatCOP(totalInvestedInGoals) : "$0";
+  const primaryGoalTitle =
+    goalPlan.allocations.find((allocation) => allocation.goal.isPrimary)?.goal.title ??
+    "Sin meta principal";
   const monthlyMargin = metrics.snapshot.cashflow.monthlyMargin;
   const currentSavingsForEmergency = metrics.snapshot.values.currentSavings;
   const goalBudgetPresentation = getGoalBudgetPresentation({
@@ -1593,18 +1588,33 @@ export default function GoalsOverviewScreen() {
     });
   };
 
-  const completeGoal = (goalId: string) => {
-    updateGoal(goalId, {
-      status: "completed"
-    });
+  const completeGoal = (allocation: GoalAllocation) => {
+    if (allocation.remainingAmount === null) {
+      return;
+    }
+
+    if (allocation.remainingAmount > 0) {
+      registerGoalContribution(allocation.goal.id, allocation.remainingAmount);
+      return;
+    }
+
+    updateGoal(allocation.goal.id, { status: "completed" });
   };
 
   const confirmCompleteGoal = (allocation: GoalAllocation) => {
+    if (allocation.remainingAmount === null) {
+      return;
+    }
+
+    const remainingAmount = Math.max(0, allocation.remainingAmount);
+
     confirmGoalAction({
       confirmLabel: "Completar",
       message:
-        "La meta se marcará como completada, dejará de recibir aporte mensual y podrás reactivarla.",
-      onConfirm: () => completeGoal(allocation.goal.id),
+        remainingAmount > 0
+          ? `Se registrará un aporte de ${formatCOP(remainingAmount)} para llevar la meta al 100%. El monto quedará guardado en su historial de aportes.`
+          : "La meta ya alcanzó el monto objetivo y se marcará como completada.",
+      onConfirm: () => completeGoal(allocation),
       title: `Completar ${allocation.goal.title}`
     });
   };
@@ -1661,10 +1671,10 @@ export default function GoalsOverviewScreen() {
               }
             />
             <StatCard
-              icon={<Flag color={colors.support} size={20} strokeWidth={2.4} />}
-              label="Metas activas"
-              tone="support"
-              value={activeGoalsCount.toString()}
+              icon={<Flag color={colors.primary} size={20} strokeWidth={2.4} />}
+              label="Meta principal"
+              tone="primary"
+              value={primaryGoalTitle}
             />
             <StatCard
               icon={<CheckCircle2 color={colors.support} size={20} strokeWidth={2.4} />}
@@ -1685,10 +1695,10 @@ export default function GoalsOverviewScreen() {
               value={investedInGoalsLabel}
             />
             <StatCard
-              icon={<PiggyBank color={colors.support} size={20} strokeWidth={2.4} />}
-              label="Registrado este mes"
+              icon={<Flag color={colors.support} size={20} strokeWidth={2.4} />}
+              label="Metas activas"
               tone="support"
-              value={totalGoalContributionsThisMonth > 0 ? formatCOP(totalGoalContributionsThisMonth) : "$0"}
+              value={activeGoalsCount.toString()}
             />
           </View>
 
@@ -1721,18 +1731,34 @@ export default function GoalsOverviewScreen() {
             <View
               style={[
                 styles.planReferenceCard,
+                isPhone && styles.planReferenceCardPhone,
                 !planPreference.isApplicable && styles.planReferenceCardWarning
               ]}
             >
-              <View style={styles.planReferenceIcon}>
-                <Sparkles color={colors.primary} size={20} strokeWidth={2.5} />
+              <View style={styles.planReferenceInfo}>
+                <View style={styles.planReferenceIcon}>
+                  <Sparkles color={colors.primary} size={20} strokeWidth={2.5} />
+                </View>
+                <View style={styles.planReferenceCopy}>
+                  <Text style={styles.planReferenceKicker}>
+                    Referencia elegida en Simulación
+                  </Text>
+                  <Text style={styles.planReferenceTitle}>{planPreference.label}</Text>
+                </View>
               </View>
-              <View style={styles.planReferenceCopy}>
-                <Text style={styles.planReferenceKicker}>
-                  REFERENCIA ELEGIDA EN SIMULACIÓN
-                </Text>
-                <Text style={styles.planReferenceTitle}>{planPreference.label}</Text>
-              </View>
+              <Pressable
+                accessibilityLabel="Cambiar estrategia de simulación"
+                accessibilityRole="button"
+                onPress={() => router.push("/simulation")}
+                style={({ pressed }) => [
+                  styles.planReferenceAction,
+                  isPhone && styles.planReferenceActionPhone,
+                  pressed && styles.pressed
+                ]}
+              >
+                <Text style={styles.planReferenceActionText}>Cambiar estrategia</Text>
+                <ChevronRight color={colors.primary} size={18} strokeWidth={2.5} />
+              </Pressable>
             </View>
           ) : null}
 
@@ -1997,12 +2023,13 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.caption
   },
   planReferenceCard: {
-    alignItems: "flex-start",
+    alignItems: "center",
     backgroundColor: colors.primarySoft,
     borderColor: colors.primaryBorder,
     borderRadius: radius.lg,
     borderWidth: 1,
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.sm,
     padding: spacing.md
   },
@@ -2024,17 +2051,48 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   planReferenceKicker: {
-    color: colors.primary,
-    fontSize: typography.small,
+    color: colors.text,
+    fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    letterSpacing: 0.5,
-    lineHeight: typography.lineHeight.small
+    lineHeight: typography.lineHeight.sectionTitle
+  },
+  planReferenceCardPhone: {
+    alignItems: "stretch",
+    flexDirection: "column"
+  },
+  planReferenceInfo: {
+    alignItems: "center",
+    flexDirection: "row",
+    flex: 1,
+    gap: spacing.sm,
+    minWidth: 0
   },
   planReferenceTitle: {
-    color: colors.text,
+    color: colors.primary,
     fontSize: typography.body,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.body
+  },
+  planReferenceAction: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 42,
+    paddingHorizontal: spacing.md
+  },
+  planReferenceActionPhone: {
+    alignSelf: "stretch",
+    justifyContent: "center"
+  },
+  planReferenceActionText: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
   },
   planReferenceOverride: {
     color: "#B45309",

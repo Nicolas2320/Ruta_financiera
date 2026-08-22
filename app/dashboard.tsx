@@ -6,16 +6,12 @@ import {
   ArrowDownCircle,
   Bot,
   CalendarCheck,
-  ChartColumnIncreasing,
   ChevronRight,
-  ClipboardCheck,
   Coffee,
   CreditCard,
   Flag,
-  HandCoins,
   Home,
   LineChart,
-  PencilLine,
   PieChart,
   PiggyBank,
   ShieldCheck,
@@ -32,10 +28,13 @@ import { useAuth } from "../context/AuthContext";
 import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import { getNextPlanAdjustmentHint } from "../utils/actionProgressImpact";
 import { getDebtRatioLabel } from "../utils/debtCalculations";
 import { formatCOP, formatSignedCOP } from "../utils/financialRanges";
-import { getGoalPlanFromOnboarding, type GoalAllocation } from "../utils/goalPlanning";
+import {
+  getGoalPlanFromOnboarding,
+  isEmergencyGoal,
+  type GoalAllocation
+} from "../utils/goalPlanning";
 import { formatTargetMonth } from "../utils/monthYear";
 import {
   getEffectiveMonthlyPlanProgress,
@@ -44,12 +43,12 @@ import {
 import {
   getActiveMonthlyPlanProgressKey,
   getMonthlyActions,
-  getMonthlyFocus,
   getMonthlyPlanData,
   getMonthlyPlanMetrics,
   getMonthlyPlanPeriodKey,
   getMonthlyPlanPriorityKey,
   getMonthlyPlanProgressKey,
+  isMonthlyActionCompleted,
   type MonthlyGoalContext
 } from "../utils/monthlyPlan";
 import {
@@ -307,7 +306,7 @@ function IconBubble({
 }: {
   icon: ReactNode;
   tone?: Tone;
-  size?: "small" | "medium" | "large";
+  size?: "small" | "medium";
 }) {
   const toneColors = getToneColors(tone);
 
@@ -316,7 +315,6 @@ function IconBubble({
       style={[
         styles.iconBubble,
         size === "small" && styles.iconBubbleSmall,
-        size === "large" && styles.iconBubbleLarge,
         { backgroundColor: toneColors.background }
       ]}
     >
@@ -342,79 +340,85 @@ function MonthlyPlanCard({
   actionCount,
   completed,
   completedCount,
-  insight,
+  nextActionTitle,
   onRegisterProgress,
   primaryGoalTitle,
   progressPercentage,
-  realContribution,
-  title,
   compact = false
 }: {
   actionCount: number;
   completed: boolean;
   completedCount: number;
-  insight: string;
+  nextActionTitle?: string | null;
   onRegisterProgress: () => void;
   primaryGoalTitle?: string | null;
   progressPercentage: number;
-  realContribution: string;
-  title: string;
   compact?: boolean;
 }) {
   return (
     <View style={[styles.monthlyPlanCard, compact && styles.cardPhone]}>
+      <View style={styles.monthlyPlanHeading}>
+        <View style={styles.monthlyPlanHeadingIcon}>
+          <CalendarCheck color={colors.primary} size={22} strokeWidth={2.4} />
+        </View>
+        <View style={styles.monthlyPlanHeadingCopy}>
+          <Text style={styles.monthlyPlanTitle}>Resumen de este mes</Text>
+          <Text style={styles.monthlyPlanSubtitle}>
+            Revisa el avance de tus acciones y la meta que tiene prioridad.
+          </Text>
+        </View>
+      </View>
       <View style={styles.monthlyPlanBody}>
-        <Text style={styles.heroTitle}>{title}</Text>
+        <View style={styles.monthlyPlanProgressBlock}>
+          <View style={styles.monthlyPlanMetricHeader}>
+            <Text style={styles.monthlyPlanMetricLabel}>
+              {completed
+                ? "Plan completado"
+                : `${completedCount} de ${actionCount} acciones completadas`}
+            </Text>
+            <Text style={styles.monthlyPlanMetricValue}>{progressPercentage}%</Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                completed && styles.progressFillComplete,
+                { width: toPercentWidth(progressPercentage) }
+              ]}
+            />
+          </View>
+        </View>
+
         {primaryGoalTitle ? (
-          <View style={styles.heroGoalPill}>
-            <Flag color={colors.primary} size={16} strokeWidth={2.4} />
-            <Text style={styles.heroGoalPillText}>Meta principal: {primaryGoalTitle}</Text>
+          <View style={styles.primaryGoalCard}>
+            <View style={styles.primaryGoalIcon}>
+              <Flag color={colors.primary} size={20} strokeWidth={2.4} />
+            </View>
+            <View style={styles.primaryGoalCopy}>
+              <Text style={styles.primaryGoalLabel}>Meta principal</Text>
+              <Text style={styles.primaryGoalTitle}>{primaryGoalTitle}</Text>
+            </View>
           </View>
         ) : null}
 
-        <View style={styles.monthlyPlanMetrics}>
-          <View style={styles.monthlyPlanProgressBlock}>
-            <View style={styles.monthlyPlanMetricHeader}>
-              <Text style={styles.monthlyPlanMetricLabel}>
-                {completed
-                  ? "Plan completado"
-                  : `${completedCount} de ${actionCount} acciones completadas`}
-              </Text>
-              <Text style={styles.monthlyPlanMetricValue}>{progressPercentage}%</Text>
+        {nextActionTitle ? (
+          <View style={styles.nextActionCard}>
+            <View style={styles.nextActionCopy}>
+              <Text style={styles.nextActionLabel}>Siguiente acción</Text>
+              <Text style={styles.nextActionTitle}>{nextActionTitle}</Text>
             </View>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  completed && styles.progressFillComplete,
-                  { width: toPercentWidth(progressPercentage) }
-                ]}
-              />
-            </View>
+            <ChevronRight color="#B45309" size={21} strokeWidth={2.5} />
           </View>
-
-          <View style={styles.monthlyPlanRealBlock}>
-            <HandCoins color={colors.support} size={21} strokeWidth={2.4} />
-            <View style={styles.monthlyPlanRealText}>
-              <Text style={styles.monthlyPlanMetricLabel}>Avance real</Text>
-              <Text style={styles.monthlyPlanRealValue}>{realContribution}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.monthlyPlanInsight}>
-          <Text style={styles.monthlyPlanInsightLabel}>Insight</Text>
-          <Text style={styles.monthlyPlanInsightText}>{insight}</Text>
-        </View>
+        ) : null}
 
         <View style={styles.monthlyPlanActions}>
           <Pressable
+            accessibilityLabel="Registrar acción del plan mensual"
             accessibilityRole="button"
             onPress={onRegisterProgress}
             style={({ pressed }) => [styles.improveButton, pressed && styles.pressed]}
           >
-            <Text style={styles.improveButtonText}>Registrar avance</Text>
-            <ChevronRight color={colors.surface} size={20} strokeWidth={2.5} />
+            <Text style={styles.improveButtonText}>Registrar acción</Text>
           </Pressable>
         </View>
       </View>
@@ -426,15 +430,25 @@ function PanelCard({
   title,
   subtitle,
   children,
+  disabled = false,
   compact = false
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
+  disabled?: boolean;
   compact?: boolean;
 }) {
   return (
-    <View style={[styles.panelCard, compact && styles.cardPhone]}>
+    <View
+      accessibilityState={{ disabled }}
+      pointerEvents={disabled ? "none" : "auto"}
+      style={[
+        styles.panelCard,
+        compact && styles.cardPhone,
+        disabled && styles.panelCardDisabled
+      ]}
+    >
       <View style={styles.panelHeader}>
         <Text style={styles.panelTitle}>{title}</Text>
         {subtitle ? <Text style={styles.panelSubtitle}>{subtitle}</Text> : null}
@@ -479,14 +493,22 @@ function MetricCard({
 function ImprovePlanSummaryCard({
   count,
   state,
-  onPress
+  onPress,
+  disabled = false
 }: {
   count: number;
   state: string;
   onPress: () => void;
+  disabled?: boolean;
 }) {
   const isComplete = count === 4;
-  const tone: Tone = count === 0 ? "neutral" : isComplete ? "support" : "primary";
+  const tone: Tone = disabled
+    ? "neutral"
+    : count === 0
+      ? "neutral"
+      : isComplete
+        ? "support"
+        : "primary";
   const improveText = getImprovePlanDashboardText(count);
 
   return (
@@ -497,7 +519,7 @@ function ImprovePlanSummaryCard({
           size="small"
           tone={tone}
         />
-        <Chip label={state} tone={tone} />
+        <Chip label={disabled ? "Inactivo" : state} tone={tone} />
       </View>
 
       {improveText ? <Text style={styles.improveText}>{improveText}</Text> : null}
@@ -519,12 +541,20 @@ function ImprovePlanSummaryCard({
       </View>
 
       <Pressable
+        accessibilityState={{ disabled }}
         accessibilityRole="button"
+        disabled={disabled}
         onPress={onPress}
-        style={({ pressed }) => [styles.improveButton, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.improveButton,
+          disabled && styles.improveButtonDisabled,
+          pressed && styles.pressed
+        ]}
       >
-        <Text style={styles.improveButtonText}>{getImprovePlanActionLabel(count)}</Text>
-        <ChevronRight color={colors.surface} size={20} strokeWidth={2.5} />
+        <Text style={[styles.improveButtonText, disabled && styles.improveButtonTextDisabled]}>
+          {getImprovePlanActionLabel(count)}
+        </Text>
+        {!disabled ? <ChevronRight color={colors.surface} size={20} strokeWidth={2.5} /> : null}
       </Pressable>
     </View>
   );
@@ -575,33 +605,6 @@ function RowCard({
         compact ? null : <ChevronRight color={colors.textSubtle} size={24} strokeWidth={2.2} />
       )}
     </View>
-  );
-}
-
-function QuickAccessCard({
-  title,
-  route,
-  icon,
-  tone,
-  onNavigate,
-  compact = false
-}: {
-  title: string;
-  route: Route;
-  icon: ReactNode;
-  tone: Tone;
-  onNavigate: (route: Route) => void;
-  compact?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={() => onNavigate(route)}
-      style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
-    >
-      <IconBubble icon={icon} size={compact ? "medium" : "large"} tone={tone} />
-      <Text style={styles.quickTitle}>{title}</Text>
-    </Pressable>
   );
 }
 
@@ -748,10 +751,6 @@ export default function DashboardScreen() {
     () => getMonthlyActions(data, metrics, activePlanPriorityKey ?? undefined, monthlyGoalContext),
     [activePlanPriorityKey, data, metrics, monthlyGoalContext]
   );
-  const focus = useMemo(
-    () => getMonthlyFocus(data, metrics, activePlanPriorityKey ?? undefined, monthlyGoalContext),
-    [activePlanPriorityKey, data, metrics, monthlyGoalContext]
-  );
   const planProgressKey = useMemo(
     () => getMonthlyPlanProgressKey(metrics, actions, activePlanPriorityKey ?? undefined),
     [activePlanPriorityKey, actions, metrics]
@@ -777,18 +776,23 @@ export default function DashboardScreen() {
       planProgressKey
     ]
   );
-  const { completedCount, impactSummary } = monthlyPlanProgress;
+  const { completedCount, effectiveCompletedActions } = monthlyPlanProgress;
   const actionCount = actions.length;
   const progressPercentage = actionCount > 0 ? Math.round((completedCount / actionCount) * 100) : 0;
-  const impactDetail = getNextPlanAdjustmentHint(impactSummary);
-  const realContributionLabel =
-    impactSummary.realContributionTotal > 0 ? formatCOP(impactSummary.realContributionTotal) : "$0";
+  const nextActionTitle =
+    actions.find(
+      (action) =>
+        !isMonthlyActionCompleted({
+          actionId: action.id,
+          completedActions: effectiveCompletedActions,
+          planProgressKey
+        })
+    )?.title ?? null;
   const precisionStatus = snapshot.precision;
   const exactMonthlyIncome =
     snapshot.sourceMap.monthlyIncome === "exact" ? snapshot.cashflow.monthlyIncome : null;
   const exactMonthlyExpenses =
     snapshot.sourceMap.monthlyExpenses === "exact" ? snapshot.cashflow.monthlyExpenses : null;
-  const currentSavingsIsExact = snapshot.sourceMap.currentSavings === "exact";
   const hasExactCashflowAmounts =
     snapshot.sourceMap.monthlyIncome === "exact" &&
     snapshot.sourceMap.monthlyExpenses === "exact" &&
@@ -805,6 +809,7 @@ export default function DashboardScreen() {
         : snapshot.emergencyFund.label,
     tone: emergencyTone
   };
+  const hasEmergencyFundGoal = data.goals.some(isEmergencyGoal);
   const totalGoalsCount = goalPlan.allocations.length;
   const completedGoalsCount = goalPlan.allocations.filter(isCompletedGoalAllocation).length;
   const activeGoalsCount = Math.max(totalGoalsCount - completedGoalsCount, 0);
@@ -911,6 +916,24 @@ export default function DashboardScreen() {
   const firstName = onboarding.firstName.trim();
   const greetingTitle = firstName ? `Bienvenido ${firstName}!` : "Bienvenido!";
   const navigate = (route: Route) => router.push(route);
+  const openEmergencySavings = () => {
+    if (hasEmergencyFundGoal) {
+      router.push("/goals-overview");
+      return;
+    }
+
+    router.push({
+      pathname: "/goals",
+      params: {
+        mode: "add",
+        suggestedTargetAmount:
+          snapshot.emergencyFund.targetThreeMonths === null
+            ? ""
+            : `${snapshot.emergencyFund.targetThreeMonths}`,
+        template: "emergency"
+      }
+    });
+  };
 
   if (!isAuthReady || !session) {
     return (
@@ -960,12 +983,10 @@ export default function DashboardScreen() {
             compact={isPhone}
             completed={completedCount === actionCount}
             completedCount={completedCount}
-            insight={impactDetail}
+            nextActionTitle={nextActionTitle}
             onRegisterProgress={() => router.push("/action-plan")}
             primaryGoalTitle={primaryGoalTitle}
             progressPercentage={progressPercentage}
-            realContribution={realContributionLabel}
-            title={focus.title}
           />
 
           <View style={styles.twoColumnGrid}>
@@ -1030,11 +1051,13 @@ export default function DashboardScreen() {
 
             <PanelCard
               compact={isPhone}
+              disabled
               subtitle={precisionStatus.message}
               title="Mejorar mi plan financiero"
             >
               <ImprovePlanSummaryCard
                 count={precisionStatus.exactValuesCount}
+                disabled
                 onPress={() => router.push("/improve-plan")}
                 state={precisionStatus.label}
               />
@@ -1042,14 +1065,19 @@ export default function DashboardScreen() {
           </View>
 
           <RowCard
+            actionLabel={hasEmergencyFundGoal ? "Ver ahorro" : "Crear meta"}
             compact={isPhone}
             icon={<ShieldCheck color={colors.support} size={36} strokeWidth={2.4} />}
+            onPress={openEmergencySavings}
             text={emergencyStatus.text}
             title="Fondo de emergencia"
             tone={emergencyStatus.tone}
             value={
-              snapshot.values.currentSavings !== null
-                ? `Ahorro actual: ${getAmountLabel(snapshot.values.currentSavings, currentSavingsIsExact)}`
+              snapshot.emergencyFund.currentSavings !== null
+                ? `Ahorro actual: ${getAmountLabel(
+                    snapshot.emergencyFund.currentSavings,
+                    true
+                  )}`
                 : "Ahorro por registrar"
             }
           >
@@ -1130,43 +1158,6 @@ export default function DashboardScreen() {
             ) : null}
           </RowCard>
 
-          <View style={[styles.quickSection, isPhone && styles.quickSectionPhone]}>
-            <Text style={styles.sectionTitleStandalone}>Accesos rápidos</Text>
-            <View style={styles.quickGrid}>
-              <QuickAccessCard
-                compact={isPhone}
-                icon={<ClipboardCheck color={colors.primary} size={31} strokeWidth={2.4} />}
-                onNavigate={navigate}
-                route="/diagnosis"
-                title="Diagnóstico"
-                tone="primary"
-              />
-              <QuickAccessCard
-                compact={isPhone}
-                icon={<ChartColumnIncreasing color={colors.support} size={31} strokeWidth={2.4} />}
-                onNavigate={navigate}
-                route="/simulation"
-                title="Simulación"
-                tone="support"
-              />
-              <QuickAccessCard
-                compact={isPhone}
-                icon={<CalendarCheck color="#7C3AED" size={31} strokeWidth={2.4} />}
-                onNavigate={navigate}
-                route="/action-plan"
-                title="Plan mensual"
-                tone="purple"
-              />
-              <QuickAccessCard
-                compact={isPhone}
-                icon={<PencilLine color="#B45309" size={31} strokeWidth={2.4} />}
-                onNavigate={navigate}
-                route={{ pathname: "/summary", params: { mode: "edit" } }}
-                title="Editar respuestas"
-                tone="warning"
-              />
-            </View>
-          </View>
         </View>
       </ScrollView>
 
@@ -1235,69 +1226,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 58
   },
-  heroCard: {
-    ...shadows.card,
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.lg,
-    padding: spacing.lg
-  },
-  heroBody: {
-    flexBasis: 240,
-    flex: 1,
-    gap: spacing.xs,
-    minWidth: 0
-  },
-  kickerPrimary: {
-    color: colors.primary,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  heroTitle: {
-    color: colors.text,
-    fontSize: typography.cardTitle,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.cardTitle
-  },
-  heroText: {
-    color: colors.textMuted,
-    fontSize: typography.body,
-    lineHeight: typography.lineHeight.body
-  },
-  heroGoalPill: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: colors.primarySoft,
-    borderColor: "#CFE0FF",
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-    maxWidth: "100%",
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  heroGoalPillText: {
-    color: colors.primary,
-    flexShrink: 1,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  heroProgressText: {
-    color: colors.primary,
-    fontSize: typography.body,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body,
-    marginTop: spacing.xs
-  },
   monthlyPlanCard: {
     ...shadows.card,
     alignItems: "stretch",
@@ -1316,19 +1244,11 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     minWidth: 0
   },
-  monthlyPlanMetrics: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    marginTop: spacing.xs
-  },
   monthlyPlanProgressBlock: {
     backgroundColor: colors.surfaceMuted,
     borderColor: "#D7E7FF",
     borderRadius: radius.md,
     borderWidth: 1,
-    flexBasis: 260,
-    flexGrow: 1,
     gap: spacing.sm,
     padding: spacing.md
   },
@@ -1351,46 +1271,95 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.body
   },
-  monthlyPlanRealBlock: {
+  primaryGoalCard: {
     alignItems: "center",
-    backgroundColor: colors.supportSoft,
-    borderColor: "#B9E9CD",
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
     borderRadius: radius.md,
     borderWidth: 1,
-    flexBasis: 170,
     flexDirection: "row",
-    flexGrow: 1,
     gap: spacing.sm,
     padding: spacing.md
   },
-  monthlyPlanRealText: {
+  monthlyPlanHeading: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm
+  },
+  monthlyPlanHeadingIcon: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    height: 46,
+    justifyContent: "center",
+    width: 46
+  },
+  monthlyPlanHeadingCopy: {
     flex: 1,
     gap: spacing.xs,
     minWidth: 0
   },
-  monthlyPlanRealValue: {
-    color: colors.support,
-    fontSize: typography.body,
+  monthlyPlanTitle: {
+    color: colors.text,
+    fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.sectionTitle
   },
-  monthlyPlanInsight: {
-    backgroundColor: "#F8FBFF",
-    borderColor: colors.border,
+  monthlyPlanSubtitle: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
+  },
+  nextActionCard: {
+    alignItems: "center",
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA",
     borderRadius: radius.md,
     borderWidth: 1,
-    gap: spacing.xs,
+    flexDirection: "row",
+    gap: spacing.sm,
     padding: spacing.md
   },
-  monthlyPlanInsightLabel: {
-    color: colors.support,
+  nextActionCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0
+  },
+  nextActionLabel: {
+    color: "#B45309",
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
   },
-  monthlyPlanInsightText: {
-    color: colors.textMuted,
+  nextActionTitle: {
+    color: colors.text,
     fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  primaryGoalIcon: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    height: 38,
+    justifyContent: "center",
+    width: 38
+  },
+  primaryGoalCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0
+  },
+  primaryGoalLabel: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  primaryGoalTitle: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.body
   },
   monthlyPlanActions: {
@@ -1411,6 +1380,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     gap: spacing.md,
     padding: spacing.lg
+  },
+  panelCardDisabled: {
+    opacity: 0.5
   },
   panelHeader: {
     gap: spacing.xs
@@ -1500,6 +1472,12 @@ const styles = StyleSheet.create({
     fontSize: typography.button,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.button
+  },
+  improveButtonDisabled: {
+    backgroundColor: colors.disabled
+  },
+  improveButtonTextDisabled: {
+    color: colors.textSubtle
   },
   comparisonBox: {
     gap: spacing.sm,
@@ -1609,45 +1587,6 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm
   },
-  quickSection: {
-    gap: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  quickSectionPhone: {
-    paddingHorizontal: 0
-  },
-  sectionTitleStandalone: {
-    color: colors.text,
-    fontSize: typography.sectionTitle,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.sectionTitle
-  },
-  quickGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md
-  },
-  quickCard: {
-    ...shadows.card,
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    flexBasis: "22%",
-    flexGrow: 1,
-    gap: spacing.sm,
-    minHeight: 116,
-    minWidth: 130,
-    padding: spacing.md
-  },
-  quickTitle: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body,
-    textAlign: "center"
-  },
   iconBubble: {
     alignItems: "center",
     borderRadius: radius.pill,
@@ -1658,10 +1597,6 @@ const styles = StyleSheet.create({
   iconBubbleSmall: {
     height: 42,
     width: 42
-  },
-  iconBubbleLarge: {
-    height: 124,
-    width: 124
   },
   chip: {
     borderRadius: radius.pill,

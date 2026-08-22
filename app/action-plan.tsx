@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType } from "react";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -8,6 +8,7 @@ import {
   ChartColumnIncreasing,
   Check,
   ClipboardCheck,
+  CreditCard,
   HandCoins,
   PiggyBank,
   Search,
@@ -39,15 +40,10 @@ import {
   type ActionProgressValue
 } from "../types/financial";
 import { formatCOP } from "../utils/financialRanges";
-import {
-  formatGoalContribution,
-  getGoalPlanFromOnboarding
-} from "../utils/goalPlanning";
+import { getGoalPlanFromOnboarding } from "../utils/goalPlanning";
 import {
   getActionImpactMessage,
   getActionProgressImpactItem,
-  getMonthlyImpactHeadline,
-  getNextPlanAdjustmentHint,
   type MonthlyActionImpactItem
 } from "../utils/actionProgressImpact";
 import {
@@ -59,7 +55,6 @@ import {
   getActiveMonthlyPlanProgressKey,
   getMonthlyActions,
   getMonthlyActionProgressId,
-  getMonthlyFocus,
   getMonthlyPlanData,
   getMonthlyPlanMetrics,
   getMonthlyPlanPeriodKey,
@@ -104,11 +99,11 @@ function getActionVisual(actionId: string): {
     return { icon: HandCoins, color: "#7C3AED", backgroundColor: "#F1E8FF" };
   }
 
-  if (
-    actionId === "register-debts" ||
-    actionId === "register-debt-payments" ||
-    actionId === "compare-debt-strategies"
-  ) {
+  if (actionId === "register-debt-payments") {
+    return { icon: CreditCard, color: "#F97316", backgroundColor: "#FFF1E7" };
+  }
+
+  if (actionId === "register-debts" || actionId === "compare-debt-strategies") {
     return { icon: Wallet, color: "#F97316", backgroundColor: "#FFF1E7" };
   }
 
@@ -371,37 +366,6 @@ function Chip({ label, tone = "primary" }: { label: string; tone?: ChipTone }) {
   );
 }
 
-function SummaryMetric({
-  icon,
-  label,
-  value,
-  tone = "primary"
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  tone?: ChipTone;
-}) {
-  return (
-    <View style={styles.summaryMetric}>
-      <View
-        style={[
-          styles.summaryMetricIcon,
-          tone === "support" && styles.summaryMetricIconSupport,
-          tone === "warning" && styles.summaryMetricIconWarning,
-          tone === "purple" && styles.summaryMetricIconPurple
-        ]}
-      >
-        {icon}
-      </View>
-      <View style={styles.summaryMetricText}>
-        <Text style={styles.summaryMetricLabel}>{label}</Text>
-        <Text style={styles.summaryMetricValue}>{value}</Text>
-      </View>
-    </View>
-  );
-}
-
 function ActionCard({
   action,
   actionNumber,
@@ -474,6 +438,29 @@ function ActionCard({
     : isScenarioComparisonAction
       ? "Registrar acción"
       : "Registrar avance";
+  const renderStatusBadge = () => (
+    <View
+      accessibilityLabel={`Estado de ${action.title}: ${getStatusLabel(status)}`}
+      style={[
+        styles.statusBadge,
+        status === "completed" && styles.statusBadgeCompleted,
+        status === "in_progress" && styles.statusBadgeInProgress,
+        status === "skipped" && styles.statusBadgeSkipped
+      ]}
+    >
+      {completed ? <Check color={colors.support} size={15} strokeWidth={3} /> : null}
+      <Text
+        style={[
+          styles.statusBadgeText,
+          status === "completed" && styles.statusBadgeTextCompleted,
+          status === "in_progress" && styles.statusBadgeTextInProgress,
+          status === "skipped" && styles.statusBadgeTextSkipped
+        ]}
+      >
+        {getStatusLabel(status)}
+      </Text>
+    </View>
+  );
   const handleEvidenceChange = (value: string) => {
     if (evidenceConfig.type === "amount") {
       setAmountText(sanitizeCOPInput(value));
@@ -535,28 +522,17 @@ function ActionCard({
         </View>
         <View style={styles.actionMainText}>
           <Text style={styles.actionTitle}>{action.title}</Text>
+          {!compact ? <Text style={styles.actionDescription}>{action.description}</Text> : null}
+        </View>
+        {!compact ? renderStatusBadge() : null}
+      </View>
+
+      {compact ? (
+        <View style={styles.actionMobileDetails}>
+          {renderStatusBadge()}
           <Text style={styles.actionDescription}>{action.description}</Text>
         </View>
-        <View
-          accessibilityLabel={`Estado de ${action.title}: ${getStatusLabel(status)}`}
-          style={[
-            styles.statusBadge,
-            status === "completed" && styles.statusBadgeCompleted,
-            status === "in_progress" && styles.statusBadgeInProgress,
-            status === "skipped" && styles.statusBadgeSkipped
-          ]}
-        >
-          {completed ? <Check color={colors.support} size={15} strokeWidth={3} /> : null}
-          <Text
-            style={[
-              styles.statusBadgeText,
-              status === "completed" && styles.statusBadgeTextCompleted
-            ]}
-          >
-            {getStatusLabel(status)}
-          </Text>
-        </View>
-      </View>
+      ) : null}
 
       <View style={styles.actionMetaRow}>
         <Chip label={action.category} tone={getCategoryTone(action.category)} />
@@ -934,10 +910,6 @@ export default function ActionPlanScreen() {
     () => getMonthlyActions(data, metrics, activePlanPriorityKey ?? undefined, monthlyGoalContext),
     [activePlanPriorityKey, data, metrics, monthlyGoalContext]
   );
-  const focus = useMemo(
-    () => getMonthlyFocus(data, metrics, activePlanPriorityKey ?? undefined, monthlyGoalContext),
-    [activePlanPriorityKey, data, metrics, monthlyGoalContext]
-  );
   const planProgressKey = useMemo(
     () => getMonthlyPlanProgressKey(metrics, actions, activePlanPriorityKey ?? undefined),
     [activePlanPriorityKey, actions, metrics]
@@ -963,40 +935,10 @@ export default function ActionPlanScreen() {
       planProgressKey
     ]
   );
-  const { completedCount, effectiveCompletedActions, impactSummary, inProgressCount } =
-    monthlyPlanProgress;
+  const { completedCount, effectiveCompletedActions } = monthlyPlanProgress;
   const actionCount = actions.length;
   const progressPercentage = actionCount > 0 ? Math.round((completedCount / actionCount) * 100) : 0;
   const isPlanComplete = actionCount === 0 || completedCount === actionCount;
-  const engagedCount = completedCount + inProgressCount;
-  const fallbackContributionLabel =
-    metrics.balancedScenarioAmount > 0
-      ? `${formatCOP(metrics.balancedScenarioAmount)} aprox.`
-      : "Por definir";
-  const isGeneralGoalFlow = actions.some((action) => action.id === "set-goal-contribution");
-  const isCreateEmergencyGoalFlow = actions.some(
-    (action) => action.id === "create-emergency-goal"
-  );
-  const contributionLabel =
-    isGeneralGoalFlow
-      ? formatGoalContribution(goalPlan.monthlyContributionTotal)
-      : fallbackContributionLabel;
-  const contributionMetricLabel =
-    isGeneralGoalFlow ? "Aporte a metas" : "Referencia mensual";
-  const shouldShowGoalContributionSummary =
-    !isGeneralGoalFlow && !isCreateEmergencyGoalFlow && primaryGoalAllocation !== null;
-  const goalContributionSummaryLabel =
-    goalPlan.allocations.length > 1 ? "Aporte meta principal" : "Aporte meta";
-  const goalContributionSummaryValue = primaryGoalAllocation
-    ? formatGoalContribution(primaryGoalAllocation.monthlyContribution)
-    : "Por definir";
-  const primaryGoalTitle = primaryGoalAllocation?.goal.title ?? data.financialGoal;
-  const impactHeadline = getMonthlyImpactHeadline(impactSummary);
-  const nextPlanHint = getNextPlanAdjustmentHint(impactSummary);
-  const realContributionLabel =
-    impactSummary.realContributionTotal > 0 ? formatCOP(impactSummary.realContributionTotal) : "$0";
-  const isPlanNavigationPending =
-    planSyncStatus === "loading" || planSyncStatus === "saving";
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -1015,137 +957,50 @@ export default function ActionPlanScreen() {
             </View>
           </View>
 
-          <View style={[styles.planHeroCard, isPhone && styles.cardPhone]}>
-            <View style={styles.planHeroHeading}>
-              <View style={styles.planHeroIcon}>
-                <ClipboardCheck color={colors.primary} size={24} strokeWidth={2.4} />
-              </View>
-
-              <View style={styles.planHeroTitleGroup}>
-                <Text style={styles.kickerPrimary}>Enfoque del mes</Text>
-                <Text style={styles.planHeroTitle}>{focus.title}</Text>
-              </View>
-            </View>
-
-            <View style={styles.planHeroBody}>
-              <Text style={styles.text}>{focus.text}</Text>
-
-              {isGeneralGoalFlow && activeGoalAllocations.length > 0 ? (
-                <View style={styles.goalPill}>
-                  <Target color={colors.primary} size={16} strokeWidth={2.4} />
-                  <Text style={styles.goalPillText}>
-                    {activeGoalAllocations.length === 1
-                      ? "1 meta activa"
-                      : `${activeGoalAllocations.length} metas activas`}
-                  </Text>
-                </View>
-              ) : !isCreateEmergencyGoalFlow && primaryGoalTitle ? (
-                <View style={styles.goalPill}>
-                  <Target color={colors.primary} size={16} strokeWidth={2.4} />
-                  <Text style={styles.goalPillText}>Meta principal: {primaryGoalTitle}</Text>
-                </View>
-              ) : null}
-
-              <View style={styles.heroProgressBlock}>
-                {actionCount > 0 ? (
-                  <>
-                    <View style={styles.progressHeader}>
-                      <Text style={styles.progressText}>
-                        {completedCount} de {actionCount} acciones completadas
-                      </Text>
-                      <Text style={styles.progressPercent}>{progressPercentage}%</Text>
-                    </View>
-                    <View style={styles.progressTrack}>
-                      <View
-                        style={[styles.progressFill, { width: toPercentWidth(progressPercentage) }]}
-                      />
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.progressText}>¡Estás al día!</Text>
-                    <Text style={styles.progressHelper}>
-                      Tu plan está actualizado. Volveremos a evaluarlo cuando cambien tus datos o comience un nuevo mes.
+          <View style={[styles.planProgressCard, isPhone && styles.cardPhone]}>
+            <View style={styles.heroProgressBlock}>
+              {actionCount > 0 ? (
+                <>
+                  <View style={styles.progressHeader}>
+                    <Text style={styles.progressText}>
+                      {completedCount} de {actionCount} acciones completadas
                     </Text>
-                  </>
-                )}
-                {planSyncStatus === "saving" ? (
-                  <Text style={styles.syncText}>Guardando avance...</Text>
-                ) : null}
-                {planSyncStatus === "error" && planSyncError ? (
-                  <Text style={styles.syncErrorText}>{planSyncError}</Text>
-                ) : null}
-                {actionCount > 0 && completedCount === actionCount ? (
-                  <Text style={styles.completedMessage}>
-                    ¡Buen trabajo! Completaste todas las acciones de este mes y tu plan está al día.
+                    <Text style={styles.progressPercent}>{progressPercentage}%</Text>
+                  </View>
+                  <View style={styles.progressTrack}>
+                    <View
+                      style={[styles.progressFill, { width: toPercentWidth(progressPercentage) }]}
+                    />
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.progressText}>¡Estás al día!</Text>
+                  <Text style={styles.progressHelper}>
+                    Tu plan está actualizado. Volveremos a evaluarlo cuando cambien tus datos o comience un nuevo mes.
                   </Text>
-                ) : null}
-              </View>
-
-              <View style={styles.trustPill}>
-                <ShieldCheck color={colors.support} size={17} strokeWidth={2.4} />
-                <Text style={styles.supportText}>
-                  Puedes ajustar este plan a tu realidad. Prueba acciones pequeñas, revisa qué funcionó
-                  y ajusta el próximo mes.
+                </>
+              )}
+              {planSyncStatus === "saving" ? (
+                <Text style={styles.syncText}>Guardando avance...</Text>
+              ) : null}
+              {planSyncStatus === "error" && planSyncError ? (
+                <Text style={styles.syncErrorText}>{planSyncError}</Text>
+              ) : null}
+              {actionCount > 0 && completedCount === actionCount ? (
+                <Text style={styles.completedMessage}>
+                  ¡Buen trabajo! Completaste todas las acciones de este mes y tu plan está al día.
                 </Text>
-              </View>
+              ) : null}
             </View>
-          </View>
 
-          <View style={styles.summaryGrid}>
-            <SummaryMetric
-              icon={<CalendarCheck color={colors.primary} size={20} strokeWidth={2.4} />}
-              label="Acciones con avance"
-              value={actionCount > 0 ? `${engagedCount} de ${actionCount}` : "Sin pendientes"}
-            />
-            <SummaryMetric
-              icon={<HandCoins color={colors.support} size={20} strokeWidth={2.4} />}
-              label="Avance real"
-              tone="support"
-              value={realContributionLabel}
-            />
-            <SummaryMetric
-              icon={<Wallet color={colors.primary} size={20} strokeWidth={2.4} />}
-              label={contributionMetricLabel}
-              value={contributionLabel}
-            />
-            {shouldShowGoalContributionSummary ? (
-              <SummaryMetric
-                icon={<PiggyBank color="#7C3AED" size={20} strokeWidth={2.4} />}
-                label={goalContributionSummaryLabel}
-                tone="purple"
-                value={goalContributionSummaryValue}
-              />
-            ) : null}
-          </View>
-
-          <View style={[styles.impactSummaryCard, isPhone && styles.cardPhone]}>
-            <View style={styles.impactSummaryHeader}>
-              <View style={styles.impactSummaryIcon}>
-                <ChartColumnIncreasing color={colors.primary} size={21} strokeWidth={2.4} />
-              </View>
-              <View style={styles.impactSummaryCopy}>
-                <Text style={styles.impactSummaryTitle}>Qué entendió la app</Text>
-                <Text style={styles.impactSummaryText}>{impactHeadline}</Text>
-              </View>
+            <View style={styles.trustPill}>
+              <ShieldCheck color={colors.support} size={17} strokeWidth={2.4} />
+              <Text style={styles.supportText}>
+                Puedes ajustar este plan a tu realidad. Prueba acciones pequeñas, revisa qué funcionó
+                y ajusta el próximo mes.
+              </Text>
             </View>
-            <View style={styles.impactSignalGrid}>
-              <View style={styles.impactSignalPill}>
-                <Text style={styles.impactSignalLabel}>Aportes reales</Text>
-                <Text style={styles.impactSignalValue}>{impactSummary.realContributions.length}</Text>
-              </View>
-              <View style={styles.impactSignalPill}>
-                <Text style={styles.impactSignalLabel}>Compromisos</Text>
-                <Text style={styles.impactSignalValue}>{impactSummary.limitCommitments.length}</Text>
-              </View>
-              <View style={styles.impactSignalPill}>
-                <Text style={styles.impactSignalLabel}>Señales</Text>
-                <Text style={styles.impactSignalValue}>
-                  {impactSummary.insightSignals.length + impactSummary.dataSignals.length}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.impactSummaryHint}>{nextPlanHint}</Text>
           </View>
 
           <View style={styles.sectionIntro}>
@@ -1226,21 +1081,9 @@ export default function ActionPlanScreen() {
 
           <View style={styles.actions}>
             <PrimaryButton
-              accessibilityLabel={
-                isPlanNavigationPending
-                  ? "Guardando el plan antes de abrir el inicio"
-                  : "Ir a mi inicio"
-              }
-              disabled={isPlanNavigationPending}
-              icon={isPlanNavigationPending ? null : undefined}
-              iconPosition="right"
-              onPress={() => router.push("/dashboard")}
-              title={isPlanNavigationPending ? "Guardando tu plan..." : "Ir a mi inicio"}
-            />
-            <PrimaryButton
-              accessibilityLabel="Volver a la pantalla anterior"
+              accessibilityLabel="Volver al dashboard"
               icon={null}
-              onPress={() => router.back()}
+              onPress={() => router.replace("/dashboard")}
               style={styles.secondaryButton}
               title="Volver"
               variant="secondary"
@@ -1311,7 +1154,7 @@ const styles = StyleSheet.create({
     fontSize: typography.subtitle,
     lineHeight: typography.lineHeight.subtitle
   },
-  planHeroCard: {
+  planProgressCard: {
     ...shadows.card,
     alignItems: "stretch",
     backgroundColor: colors.surface,
@@ -1320,60 +1163,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.lg
-  },
-  planHeroHeading: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: spacing.md
-  },
-  planHeroIcon: {
-    alignItems: "center",
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    height: 54,
-    justifyContent: "center",
-    width: 54
-  },
-  planHeroTitleGroup: {
-    flex: 1,
-    gap: spacing.xs,
-    minWidth: 0
-  },
-  planHeroBody: {
-    gap: spacing.sm,
-    minWidth: 0
-  },
-  kickerPrimary: {
-    color: colors.primary,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  planHeroTitle: {
-    color: colors.text,
-    fontSize: typography.cardTitle,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.cardTitle
-  },
-  goalPill: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: colors.primarySoft,
-    borderColor: "#D7E7FF",
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.xs,
-    maxWidth: "100%",
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  goalPillText: {
-    color: colors.primary,
-    flexShrink: 1,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
   },
   heroProgressBlock: {
     backgroundColor: colors.surfaceMuted,
@@ -1409,60 +1198,6 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.caption
-  },
-  summaryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md
-  },
-  summaryMetric: {
-    ...shadows.card,
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    flexBasis: "45%",
-    flexGrow: 1,
-    flexShrink: 1,
-    flexDirection: "row",
-    gap: spacing.md,
-    minHeight: 96,
-    minWidth: 0,
-    padding: spacing.md
-  },
-  summaryMetricIcon: {
-    alignItems: "center",
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    height: 44,
-    justifyContent: "center",
-    width: 44
-  },
-  summaryMetricIconSupport: {
-    backgroundColor: colors.supportSoft
-  },
-  summaryMetricIconWarning: {
-    backgroundColor: colors.warningSoft
-  },
-  summaryMetricIconPurple: {
-    backgroundColor: "#F1E8FF"
-  },
-  summaryMetricText: {
-    flex: 1,
-    gap: spacing.xs
-  },
-  summaryMetricLabel: {
-    color: colors.textSubtle,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  summaryMetricValue: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
   },
   actionsList: {
     gap: spacing.md
@@ -1524,6 +1259,10 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     lineHeight: typography.lineHeight.caption
   },
+  actionMobileDetails: {
+    alignItems: "flex-start",
+    gap: spacing.sm
+  },
   checkbox: {
     alignItems: "center",
     borderColor: colors.textSubtle,
@@ -1543,8 +1282,8 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     alignItems: "center",
-    backgroundColor: colors.warningSoft,
-    borderColor: "#FED7AA",
+    backgroundColor: colors.dangerSoft,
+    borderColor: colors.dangerBorder,
     borderRadius: radius.pill,
     borderWidth: 1,
     flexDirection: "row",
@@ -1557,21 +1296,27 @@ const styles = StyleSheet.create({
     borderColor: "#B9E9CD"
   },
   statusBadgeInProgress: {
-    backgroundColor: colors.primarySoft,
-    borderColor: "#D7E7FF"
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA"
   },
   statusBadgeSkipped: {
     backgroundColor: "#EEF2F7",
     borderColor: colors.border
   },
   statusBadgeText: {
-    color: "#9A5B20",
+    color: colors.danger,
     fontSize: typography.small,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.small
   },
   statusBadgeTextCompleted: {
     color: colors.support
+  },
+  statusBadgeTextInProgress: {
+    color: "#B45309"
+  },
+  statusBadgeTextSkipped: {
+    color: colors.textMuted
   },
   actionMetaRow: {
     flexDirection: "row",
@@ -2051,77 +1796,6 @@ const styles = StyleSheet.create({
     height: 54,
     justifyContent: "center",
     width: 54
-  },
-  impactSummaryCard: {
-    ...shadows.card,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    gap: spacing.md,
-    padding: spacing.lg
-  },
-  impactSummaryHeader: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: spacing.sm
-  },
-  impactSummaryIcon: {
-    alignItems: "center",
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    height: 42,
-    justifyContent: "center",
-    width: 42
-  },
-  impactSummaryCopy: {
-    flex: 1,
-    gap: spacing.xs,
-    minWidth: 0
-  },
-  impactSummaryTitle: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
-  },
-  impactSummaryText: {
-    color: colors.textMuted,
-    fontSize: typography.body,
-    lineHeight: typography.lineHeight.body
-  },
-  impactSignalGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  impactSignalPill: {
-    backgroundColor: colors.surfaceMuted,
-    borderColor: "#D7E7FF",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexBasis: 150,
-    flexGrow: 1,
-    gap: spacing.xs,
-    padding: spacing.md
-  },
-  impactSignalLabel: {
-    color: colors.textSubtle,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  impactSignalValue: {
-    color: colors.primary,
-    fontSize: typography.sectionTitle,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.sectionTitle
-  },
-  impactSummaryHint: {
-    color: colors.support,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.caption
   },
   progressHeader: {
     alignItems: "center",

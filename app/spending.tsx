@@ -565,6 +565,7 @@ function SectionCard({
   title,
   subtitle,
   icon,
+  iconTone = "primary",
   actionLabel,
   onActionPress,
   children,
@@ -573,6 +574,7 @@ function SectionCard({
   title: string;
   subtitle?: string;
   icon: ReactNode;
+  iconTone?: Tone;
   actionLabel?: string;
   onActionPress?: () => void;
   children: ReactNode;
@@ -581,7 +583,7 @@ function SectionCard({
   return (
     <View style={[styles.sectionCard, compact && styles.cardPhone]}>
       <View style={styles.sectionHeader}>
-        <IconBubble icon={icon} size="small" />
+        <IconBubble icon={icon} size="small" tone={iconTone} />
         <View style={styles.sectionHeaderText}>
           <Text style={styles.sectionTitle}>{title}</Text>
           {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
@@ -1031,9 +1033,9 @@ export default function SpendingScreen() {
           <View style={[styles.heroCard, isPhone && styles.cardPhone]}>
             <View style={styles.heroTextGroup}>
               <View style={styles.heroTopRow}>
+                <Text style={styles.heroKicker}>{monthlyExpensesLabel}</Text>
                 <Chip label={getExpenseSourceLabel(snapshot.sourceMap.monthlyExpenses)} tone={hasExactMonthlyExpenses ? "support" : snapshot.sourceMap.monthlyExpenses === "missing" ? "neutral" : "primary"} />
               </View>
-              <Text style={styles.heroKicker}>{monthlyExpensesLabel}</Text>
               <Text style={styles.heroAmount}>
                 {getAmountLabel(metrics.expenseMidpoint, hasExactMonthlyExpenses)}
               </Text>
@@ -1228,6 +1230,7 @@ export default function SpendingScreen() {
             compact={isPhone}
             actionLabel={hasSmallExpensesDetail ? "Revisar" : "Ingresar datos"}
             icon={<Coffee color="#B45309" size={20} strokeWidth={2.4} />}
+            iconTone="warning"
             onActionPress={() => router.push({ pathname: "/small-expenses", params: { source: "spending" } })}
             title="Gastos pequeños frecuentes"
           >
@@ -1477,16 +1480,17 @@ const styles = StyleSheet.create({
     width: "100%"
   },
   heroTopRow: {
+    alignItems: "center",
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacing.sm
+    gap: spacing.sm,
+    justifyContent: "space-between"
   },
   heroKicker: {
-    color: colors.primary,
-    fontSize: typography.caption,
+    color: colors.text,
+    fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption,
-    marginTop: spacing.xs
+    lineHeight: typography.lineHeight.sectionTitle
   },
   heroAmount: {
     color: colors.text,
