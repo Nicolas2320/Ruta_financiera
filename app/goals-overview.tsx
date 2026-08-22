@@ -53,7 +53,8 @@ import {
   getOnboardingGoals,
   isActionProgressCompleted,
   normalizeFinancialGuidanceMode,
-  type FinancialGoal
+  type FinancialGoal,
+  type FinancialGoalStatus
 } from "../types/financial";
 import { formatCOP, parseCOPInput } from "../utils/financialRanges";
 import { getGoalBudgetPresentation } from "../utils/goalBudgetPresentation";
@@ -1521,19 +1522,28 @@ export default function GoalsOverviewScreen() {
     });
   };
 
-  const registerGoalContribution = (goalId: string, amount: number) => {
+  const registerGoalContribution = (
+    goalId: string,
+    amount: number,
+    options?: { forceStatus?: FinancialGoalStatus }
+  ) => {
     const shouldCompletePlanAction =
       monthlyGoalContributionAction !== null &&
       monthlyGoalContributionProgressId !== null &&
       !isActionProgressCompleted(completedActions[monthlyGoalContributionProgressId]);
     const sourceProgressId = shouldCompletePlanAction ? monthlyGoalContributionProgressId : null;
+    const nextGoals = applyGoalContribution(goals, goalId, {
+      amount,
+      source: "manual",
+      sourceProgressId
+    });
 
     persistGoals(
-      applyGoalContribution(goals, goalId, {
-        amount,
-        source: "manual",
-        sourceProgressId
-      })
+      options?.forceStatus
+        ? nextGoals.map((goal) =>
+            goal.id === goalId ? { ...goal, status: options.forceStatus as FinancialGoalStatus } : goal
+          )
+        : nextGoals
     );
 
     if (shouldCompletePlanAction && monthlyGoalContributionProgressId) {
@@ -1594,7 +1604,9 @@ export default function GoalsOverviewScreen() {
     }
 
     if (allocation.remainingAmount > 0) {
-      registerGoalContribution(allocation.goal.id, allocation.remainingAmount);
+      registerGoalContribution(allocation.goal.id, allocation.remainingAmount, {
+        forceStatus: "completed"
+      });
       return;
     }
 

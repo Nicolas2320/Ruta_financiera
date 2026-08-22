@@ -85,6 +85,38 @@ describe("financial projection input", () => {
     expect(input.goals[0]).not.toHaveProperty("priority");
   });
 
+  it("sums this month's registered payments, including from debts already paid off", () => {
+    const input = buildFinancialProjectionInput({
+      asOfDate: "2026-08-21",
+      exactValues: {
+        monthlyExpenses: 1_000_000,
+        monthlyIncome: 4_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        debts: [
+          makeDebt({
+            id: "active-debt",
+            monthlyPaymentType: "minimum_required",
+            payments: [
+              { id: "p1", amount: 300_000, date: "2026-08-05" },
+              { id: "p2", amount: 100_000, date: "2026-07-05" }
+            ]
+          }),
+          makeDebt({
+            id: "settled-debt",
+            monthlyPaymentType: "minimum_required",
+            remainingAmount: 0,
+            payments: [{ id: "p3", amount: 500_000, date: "2026-08-18" }]
+          })
+        ]
+      })
+    });
+
+    expect(input.cashflow.debtPaymentsRealizedThisMonth).toBe(800_000);
+    expect(input.debts.map((debt) => debt.id)).toEqual(["active-debt"]);
+  });
+
   it("reserves a reported debt payment before projecting goals without debt details", () => {
     const input = buildFinancialProjectionInput({
       exactValues: {

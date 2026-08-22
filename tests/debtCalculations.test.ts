@@ -95,6 +95,15 @@ describe("registered debt calculations", () => {
     expect(getDebtRemainingTotal(debts)).toBe(1_000_000);
   });
 
+  it("caps a debt's contribution to the total at its remaining balance", () => {
+    const debts = [
+      makeDebt({ id: "near-payoff", monthlyPayment: 400_000, remainingAmount: 340_000 }),
+      makeDebt({ id: "regular", monthlyPayment: 300_000, remainingAmount: 4_000_000 })
+    ];
+
+    expect(getDebtMonthlyPaymentTotal(debts)).toBe(640_000);
+  });
+
   it("uses registered debts as the source of truth without double counting expense categories", () => {
     const summary = getRegisteredDebtSummary({
       debts: [makeDebt({ monthlyPayment: 300_000, remainingAmount: 4_000_000 })],

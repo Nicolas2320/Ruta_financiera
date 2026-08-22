@@ -6,7 +6,7 @@ import type {
   OnboardingData
 } from "../types/financial";
 import { getOnboardingGoals } from "../types/financial";
-import { isDebtPaid } from "./debtPayments";
+import { getDebtPaymentTotalForPeriod, isDebtPaid } from "./debtPayments";
 import { calculateFinancialSnapshot, type SnapshotSource } from "./financialCalculations";
 import { getGoalAmountRangeEstimate } from "./financialRanges";
 import { isDebtGoal } from "./goalPlanning";
@@ -83,6 +83,7 @@ export type FinancialProjectionInput = {
     plannedDebtPaymentsTotal: number;
     knownRequiredDebtPaymentsTotal: number;
     unitemizedRequiredDebtPaymentsTotal: number;
+    debtPaymentsRealizedThisMonth: number;
     hasCompleteRequiredDebtPayments: boolean;
     availableAfterPlannedPayments: number | null;
     availableAfterRequiredPayments: number | null;
@@ -153,6 +154,11 @@ export function buildFinancialProjectionInput({
   const snapshot = calculateFinancialSnapshot({ onboarding, exactValues });
   const issues: ProjectionDataIssue[] = [];
   const activeDebts = onboarding.debts.filter((debt) => !isDebtPaid(debt));
+  const currentPeriodKey = asOfDate.slice(0, 7);
+  const debtPaymentsRealizedThisMonth = onboarding.debts.reduce(
+    (total, debt) => total + getDebtPaymentTotalForPeriod(debt, currentPeriodKey),
+    0
+  );
   const debts = activeDebts.map<ProjectionDebtInput>((debt) => {
     const monthlyPaymentType = debt.monthlyPaymentType ?? "unknown";
     const paymentFlexibility = debt.paymentFlexibility ?? "unknown";
@@ -330,6 +336,7 @@ export function buildFinancialProjectionInput({
       plannedDebtPaymentsTotal: totalPlannedDebtPayments,
       knownRequiredDebtPaymentsTotal,
       unitemizedRequiredDebtPaymentsTotal,
+      debtPaymentsRealizedThisMonth,
       hasCompleteRequiredDebtPayments,
       availableAfterPlannedPayments:
         monthlyIncome !== null &&

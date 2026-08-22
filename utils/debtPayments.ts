@@ -93,26 +93,28 @@ export function registerDebtPayment(
       return debt;
     }
 
-    const reportedRemainingAmount = getSafeRemainingAmount(input.reportedRemainingAmount);
+    const currentRemainingAmount = getSafeRemainingAmount(debt.remainingAmount);
+    const explicitRemainingAmount = getSafeRemainingAmount(input.reportedRemainingAmount);
+    const autoRemainingAmount =
+      currentRemainingAmount !== null ? Math.max(0, currentRemainingAmount - amount) : null;
+    const nextRemainingAmount = explicitRemainingAmount ?? autoRemainingAmount;
     const createdAt = new Date().toISOString();
     const payment: DebtPaymentRecord = {
       id: paymentId,
       amount,
       date,
       createdAt,
-      ...(reportedRemainingAmount !== null
+      ...(nextRemainingAmount !== null
         ? {
-            previousRemainingAmount: getSafeRemainingAmount(debt.remainingAmount),
-            reportedRemainingAmount
+            previousRemainingAmount: currentRemainingAmount,
+            reportedRemainingAmount: nextRemainingAmount
           }
         : {})
     };
 
     return {
       ...debt,
-      ...(reportedRemainingAmount !== null
-        ? { remainingAmount: reportedRemainingAmount }
-        : {}),
+      ...(nextRemainingAmount !== null ? { remainingAmount: nextRemainingAmount } : {}),
       payments: sortPaymentsNewestFirst([payment, ...currentPayments]),
       updatedAt: createdAt
     };

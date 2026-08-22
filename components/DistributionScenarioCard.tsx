@@ -293,7 +293,9 @@ function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentat
         timeline={timeline}
       />
 
-      {focus === "debt" ? <GoalProgressSummary scenario={scenario} /> : null}
+      {focus === "debt" && scenario.id !== "reduce_interest" ? (
+        <GoalProgressSummary scenario={scenario} />
+      ) : null}
 
       {focus !== "goal" && payoffEvents.length > 0 ? (
         <View style={styles.timelineMilestones}>
@@ -499,7 +501,9 @@ export function DistributionScenarioCard({
                 label="Extra a deudas"
                 value={formatCOP(scenario.extraDebtPayment)}
               />
-              <AllocationValue label="A metas" value={formatCOP(scenario.goalContribution)} />
+              {scenario.id === "reduce_interest" ? null : (
+                <AllocationValue label="A metas" value={formatCOP(scenario.goalContribution)} />
+              )}
               <AllocationValue
                 label="Sin repartir"
                 value={formatCOP(scenario.unassignedAmount)}

@@ -214,10 +214,18 @@ function pickHigherDebtLevel(left: DebtLevel, right: DebtLevel): DebtLevel {
   return order[right] > order[left] ? right : left;
 }
 
+export function getEffectiveDebtMonthlyPayment(debt: DebtRecord) {
+  const monthlyPayment = Math.max(0, safeNumber(debt.monthlyPayment) ?? 0);
+  const remainingAmount = safeNumber(debt.remainingAmount);
+
+  return remainingAmount !== null && remainingAmount >= 0
+    ? Math.min(monthlyPayment, remainingAmount)
+    : monthlyPayment;
+}
+
 export function getDebtMonthlyPaymentTotal(debts: DebtRecord[] | null | undefined) {
   return (debts ?? []).reduce(
-    (total, debt) =>
-      total + (isDebtPaid(debt) ? 0 : Math.max(0, safeNumber(debt.monthlyPayment) ?? 0)),
+    (total, debt) => total + (isDebtPaid(debt) ? 0 : getEffectiveDebtMonthlyPayment(debt)),
     0
   );
 }

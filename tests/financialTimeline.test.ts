@@ -204,6 +204,50 @@ describe("month-by-month financial timeline", () => {
     expect(displayMonths[1]).toBe(timeline.months[0]);
   });
 
+  it("shows the payment already registered this month as the chart's starting point", () => {
+    const input = buildFinancialProjectionInput({
+      asOfDate: "2026-08-21",
+      exactValues: {
+        monthlyExpenses: 1_000_000,
+        monthlyIncome: 3_000_000,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        debts: [
+          makeDebt({
+            annualInterestRate: 0,
+            id: "settled-debt",
+            monthlyPayment: 200_000,
+            monthlyPaymentType: "minimum_required",
+            payments: [{ id: "final-payment", amount: 350_000, date: "2026-08-18" }],
+            remainingAmount: 0
+          }),
+          makeDebt({
+            annualInterestRate: 0,
+            id: "active-debt",
+            monthlyPayment: 100_000,
+            monthlyPaymentType: "minimum_required",
+            remainingAmount: 1_000_000
+          })
+        ],
+        goals: [makeGoal()]
+      })
+    });
+    const scenario = buildDistributionScenarios({
+      input,
+      protectedMarginPreference: { mode: "use_all" }
+    }).accelerateGoal;
+    const timeline = buildFinancialScenarioTimeline({ input, scenario });
+    const displayMonths = getFinancialTimelineDisplayMonths(timeline);
+
+    expect(displayMonths[0]).toMatchObject({
+      baseDebtPayments: 350_000,
+      extraDebtPayments: 0,
+      index: 0,
+      month: "2026-08"
+    });
+  });
+
   it("projects only debt payments in the reference scenario and leaves goals without a date", () => {
     const input = buildFinancialProjectionInput({
       asOfDate: "2026-08-02",

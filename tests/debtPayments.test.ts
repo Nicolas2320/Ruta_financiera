@@ -10,7 +10,7 @@ import {
 import { makeDebt } from "./fixtures/financial";
 
 describe("debt payment history", () => {
-  it("records a payment without changing the confirmed balance or monthly installment", () => {
+  it("auto-subtracts the payment from the balance without changing the monthly installment", () => {
     const debt = makeDebt({ monthlyPayment: 250_000, remainingAmount: 2_000_000 });
     const [updatedDebt] = registerDebtPayment([debt], debt.id, {
       amount: 250_000,
@@ -20,18 +20,32 @@ describe("debt payment history", () => {
 
     expect(updatedDebt).toMatchObject({
       monthlyPayment: 250_000,
-      remainingAmount: 2_000_000,
+      remainingAmount: 1_750_000,
       payments: [
         {
           id: "payment-1",
           amount: 250_000,
-          date: "2026-07-15"
+          date: "2026-07-15",
+          previousRemainingAmount: 2_000_000,
+          reportedRemainingAmount: 1_750_000
         }
       ]
     });
   });
 
-  it("updates only the balance when the user reports a current balance", () => {
+  it("marks the debt as paid once auto-subtracted payments reach the balance", () => {
+    const debt = makeDebt({ remainingAmount: 100_000 });
+    const [paidDebt] = registerDebtPayment([debt], debt.id, {
+      amount: 150_000,
+      date: "2026-07-15",
+      id: "final-payment"
+    });
+
+    expect(paidDebt.remainingAmount).toBe(0);
+    expect(isDebtPaid(paidDebt)).toBe(true);
+  });
+
+  it("overrides the auto-subtracted balance when the user reports a current balance", () => {
     const debt = makeDebt({ monthlyPayment: 250_000, remainingAmount: 2_000_000 });
     const [updatedDebt] = registerDebtPayment([debt], debt.id, {
       amount: 250_000,

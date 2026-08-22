@@ -93,6 +93,25 @@ function getToneColors(tone: Tone) {
   };
 }
 
+function resolveStoredDistributionId(
+  strategy: string | null | undefined
+): DistributionStrategyId {
+  if (strategy === "prioritize_goal") {
+    return "accelerate_goal";
+  }
+
+  if (
+    strategy === "current_reference" ||
+    strategy === "reduce_interest" ||
+    strategy === "accelerate_goal" ||
+    strategy === "split_debt_goal"
+  ) {
+    return strategy;
+  }
+
+  return "current_reference";
+}
+
 function formatSimulationAmountRange(range: SimulationAmountRange) {
   if (range.minimum === null && range.maximum === null) {
     return "Por estimar";
@@ -242,9 +261,12 @@ export default function SimulationScreen() {
     useState<ProtectedMarginMode>("automatic");
   const [customProtectedMarginInput, setCustomProtectedMarginInput] = useState("");
   const [selectedDistributionId, setSelectedDistributionId] =
-    useState<DistributionStrategyId>("current_reference");
-  const [expandedDistributionId, setExpandedDistributionId] =
-    useState<string>("current_reference");
+    useState<DistributionStrategyId>(() =>
+      resolveStoredDistributionId(onboarding.simulationPlanPreference?.strategy)
+    );
+  const [expandedDistributionId, setExpandedDistributionId] = useState<string>(() =>
+    resolveStoredDistributionId(onboarding.simulationPlanPreference?.strategy)
+  );
   const [splitDebtPercent, setSplitDebtPercent] = useState(50);
 
   const projectionInput = useMemo(
@@ -354,16 +376,9 @@ export default function SimulationScreen() {
         ? ""
         : formatCOP(preference.customProtectedMargin)
     );
-    if (
-      preference.strategy === "current_reference" ||
-      preference.strategy === "reduce_interest" ||
-      preference.strategy === "accelerate_goal" ||
-      preference.strategy === "split_debt_goal"
-    ) {
-      setSelectedDistributionId(preference.strategy);
-    } else if (preference.strategy === "prioritize_goal") {
-      setSelectedDistributionId("accelerate_goal");
-    }
+    const storedDistributionId = resolveStoredDistributionId(preference.strategy);
+    setSelectedDistributionId(storedDistributionId);
+    setExpandedDistributionId(storedDistributionId);
     if (preference.debtShare !== null) {
       setSplitDebtPercent(Math.round(preference.debtShare * 100));
     }

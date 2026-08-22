@@ -64,6 +64,7 @@ export type FinancialScenarioTimeline = {
   allDebtBalancesKnown: boolean;
   allKnownDebtsPaidMonth: string | null;
   asOfMonth: string;
+  debtPaymentsRealizedThisMonth: number;
   goalCompletionMonth: string | null;
   goalCompletionMonths: Record<string, string>;
   hasUnknownInterestRates: boolean;
@@ -97,7 +98,7 @@ export function getFinancialTimelineDisplayMonths(
     0
   );
   const startingMonth: FinancialTimelineMonth = {
-    baseDebtPayments: 0,
+    baseDebtPayments: Math.max(0, timeline.debtPaymentsRealizedThisMonth),
     debtPayments: startingDebtPayments,
     endingKnownDebtBalance: startingKnownDebtBalance,
     extraDebtPayments: 0,
@@ -250,6 +251,7 @@ export function buildGoalOnlyTimeline({
     allDebtBalancesKnown: false,
     allKnownDebtsPaidMonth: null,
     asOfMonth,
+    debtPaymentsRealizedThisMonth: 0,
     goalCompletionMonth,
     goalCompletionMonths: goalCompletionMonth ? { [goal.id]: goalCompletionMonth } : {},
     hasUnknownInterestRates: false,
@@ -352,6 +354,7 @@ export function buildGoalsOnlyTimeline({
     allDebtBalancesKnown: false,
     allKnownDebtsPaidMonth: null,
     asOfMonth,
+    debtPaymentsRealizedThisMonth: 0,
     goalCompletionMonth: trackedGoal
       ? goalCompletionMonths[trackedGoal.goalId] ?? null
       : null,
@@ -596,6 +599,7 @@ export function buildFinancialScenarioTimeline({
       allDebtBalancesKnown,
       allKnownDebtsPaidMonth: null,
       asOfMonth,
+      debtPaymentsRealizedThisMonth: input.cashflow.debtPaymentsRealizedThisMonth,
       goalCompletionMonth: null,
       goalCompletionMonths: {},
       hasUnknownInterestRates,
@@ -874,6 +878,7 @@ export function buildFinancialScenarioTimeline({
     allDebtBalancesKnown,
     allKnownDebtsPaidMonth,
     asOfMonth,
+    debtPaymentsRealizedThisMonth: input.cashflow.debtPaymentsRealizedThisMonth,
     goalCompletionMonth,
     goalCompletionMonths,
     hasUnknownInterestRates,

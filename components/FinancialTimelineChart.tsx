@@ -22,7 +22,8 @@ import Svg, {
 import { colors, radius, spacing, typography } from "../constants/theme";
 import {
   getFinancialTimelineDisplayMonths,
-  type FinancialScenarioTimeline
+  type FinancialScenarioTimeline,
+  type FinancialTimelineMonth
 } from "../utils/financialTimeline";
 import { formatCOP } from "../utils/financialRanges";
 import { formatTargetMonth } from "../utils/monthYear";
@@ -69,6 +70,18 @@ function formatCompactCOP(value: number) {
   }
 
   return `$${Math.round(value)}`;
+}
+
+function getDebtTooltipDetail(month: FinancialTimelineMonth, totalPayment: number) {
+  if (month.index === 0) {
+    return `Pagado este mes ${formatCompactCOP(totalPayment)}`;
+  }
+
+  if (month.endingKnownDebtBalance === 0) {
+    return `Sin deuda · ${formatCompactCOP(month.unassignedAmount)} libres`;
+  }
+
+  return `Pago proyectado ${formatCompactCOP(totalPayment)}`;
 }
 
 function formatShortMonth(value: string) {
@@ -748,7 +761,7 @@ export function FinancialTimelineChart({
                     x={tooltipX + 10}
                     y={tooltipY + 52}
                   >
-                    {`Pago ${formatCompactCOP(totalSelectedDebtPayment)}`}
+                    {getDebtTooltipDetail(selectedMonth, totalSelectedDebtPayment)}
                   </SvgText>
                 </>
               )}

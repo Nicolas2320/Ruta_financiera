@@ -1462,9 +1462,18 @@ function DebtPaymentsModal({
   const payments = debt?.payments ?? [];
   const paymentTotal = debt ? getDebtPaymentTotal(debt) : 0;
   const monthlyPaymentTotal = debt ? getDebtPaymentTotalForMonth(debt) : 0;
+  const enteredPaymentAmount = parseCOPInput(form.amount) ?? 0;
+  const currentRemainingAmount =
+    debt && debt.remainingAmount !== null && debt.remainingAmount !== undefined
+      ? debt.remainingAmount
+      : null;
+  const autoRemainingAmount =
+    currentRemainingAmount !== null
+      ? Math.max(0, currentRemainingAmount - enteredPaymentAmount)
+      : null;
   const nextRemainingAmount = form.updatesBalance
     ? parseCOPInput(form.remainingAmountAfter)
-    : null;
+    : autoRemainingAmount;
 
   return (
     <AppModal
@@ -1543,8 +1552,8 @@ function DebtPaymentsModal({
                 onUpdate({
                   remainingAmountAfter: form.updatesBalance
                     ? ""
-                    : debt.remainingAmount !== null && debt.remainingAmount !== undefined
-                      ? formatCOP(debt.remainingAmount)
+                    : autoRemainingAmount !== null
+                      ? formatCOP(autoRemainingAmount)
                       : "",
                   updatesBalance: !form.updatesBalance
                 })
@@ -1557,7 +1566,7 @@ function DebtPaymentsModal({
                 <Plus color={colors.primary} size={18} strokeWidth={2.4} />
               )}
               <Text style={styles.balanceToggleText}>
-                {form.updatesBalance ? "No actualizar el saldo" : "Actualizar saldo pendiente"}
+                {form.updatesBalance ? "Usar el cálculo automático" : "Corregir el saldo manualmente"}
               </Text>
               {!form.updatesBalance ? <OptionalTag /> : null}
             </Pressable>
@@ -1573,12 +1582,16 @@ function DebtPaymentsModal({
                 <Text style={styles.paymentHelperText}>
                   {nextRemainingAmount === 0
                     ? "La deuda quedará marcada como pagada y su cuota dejará de contar en tus cálculos."
-                    : "Usaremos esta cifra como el saldo actual, aunque el pago sea de otra fecha. No lo restamos automáticamente porque puede incluir intereses u otros cobros."}
+                    : "Usaremos esta cifra como el saldo actual en vez del cálculo automático. Útil si el pago incluye intereses u otros cobros."}
                 </Text>
               </View>
             ) : (
               <Text style={styles.paymentHelperText}>
-                El pago quedará en el historial sin cambiar el saldo pendiente.
+                {autoRemainingAmount === null
+                  ? "Restaremos este pago del saldo pendiente automáticamente."
+                  : autoRemainingAmount === 0
+                    ? "Este pago cubre el saldo pendiente. La deuda quedará marcada como pagada y se archivará."
+                    : `Restaremos este pago del saldo pendiente. Saldo estimado después: ${formatCOP(autoRemainingAmount)}.`}
               </Text>
             )}
           </View>
@@ -1775,6 +1788,8 @@ export default function DebtsScreen() {
   );
   const [isStartPickerOpen, setIsStartPickerOpen] = useState(false);
   const [debtPendingDelete, setDebtPendingDelete] = useState<DebtRecord | null>(null);
+  const [isPaidDebtsExpanded, setIsPaidDebtsExpanded] = useState(false);
+  const [settledDebt, setSettledDebt] = useState<DebtRecord | null>(null);
   const [paymentDebtId, setPaymentDebtId] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState<DebtPaymentFormState>(() =>
     getEmptyDebtPaymentForm()
@@ -1833,6 +1848,8 @@ export default function DebtsScreen() {
   );
   const summaryTone = getDebtTone(debtSummary.level);
   const hasOnlyPaidDebts = debts.length > 0 && debts.every(isDebtPaid);
+  const activeDebts = debts.filter((debt) => !isDebtPaid(debt));
+  const paidDebts = debts.filter(isDebtPaid);
   const debtFormRemainingAmount = parseCOPInput(debtForm.remainingAmount);
   const debtFormMonthlyPayment = parseCOPInput(debtForm.monthlyPayment);
   const hasCompleteDebtClassification = Boolean(
@@ -2030,16 +2047,22 @@ export default function DebtsScreen() {
 
     isSavingPaymentRef.current = true;
 
-    updateDebts(
-      registerDebtPayment(debts, paymentDebt.id, {
-        amount: paymentAmount,
-        date: paymentDate,
-        reportedRemainingAmount: paymentForm.updatesBalance
-          ? paymentRemainingAmount
-          : undefined
-      })
-    );
+    const wasPaid = isDebtPaid(paymentDebt);
+    const nextDebts = registerDebtPayment(debts, paymentDebt.id, {
+      amount: paymentAmount,
+      date: paymentDate,
+      reportedRemainingAmount: paymentForm.updatesBalance
+        ? paymentRemainingAmount
+        : undefined
+    });
+    const updatedDebt = nextDebts.find((debt) => debt.id === paymentDebt.id) ?? null;
+
+    updateDebts(nextDebts);
     closeDebtPayments();
+
+    if (updatedDebt && !wasPaid && isDebtPaid(updatedDebt)) {
+      setSettledDebt(updatedDebt);
+    }
   };
 
   const confirmDeletePayment = () => {
@@ -2177,9 +2200,9 @@ export default function DebtsScreen() {
               </Pressable>
             ) : null}
 
-            {debts.length > 0 ? (
+            {activeDebts.length > 0 ? (
               <View style={styles.debtList}>
-                {debts.map((debt) => (
+                {activeDebts.map((debt) => (
                   <DebtCard
                     compact={isPhone}
                     debt={debt}
@@ -2190,8 +2213,49 @@ export default function DebtsScreen() {
                   />
                 ))}
               </View>
-            ) : !showDebtForm ? (
+            ) : debts.length === 0 && !showDebtForm ? (
               <EmptyState onPress={startNewDebt} />
+            ) : !showDebtForm ? (
+              <Text style={styles.text}>No tienes deudas activas en este momento.</Text>
+            ) : null}
+
+            {paidDebts.length > 0 ? (
+              <View style={styles.paidDebtsSection}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: isPaidDebtsExpanded }}
+                  onPress={() => setIsPaidDebtsExpanded((current) => !current)}
+                  style={({ pressed }) => [styles.paidDebtsToggle, pressed && styles.pressed]}
+                >
+                  <CheckCircle2 color={colors.support} size={18} strokeWidth={2.4} />
+                  <Text style={styles.paidDebtsToggleText}>
+                    Deudas pagadas ({paidDebts.length})
+                  </Text>
+                  <ChevronRight
+                    color={colors.support}
+                    size={18}
+                    strokeWidth={2.5}
+                    style={[
+                      styles.paidDebtsToggleIcon,
+                      isPaidDebtsExpanded && styles.paidDebtsToggleIconExpanded
+                    ]}
+                  />
+                </Pressable>
+                {isPaidDebtsExpanded ? (
+                  <View style={styles.debtList}>
+                    {paidDebts.map((debt) => (
+                      <DebtCard
+                        compact={isPhone}
+                        debt={debt}
+                        key={debt.id}
+                        onDelete={() => requestDeleteDebt(debt)}
+                        onEdit={() => startEditDebt(debt)}
+                        onPayments={() => openDebtPayments(debt)}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+              </View>
             ) : null}
           </SectionCard>
 
@@ -2482,6 +2546,30 @@ export default function DebtsScreen() {
           {debtPendingDelete
             ? "Esta deuda se quitará de tu lista y dejará de incluirse en los cálculos del plan."
             : "¿Quieres eliminar esta deuda de tus deudas?"}
+        </Text>
+      </AppModal>
+
+      <AppModal
+        footer={
+          <AppModalActions>
+            <AppModalAction
+              icon={<CheckCircle2 color={colors.surface} size={19} strokeWidth={2.5} />}
+              label="Entendido"
+              onPress={() => setSettledDebt(null)}
+            />
+          </AppModalActions>
+        }
+        icon={<CheckCircle2 color={colors.surface} size={23} strokeWidth={2.4} />}
+        iconBackgroundColor={colors.support}
+        onClose={() => setSettledDebt(null)}
+        size="compact"
+        title="¡Felicidades, deuda saldada!"
+        visible={Boolean(settledDebt)}
+      >
+        <Text style={styles.modalText}>
+          {settledDebt
+            ? `Terminaste de pagar ${getDebtTitle(settledDebt)}. La archivamos junto con su historial y ya no cuenta en tus cálculos ni en la simulación.`
+            : ""}
         </Text>
       </AppModal>
 
@@ -3225,6 +3313,34 @@ const styles = StyleSheet.create({
   },
   debtList: {
     gap: spacing.md
+  },
+  paidDebtsSection: {
+    gap: spacing.md,
+    marginTop: spacing.sm
+  },
+  paidDebtsToggle: {
+    alignItems: "center",
+    backgroundColor: colors.supportSoft,
+    borderColor: colors.supportBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 44,
+    paddingHorizontal: spacing.md
+  },
+  paidDebtsToggleText: {
+    color: colors.support,
+    flex: 1,
+    fontSize: typography.body,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.body
+  },
+  paidDebtsToggleIcon: {
+    transform: [{ rotate: "0deg" }]
+  },
+  paidDebtsToggleIconExpanded: {
+    transform: [{ rotate: "90deg" }]
   },
   debtCard: {
     backgroundColor: "#F8FBFF",
