@@ -96,6 +96,7 @@ export type FinancialSnapshot = {
     suggestedMonthlyContribution: number;
   };
   emergencyFund: {
+    currentSavings: number | null;
     coverageMonths: number | null;
     isGoalCompleted: boolean;
     targetThreeMonths: number | null;
@@ -669,11 +670,12 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
   const emergencyGoalAmount = isNonNegativeNumber(emergencyGoal?.currentAmount)
     ? emergencyGoal.currentAmount
     : 0;
-  const emergencyFundSavings = emergencyGoal
+  const emergencyGoalSavings = emergencyGoal
     ? emergencyGoal.status === "completed"
       ? Math.max(emergencyGoalAmount, emergencyGoal.targetAmount ?? 0)
       : emergencyGoalAmount
-    : currentSavings;
+    : null;
+  const emergencyFundSavings = emergencyGoalSavings ?? currentSavings;
 
   const selectedDebtLevel = getDebtLevel(onboarding.debtSituation, onboarding.debtPaymentShare);
   const registeredDebtSummary = getRegisteredDebtSummary({
@@ -799,6 +801,7 @@ export function calculateFinancialSnapshot(profile: FinancialProfileInput): Fina
       suggestedMonthlyContribution
     },
     emergencyFund: {
+      currentSavings: emergencyGoalSavings,
       coverageMonths,
       isGoalCompleted: emergencyGoal?.status === "completed",
       targetThreeMonths,

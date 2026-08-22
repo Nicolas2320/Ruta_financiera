@@ -793,7 +793,6 @@ export default function DashboardScreen() {
     snapshot.sourceMap.monthlyIncome === "exact" ? snapshot.cashflow.monthlyIncome : null;
   const exactMonthlyExpenses =
     snapshot.sourceMap.monthlyExpenses === "exact" ? snapshot.cashflow.monthlyExpenses : null;
-  const currentSavingsIsExact = snapshot.sourceMap.currentSavings === "exact";
   const hasExactCashflowAmounts =
     snapshot.sourceMap.monthlyIncome === "exact" &&
     snapshot.sourceMap.monthlyExpenses === "exact" &&
@@ -1074,8 +1073,11 @@ export default function DashboardScreen() {
             title="Fondo de emergencia"
             tone={emergencyStatus.tone}
             value={
-              snapshot.values.currentSavings !== null
-                ? `Ahorro actual: ${getAmountLabel(snapshot.values.currentSavings, currentSavingsIsExact)}`
+              snapshot.emergencyFund.currentSavings !== null
+                ? `Ahorro actual: ${getAmountLabel(
+                    snapshot.emergencyFund.currentSavings,
+                    true
+                  )}`
                 : "Ahorro por registrar"
             }
           >

@@ -107,6 +107,7 @@ describe("calculateFinancialSnapshot", () => {
       suggestedContributionBeforeRounding: 956_250,
       suggestedMonthlyContribution: 950_000
     });
+    expect(snapshot.emergencyFund.currentSavings).toBe(250_000);
     expect(snapshot.emergencyFund.coverageMonths).toBeCloseTo(0.1667, 3);
     expect(snapshot.emergencyFund.status).toBe("starter");
     expect(snapshot.goal).toMatchObject({
@@ -121,6 +122,18 @@ describe("calculateFinancialSnapshot", () => {
     });
     expect(snapshot.precision).toMatchObject({ exactValuesCount: 4, status: "clearer" });
     expect(snapshot.priority.key).toBe("build_emergency_fund");
+  });
+
+  it("does not present general savings as an emergency-goal balance", () => {
+    const snapshot = calculateFinancialSnapshot({
+      onboarding: makeOnboarding(),
+      exactValues: {
+        currentSavings: 1_250_000
+      }
+    });
+
+    expect(snapshot.values.currentSavings).toBe(1_250_000);
+    expect(snapshot.emergencyFund.currentSavings).toBeNull();
   });
 
   it("never recommends a contribution when monthly cashflow is negative", () => {
