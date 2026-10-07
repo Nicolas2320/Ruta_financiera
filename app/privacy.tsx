@@ -131,7 +131,7 @@ export default function PrivacyScreen() {
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel="Continuar hacia el perfil financiero"
-              iconPosition="right"
+              icon={null}
               onPress={() => router.push("/profile")}
               style={styles.primaryButton}
               title="Continuar"

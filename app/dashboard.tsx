@@ -363,12 +363,22 @@ function MonthlyPlanCard({
         </View>
         <View style={styles.monthlyPlanHeadingCopy}>
           <Text style={styles.monthlyPlanTitle}>Resumen de este mes</Text>
-          <Text style={styles.monthlyPlanSubtitle}>
-            Revisa el avance de tus acciones y la meta que tiene prioridad.
-          </Text>
         </View>
       </View>
       <View style={styles.monthlyPlanBody}>
+
+        {primaryGoalTitle ? (
+          <View style={styles.primaryGoalCard}>
+            <View style={styles.primaryGoalIcon}>
+              <Flag color={colors.primary} size={20} strokeWidth={2.4} />
+            </View>
+            <View style={styles.primaryGoalCopy}>
+              <Text style={styles.primaryGoalLabel}>Meta principal</Text>
+              <Text style={styles.primaryGoalTitle}>{primaryGoalTitle}</Text>
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.monthlyPlanProgressBlock}>
           <View style={styles.monthlyPlanMetricHeader}>
             <Text style={styles.monthlyPlanMetricLabel}>
@@ -387,39 +397,27 @@ function MonthlyPlanCard({
               ]}
             />
           </View>
-        </View>
+          {nextActionTitle ? (
+            <View style={styles.nextActionCard}>
+              <View style={styles.nextActionCopy}>
+                <Text style={styles.nextActionLabel}>Siguiente acción</Text>
+                <Text style={styles.nextActionTitle}>{nextActionTitle}</Text>
+              </View>
+              <View style={styles.monthlyPlanActions}>
+                <Pressable
+                  accessibilityLabel="Registrar acción del plan mensual"
+                  accessibilityRole="button"
+                  onPress={onRegisterProgress}
+                  style={({ pressed }) => [styles.improveButton, pressed && styles.pressed]}
+                >
+                  <Text style={styles.improveButtonText}>Registrar acción</Text>
+                </Pressable>
 
-        {primaryGoalTitle ? (
-          <View style={styles.primaryGoalCard}>
-            <View style={styles.primaryGoalIcon}>
-              <Flag color={colors.primary} size={20} strokeWidth={2.4} />
+              </View>
             </View>
-            <View style={styles.primaryGoalCopy}>
-              <Text style={styles.primaryGoalLabel}>Meta principal</Text>
-              <Text style={styles.primaryGoalTitle}>{primaryGoalTitle}</Text>
-            </View>
-          </View>
-        ) : null}
+          ) : null}
 
-        {nextActionTitle ? (
-          <View style={styles.nextActionCard}>
-            <View style={styles.nextActionCopy}>
-              <Text style={styles.nextActionLabel}>Siguiente acción</Text>
-              <Text style={styles.nextActionTitle}>{nextActionTitle}</Text>
-            </View>
-            <ChevronRight color="#B45309" size={21} strokeWidth={2.5} />
-          </View>
-        ) : null}
 
-        <View style={styles.monthlyPlanActions}>
-          <Pressable
-            accessibilityLabel="Registrar acción del plan mensual"
-            accessibilityRole="button"
-            onPress={onRegisterProgress}
-            style={({ pressed }) => [styles.improveButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.improveButtonText}>Registrar acción</Text>
-          </Pressable>
         </View>
       </View>
     </View>
@@ -481,7 +479,7 @@ function MetricCard({
         }
       ]}
     >
-      <IconBubble icon={icon} size="small" tone={tone} />
+      <View style={[styles.metricIcon, { backgroundColor: toneColors.background }]}>{icon}</View>
       <View style={styles.metricTextGroup}>
         <Text style={styles.metricLabel}>{label}</Text>
         <Text style={[styles.metricValue, { color: toneColors.text }]}>{value}</Text>
@@ -841,10 +839,10 @@ export default function DashboardScreen() {
         ? `Objetivo: ${formatCOP(primaryGoalTargetAmount)}. Meta completada.`
         : "Meta completada."
       : primaryGoalTargetAmount !== null
-      ? primaryGoalProgressPercentage !== null
-        ? `Objetivo: ${formatCOP(primaryGoalTargetAmount)}. Base actual frente a tu objetivo: ${primaryGoalProgressPercentage}% aprox.`
-        : `Objetivo: ${formatCOP(primaryGoalTargetAmount)}. Mes objetivo: ${primaryGoalTargetMonth}.`
-      : `Mes objetivo: ${primaryGoalTargetMonth}. Cifra aproximada: ${getDefinedLabel(data.goalAmountRange, "No definida")}.`;
+        ? primaryGoalProgressPercentage !== null
+          ? `Objetivo: ${formatCOP(primaryGoalTargetAmount)}. Base actual frente a tu objetivo: ${primaryGoalProgressPercentage}% aprox.`
+          : `Objetivo: ${formatCOP(primaryGoalTargetAmount)}. Mes objetivo: ${primaryGoalTargetMonth}.`
+        : `Mes objetivo: ${primaryGoalTargetMonth}. Cifra aproximada: ${getDefinedLabel(data.goalAmountRange, "No definida")}.`;
   const activeGoalsLabel = `${activeGoalsCount} ${activeGoalsCount === 1 ? "activa" : "activas"}`;
   const completedGoalsLabel = `${completedGoalsCount} ${completedGoalsCount === 1 ? "completada" : "completadas"}`;
   const goalsValue =
@@ -877,20 +875,20 @@ export default function DashboardScreen() {
       : null;
   const smallExpensesValue =
     snapshot.cashflow.monthlyExpensesIncludesSmallExpenses &&
-    snapshot.smallExpenses.amount === null
+      snapshot.smallExpenses.amount === null
       ? "Incluidos en el gasto mensual"
       : snapshot.sourceMap.smallExpenses === "reported_none"
-      ? "No identificados"
-      : snapshot.smallExpenses.amount !== null
-      ? snapshot.sourceMap.smallExpenses === "exact"
-        ? formatCOP(snapshot.smallExpenses.amount)
-        : `${formatCOP(snapshot.smallExpenses.amount)} aprox.`
-      : snapshot.sourceMap.smallExpenses === "unknown"
-        ? "Por estimar"
-        : `Rango: ${getDefinedLabel(data.smallExpensesRange)}`;
+        ? "No identificados"
+        : snapshot.smallExpenses.amount !== null
+          ? snapshot.sourceMap.smallExpenses === "exact"
+            ? formatCOP(snapshot.smallExpenses.amount)
+            : `${formatCOP(snapshot.smallExpenses.amount)} aprox.`
+          : snapshot.sourceMap.smallExpenses === "unknown"
+            ? "Por estimar"
+            : `Rango: ${getDefinedLabel(data.smallExpensesRange)}`;
   const smallExpensesText =
     snapshot.cashflow.monthlyExpensesIncludesSmallExpenses &&
-    snapshot.smallExpenses.amount === null
+      snapshot.smallExpenses.amount === null
       ? "Ya están considerados en el total mensual. Detallarlos después es opcional y no los sumará dos veces."
       : snapshot.smallExpenses.recommendation;
   const hasSmallExpensesDetail =
@@ -903,8 +901,8 @@ export default function DashboardScreen() {
       ? snapshot.debt.source === "reported"
         ? `${snapshot.debt.isPaymentEstimated ? "Estimado" : "Cuotas"}: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
         : snapshot.debt.source === "category"
-        ? `Referencia: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
-        : `Cuotas: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
+          ? `Referencia: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
+          : `Cuotas: ${formatCOP(snapshot.debt.monthlyPaymentTotal)}`
       : snapshot.debt.label;
   const dashboardDebtText = getDashboardDebtText({
     count: snapshot.debt.registeredDebtCount,
@@ -993,19 +991,19 @@ export default function DashboardScreen() {
             <PanelCard compact={isPhone} title="Resumen financiero estimado">
               <View style={styles.metricsGrid}>
                 <MetricCard
-                  icon={<PiggyBank color={colors.support} size={23} strokeWidth={2.4} />}
+                  icon={<PiggyBank color={colors.support} size={28} strokeWidth={2.4} />}
                   label="Ingreso mensual"
                   tone="support"
                   value={getAmountLabel(metrics.incomeMidpoint, exactMonthlyIncome !== null)}
                 />
                 <MetricCard
-                  icon={<ArrowDownCircle color="#C2410C" size={23} strokeWidth={2.4} />}
+                  icon={<ArrowDownCircle color="#C2410C" size={28} strokeWidth={2.4} />}
                   label="Gastos principales"
                   tone="danger"
                   value={getAmountLabel(metrics.expenseMidpoint, exactMonthlyExpenses !== null)}
                 />
                 <MetricCard
-                  icon={<TrendingUp color={colors.support} size={23} strokeWidth={2.4} />}
+                  icon={<TrendingUp color={colors.support} size={28} strokeWidth={2.4} />}
                   label="Margen mensual"
                   tone={metrics.estimatedMargin !== null && metrics.estimatedMargin > 0 ? "support" : "warning"}
                   value={getMarginLabel(metrics.estimatedMargin, hasExactCashflowAmounts)}
@@ -1014,7 +1012,7 @@ export default function DashboardScreen() {
                   icon={
                     <CreditCard
                       color={getToneColors(dashboardDebtTone).text}
-                      size={23}
+                      size={28}
                       strokeWidth={2.4}
                     />
                   }
@@ -1022,9 +1020,8 @@ export default function DashboardScreen() {
                   tone={dashboardDebtTone}
                   value={
                     snapshot.cashflow.monthlyDebtPayments > 0
-                      ? `${formatCOP(snapshot.cashflow.monthlyDebtPayments)}${
-                          snapshot.debt.isPaymentEstimated ? " aprox." : ""
-                        }`
+                      ? `${formatCOP(snapshot.cashflow.monthlyDebtPayments)}${snapshot.debt.isPaymentEstimated ? " aprox." : ""
+                      }`
                       : "$0"
                   }
                 />
@@ -1049,19 +1046,6 @@ export default function DashboardScreen() {
               </View>
             </PanelCard>
 
-            <PanelCard
-              compact={isPhone}
-              disabled
-              subtitle={precisionStatus.message}
-              title="Mejorar mi plan financiero"
-            >
-              <ImprovePlanSummaryCard
-                count={precisionStatus.exactValuesCount}
-                disabled
-                onPress={() => router.push("/improve-plan")}
-                state={precisionStatus.label}
-              />
-            </PanelCard>
           </View>
 
           <RowCard
@@ -1075,9 +1059,9 @@ export default function DashboardScreen() {
             value={
               snapshot.emergencyFund.currentSavings !== null
                 ? `Ahorro actual: ${getAmountLabel(
-                    snapshot.emergencyFund.currentSavings,
-                    true
-                  )}`
+                  snapshot.emergencyFund.currentSavings,
+                  true
+                )}`
                 : "Ahorro por registrar"
             }
           >
@@ -1404,27 +1388,40 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   metricCard: {
+    alignItems: "center",
     borderRadius: radius.md,
     borderWidth: 1,
     flexBasis: "47%",
     flexGrow: 1,
-    gap: spacing.sm,
-    minWidth: 140,
-    padding: spacing.md
+    gap: spacing.xs,
+    justifyContent: "center",
+    minHeight: 112,
+    minWidth: 128,
+    padding: spacing.sm
+  },
+  metricIcon: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    height: 40,
+    justifyContent: "center",
+    width: 40
   },
   metricTextGroup: {
-    gap: spacing.xs
+    alignItems: "center",
+    gap: 2
   },
   metricLabel: {
     color: colors.text,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
+    lineHeight: typography.lineHeight.caption,
+    textAlign: "center"
   },
   metricValue: {
     fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.sectionTitle
+    lineHeight: typography.lineHeight.sectionTitle,
+    textAlign: "center"
   },
   improveSummary: {
     gap: spacing.md

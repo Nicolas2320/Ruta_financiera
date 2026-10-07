@@ -397,7 +397,7 @@ export default function SummaryScreen() {
               <>
                 <PrimaryButton
                   accessibilityLabel="Generar diagnóstico financiero"
-                  iconPosition="right"
+                  icon={null}
                   onPress={openGuidanceModal}
                   title="Generar diagnóstico"
                 />

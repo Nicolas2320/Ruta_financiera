@@ -174,7 +174,7 @@ function SummaryMetric({
 }: {
   label: string;
   value: string;
-  helper: string;
+  helper?: string;
   icon: ReactNode;
   tone?: Tone;
 }) {
@@ -194,7 +194,7 @@ function SummaryMetric({
       <View style={styles.summaryMetricText}>
         <Text style={styles.metricLabel}>{label}</Text>
         <Text style={[styles.metricValue, { color: toneColors.text }]}>{value}</Text>
-        <Text style={styles.metricHelper}>{helper}</Text>
+        {helper ? <Text style={styles.metricHelper}>{helper}</Text> : null}
       </View>
     </View>
   );
@@ -456,7 +456,7 @@ export default function SimulationScreen() {
     : formatSimulationAmountRange(simulationExperience.debtPaymentRange);
   const debtMetricHelper = isDetailedDebtMode
     ? projectionInput.cashflow.hasCompleteRequiredDebtPayments
-      ? "Pagos mínimos o acordados"
+      ? undefined
       : "Falta confirmar una o más cuotas"
     : simulationExperience.mode === "goal_only"
       ? "Indicaste que no pagas deudas"
@@ -470,7 +470,7 @@ export default function SimulationScreen() {
           ? `Según tu respuesta: ${onboarding.debtPaymentShare}`
           : "Sin inventar una cuota exacta";
   const heroSubtitle = isDetailedDebtMode
-    ? "Compara distintas formas de repartir el mismo dinero mensual. Ninguna alternativa cambia tu plan hasta que tú lo decidas."
+    ? undefined
     : simulationExperience.mode === "reported_debt"
       ? snapshot.debt.reportedPaymentKind === "exact"
         ? "Explora tu capacidad mensual con el pago total que informaste, sin inventar saldos ni intereses."
@@ -492,7 +492,7 @@ export default function SimulationScreen() {
             </View>
             <View style={styles.heroTextGroup}>
               <Text style={[styles.title, isPhone && styles.titlePhone]}>Simulación</Text>
-              <Text style={styles.subtitle}>{heroSubtitle}</Text>
+              {heroSubtitle ? <Text style={styles.subtitle}>{heroSubtitle}</Text> : null}
             </View>
           </View>
 
@@ -500,7 +500,7 @@ export default function SimulationScreen() {
             <SummaryMetric
               helper={
                 projectionInput.cashflow.monthlyIncomeSource === "exact"
-                  ? "Dato registrado"
+                  ? undefined
                   : "Estimado desde tu rango"
               }
               icon={<WalletCards color={colors.support} size={22} strokeWidth={2.4} />}
@@ -513,7 +513,6 @@ export default function SimulationScreen() {
               }
             />
             <SummaryMetric
-              helper="Principales y pequeños; no incluye deudas"
               icon={<PieChart color={colors.primary} size={22} strokeWidth={2.4} />}
               label="Gastos sin deudas"
               value={
@@ -532,7 +531,7 @@ export default function SimulationScreen() {
             <SummaryMetric
               helper={
                 isDetailedDebtMode
-                  ? "Después de dejar una parte libre para el mes"
+                  ? undefined
                   : simulationExperience.planningMonthlyMargin === null
                     ? "No lo calculamos sin una referencia prudente"
                     : "Calculado después de dejar una parte libre para el mes"

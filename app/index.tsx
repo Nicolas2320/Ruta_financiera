@@ -6,10 +6,9 @@ import {
   ClipboardList,
   Coffee,
   LogIn,
-  Route,
   ShieldCheck
 } from "lucide-react-native";
-import { ImageBackground, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, ImageBackground, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
@@ -19,6 +18,7 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 
 const welcomeRoute = require("../assets/illustrations/welcome-route.png");
+const brandLogo = require("../assets/brand/logo-mark.png");
 
 type IconProps = {
   color?: string;
@@ -96,7 +96,12 @@ export default function WelcomeScreen() {
         <View style={styles.container}>
           <View style={styles.brandRow}>
             <View style={styles.brandIcon}>
-              <Route color={colors.primary} size={25} strokeWidth={2.7} />
+              <Image
+                accessibilityLabel="Logo de Ruta Financiera"
+                resizeMode="contain"
+                source={brandLogo}
+                style={styles.brandLogo}
+              />
             </View>
             <Text style={styles.brandName}>Ruta Financiera</Text>
           </View>
@@ -270,6 +275,10 @@ const styles = StyleSheet.create({
     height: 42,
     justifyContent: "center",
     width: 42
+  },
+  brandLogo: {
+    height: 38,
+    width: 38
   },
   brandName: {
     color: colors.text,

@@ -312,7 +312,7 @@ export default function ExpensesScreen() {
                     : "Continuar hacia ahorros y deudas"
               }
               disabled={!canContinue}
-              iconPosition="right"
+              icon={null}
               onPress={handleContinue}
               style={styles.primaryButton}
               title={isActionPlanEditMode ? "Guardar cifra" : isEditMode ? "Guardar cambios" : "Continuar"}

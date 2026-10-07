@@ -610,7 +610,7 @@ export default function GoalsScreen() {
             <PrimaryButton
               accessibilityLabel={isAddMode ? "Guardar nueva meta" : "Continuar hacia revisión de respuestas"}
               disabled={!canContinue}
-              iconPosition="right"
+              icon={null}
               onPress={handleContinue}
               style={styles.primaryButton}
               title={isAddMode ? "Guardar meta" : "Continuar"}

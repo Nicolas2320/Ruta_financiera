@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter, type Route as ExpoRoute } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { KeyRound, LogIn, Mail, Route, ShieldCheck, UserPlus } from "lucide-react-native";
@@ -49,16 +49,25 @@ export default function AuthScreen() {
   const [password, setPassword] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isMountedRef = useRef(true);
+  const isSubmittingRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const canSubmit =
     isSupabaseConfigured && isAuthReady && email.trim().length > 3 && password.length >= 6;
   const isSignIn = mode === "sign-in";
 
   const handleSubmit = async () => {
-    if (!canSubmit) {
+    if (!canSubmit || isSubmittingRef.current) {
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setFeedback(null);
 
@@ -66,6 +75,11 @@ export default function AuthScreen() {
       ? await signInWithPassword(email, password)
       : await signUpWithPassword(email, password);
 
+    if (!isMountedRef.current) {
+      return;
+    }
+
+    isSubmittingRef.current = false;
     setIsSubmitting(false);
 
     if (result.error) {
@@ -124,15 +138,6 @@ export default function AuthScreen() {
                   : isSavePlanFlow
                     ? "Guarda tu ruta financiera"
                     : "Crear una cuenta"}
-              </Text>
-              <Text style={styles.subtitle}>
-                {isSignIn
-                  ? isSavePlanFlow
-                    ? "Entra para continuar con los datos guardados en tu cuenta. Si ya tenías un plan, lo conservaremos."
-                    : "Entra para recuperar la información guardada."
-                  : isSavePlanFlow
-                    ? "Ya viste tu diagnóstico y simulación. Crea una cuenta para guardar tus respuestas y abrir tu plan mensual."
-                    : "Crea tu cuenta y después comenzaremos tu diagnóstico."}
               </Text>
             </View>
 

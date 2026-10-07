@@ -3,6 +3,7 @@
     "name": "Ruta Financiera",
     "slug": "ruta-financiera",
     "version": "0.1.0",
+    "icon": "./assets/brand/app-icon.png",
     "orientation": "portrait",
     "scheme": "rutafinanciera",
     "userInterfaceStyle": "light",
@@ -16,12 +17,14 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#F7FAFC"
+        "backgroundColor": "#F6F9FC",
+        "foregroundImage": "./assets/brand/adaptive-icon-foreground.png"
       },
       "edgeToEdgeEnabled": true
     },
     "web": {
       "bundler": "metro",
+      "favicon": "./assets/brand/favicon.png",
       "output": "static"
     }
   }

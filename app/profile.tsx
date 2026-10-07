@@ -44,7 +44,12 @@ export default function ProfileScreen() {
     updateOnboarding({
       firstName: firstName.trim()
     });
-    router.push(isProfileEditMode ? { pathname: "/summary", params: { mode: "edit" } } : "/income");
+    if (isProfileEditMode) {
+      router.push({ pathname: "/summary", params: { mode: "edit" } });
+      return;
+    }
+
+    router.replace("/income");
   };
 
   return (
@@ -107,7 +112,7 @@ export default function ProfileScreen() {
             <PrimaryButton
               accessibilityLabel="Continuar hacia preguntas de ingresos"
               disabled={!canContinue}
-              iconPosition="right"
+              icon={null}
               onPress={handleContinue}
               style={styles.primaryButton}
               title={isProfileEditMode ? "Guardar cambios" : "Continuar"}

@@ -363,7 +363,7 @@ export default function SavingsDebtsScreen() {
             <PrimaryButton
               accessibilityLabel={isProfileEditMode ? "Guardar cambios de ahorros y deudas" : "Continuar hacia meta financiera"}
               disabled={!canContinue}
-              iconPosition="right"
+              icon={null}
               onPress={handleContinue}
               style={styles.primaryButton}
               title={isProfileEditMode ? "Guardar cambios" : "Continuar"}
@@ -450,7 +450,8 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.caption
   },
   sectionBody: {
-    flex: 1
+    flex: 1,
+    gap: spacing.sm
   },
   moneyGrid: {
     flexDirection: "row",

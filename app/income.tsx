@@ -228,7 +228,7 @@ export default function IncomeScreen() {
                     : "Continuar hacia preguntas de gastos"
               }
               disabled={!canContinue}
-              iconPosition="right"
+              icon={null}
               onPress={handleContinue}
               style={styles.primaryButton}
               title={isActionPlanEditMode ? "Guardar cifra" : isEditMode ? "Guardar cambios" : "Continuar"}
