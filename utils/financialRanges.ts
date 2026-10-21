@@ -123,12 +123,6 @@ const smallExpenseRanges: Record<string, FinancialRangeEstimate> = {
     max: null,
     midpoint: null,
     label: "Más de $500.000"
-  },
-  "No sé": {
-    min: null,
-    max: null,
-    midpoint: null,
-    label: "No sé"
   }
 };
 
