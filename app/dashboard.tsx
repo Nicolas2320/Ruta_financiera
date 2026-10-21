@@ -67,6 +67,12 @@ type IconProps = {
 
 type Tone = "primary" | "support" | "warning" | "purple" | "neutral" | "danger";
 
+type MonthlyPlanGoal = {
+  id: string;
+  isPrimary: boolean;
+  title: string;
+};
+
 type Route = Parameters<ReturnType<typeof useRouter>["push"]>[0];
 
 function toPercentWidth(value: number): `${number}%` {
@@ -340,18 +346,18 @@ function MonthlyPlanCard({
   actionCount,
   completed,
   completedCount,
+  goals,
   nextActionTitle,
   onRegisterProgress,
-  primaryGoalTitle,
   progressPercentage,
   compact = false
 }: {
   actionCount: number;
   completed: boolean;
   completedCount: number;
+  goals: MonthlyPlanGoal[];
   nextActionTitle?: string | null;
   onRegisterProgress: () => void;
-  primaryGoalTitle?: string | null;
   progressPercentage: number;
   compact?: boolean;
 }) {
@@ -367,14 +373,31 @@ function MonthlyPlanCard({
       </View>
       <View style={styles.monthlyPlanBody}>
 
-        {primaryGoalTitle ? (
+        {goals.length > 0 ? (
           <View style={styles.primaryGoalCard}>
             <View style={styles.primaryGoalIcon}>
-              <Flag color={colors.primary} size={20} strokeWidth={2.4} />
+              <Flag color={colors.surface} size={20} strokeWidth={2.4} />
             </View>
             <View style={styles.primaryGoalCopy}>
-              <Text style={styles.primaryGoalLabel}>Meta principal</Text>
-              <Text style={styles.primaryGoalTitle}>{primaryGoalTitle}</Text>
+              <Text style={styles.primaryGoalLabel}>Metas del plan</Text>
+              <View style={styles.goalTags}>
+                {goals.map((goal) => (
+                  <View
+                    accessibilityLabel={goal.isPrimary ? `Meta principal: ${goal.title}` : goal.title}
+                    key={goal.id}
+                    style={[styles.goalTag, goal.isPrimary && styles.primaryGoalTag]}
+                  >
+                    <Text
+                      style={[
+                        styles.goalTagText,
+                        goal.isPrimary && styles.primaryGoalTagText
+                      ]}
+                    >
+                      {goal.title}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
           </View>
         ) : null}
@@ -708,6 +731,22 @@ export default function DashboardScreen() {
   );
   const primaryGoalTitle =
     primaryGoalAllocation?.goal.title ?? snapshot.goal.name ?? data.financialGoal;
+  const monthlyPlanGoals: MonthlyPlanGoal[] =
+    goalPlan.allocations.length > 0
+      ? [...goalPlan.allocations]
+          .sort((left, right) => {
+            const leftIsPrimary = left.goal.id === primaryGoalAllocation?.goal.id;
+            const rightIsPrimary = right.goal.id === primaryGoalAllocation?.goal.id;
+            return Number(rightIsPrimary) - Number(leftIsPrimary);
+          })
+          .map((allocation) => ({
+            id: allocation.goal.id,
+            isPrimary: allocation.goal.id === primaryGoalAllocation?.goal.id,
+            title: allocation.goal.title
+          }))
+      : primaryGoalTitle
+        ? [{ id: "primary-goal", isPrimary: true, title: primaryGoalTitle }]
+        : [];
   const monthlyGoalContext = useMemo<MonthlyGoalContext>(
     () => ({
       activeGoalCount: activeGoalAllocations.length,
@@ -989,9 +1028,9 @@ export default function DashboardScreen() {
             compact={isPhone}
             completed={completedCount === actionCount}
             completedCount={completedCount}
+            goals={monthlyPlanGoals}
             nextActionTitle={nextActionTitle}
             onRegisterProgress={() => router.push("/action-plan")}
-            primaryGoalTitle={primaryGoalTitle}
             progressPercentage={progressPercentage}
           />
 
@@ -1295,8 +1334,8 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   monthlyPlanProgressBlock: {
-    backgroundColor: colors.surfaceMuted,
-    borderColor: "#D7E7FF",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: radius.md,
     borderWidth: 1,
     gap: spacing.sm,
@@ -1323,7 +1362,7 @@ const styles = StyleSheet.create({
   },
   primaryGoalCard: {
     alignItems: "center",
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceMuted,
     borderColor: colors.primaryBorder,
     borderRadius: radius.md,
     borderWidth: 1,
@@ -1362,8 +1401,8 @@ const styles = StyleSheet.create({
   },
   nextActionCard: {
     alignItems: "center",
-    backgroundColor: "#F6F1FF",
-    borderColor: "#D8C7FF",
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: "row",
@@ -1376,7 +1415,7 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   nextActionLabel: {
-    color: "#6D28D9",
+    color: colors.primaryDark,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
@@ -1389,7 +1428,7 @@ const styles = StyleSheet.create({
   },
   primaryGoalIcon: {
     alignItems: "center",
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary,
     borderRadius: radius.pill,
     height: 38,
     justifyContent: "center",
@@ -1401,16 +1440,36 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   primaryGoalLabel: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
   },
-  primaryGoalTitle: {
-    color: colors.text,
-    fontSize: typography.body,
+  goalTags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs
+  },
+  goalTag: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  primaryGoalTag: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary
+  },
+  goalTagText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.caption
+  },
+  primaryGoalTagText: {
+    color: colors.primaryDark
   },
   monthlyPlanActions: {
     alignItems: "flex-start"
