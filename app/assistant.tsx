@@ -347,6 +347,16 @@ function buildAssistantFinancialContext({
   referenceMonthlyContribution: number;
   snapshot: FinancialSnapshot;
 }): AssistantFinancialContext {
+  const hasSavedDistribution = Boolean(onboarding.simulationPlanPreference);
+  const emergencyGoal = onboarding.goals.find((goal) => {
+    const normalizedTitle = goal.title.trim().toLocaleLowerCase("es");
+    return goal.type === "security" || normalizedTitle.includes("emergencia");
+  });
+  const emergencyCalculationBasis = emergencyGoal
+    ? "dedicated_emergency_goal"
+    : snapshot.values.currentSavings !== null
+      ? "general_savings"
+      : "missing";
   const primaryGoalAllocation =
     goalPlan.allocations.find((allocation) => allocation.goal.isPrimary) ??
     goalPlan.allocations[0] ??
@@ -390,8 +400,10 @@ function buildAssistantFinancialContext({
       totalMonthlyOutflow: snapshot.cashflow.totalMonthlyOutflow,
       expensesToIncomeRatio: snapshot.cashflow.expensesToIncomeRatio,
       suggestedMonthlyContribution: snapshot.cashflow.suggestedMonthlyContribution,
+      suggestedMonthlyContributionLabel: "Aporte recomendado",
       suggestedMonthlyContributionMeaning:
-        "Aporte sugerido desde el margen mensual; no es necesariamente la referencia manual ni el aporte finalmente asignado a una meta."
+        "Referencia inicial calculada desde el margen. Solo debe presentarse como cifra principal cuando no existe una distribución guardada.",
+      shouldPresentSuggestedMonthlyContribution: !hasSavedDistribution
     },
     debt: {
       debtToIncomeRatio: snapshot.debt.debtToIncomeRatio,
@@ -413,10 +425,14 @@ function buildAssistantFinancialContext({
       smallExpenses: snapshot.sourceMap.smallExpenses
     },
     emergencyFund: {
+      availableSavingsReference: snapshot.values.currentSavings,
+      calculationBasis: emergencyCalculationBasis,
       coverageMonths: snapshot.emergencyFund.coverageMonths,
+      currentAmount: snapshot.emergencyFund.currentSavings,
       label: snapshot.emergencyFund.label,
       missingForThreeMonths: snapshot.emergencyFund.missingForThreeMonths,
-      status: snapshot.emergencyFund.status
+      status: snapshot.emergencyFund.status,
+      targetThreeMonths: snapshot.emergencyFund.targetThreeMonths
     },
     goal: {
       estimatedMonthsToGoal:
@@ -442,10 +458,14 @@ function buildAssistantFinancialContext({
         title: allocation.goal.title
       })),
       monthlyGoalBudget: goalPlan.monthlyGoalBudget,
+      monthlyGoalBudgetLabel: "Presupuesto para metas",
       monthlyGoalBudgetMode: goalPlan.monthlyGoalBudgetMode,
       monthlyContributionTotal: goalPlan.monthlyContributionTotal,
+      monthlyContributionTotalLabel: "Total asignado a metas",
       primaryGoalMonthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
-      remainingBudget: goalPlan.remainingBudget
+      primaryGoalMonthlyContributionLabel: "Aporte a la meta principal",
+      remainingBudget: goalPlan.remainingBudget,
+      source: hasSavedDistribution ? "saved_distribution" : "recommended_fallback"
     },
     monthlyPlan: {
       actions: actionContexts,
@@ -454,15 +474,15 @@ function buildAssistantFinancialContext({
       focusTitle,
       nextPendingAction,
       primaryGoalMonthlyContribution: primaryGoalAllocation?.monthlyContribution ?? null,
-      primaryGoalMonthlyContributionLabel: "Aporte meta",
+      primaryGoalMonthlyContributionLabel: "Aporte a la meta principal",
       primaryGoalMonthlyContributionMeaning:
-        "Aporte mensual asignado a la meta principal dentro de la referencia disponible. En la UI aparece como Aporte meta.",
+        "Parte del presupuesto para metas asignada exclusivamente a la meta principal. No es el total destinado a todas las metas.",
       progressPercentage,
       realContributionThisMonth,
       referenceMonthlyContribution,
-      referenceMonthlyContributionLabel: "Referencia mensual",
+      referenceMonthlyContributionLabel: "Presupuesto mensual del plan",
       referenceMonthlyContributionMeaning:
-        "Monto de referencia del plan mensual. Puede incluir aporte sugerido y ajuste de gastos pequeños; no es lo mismo que Aporte meta.",
+        "Monto mensual utilizado por el plan. No es un aporte realizado ni el aporte individual de una meta.",
       totalActions: actions.length
     },
     precision: {

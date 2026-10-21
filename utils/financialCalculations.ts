@@ -219,12 +219,12 @@ const savingsCapacityLabels: Record<SavingsCapacityLevel, string> = {
 };
 
 const emergencyFundLabels: Record<EmergencyFundStatus, string> = {
-  none: "Aún no tienes una base de emergencia visible",
+  none: "Aún no hay un monto reservado para emergencias",
   starter: "Ya tienes una base inicial",
   building: "Vas construyendo protección",
   solid: "Tienes una base sólida",
   strong: "Tienes una protección amplia",
-  unknown: "Necesitamos ahorro actual y gastos mensuales para estimar tu fondo"
+  unknown: "Faltan datos para calcular tu fondo de emergencia"
 };
 
 const goalLabels: Record<GoalStatus, string> = {

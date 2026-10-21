@@ -836,7 +836,7 @@ function GoalCard({
       onRequestConfirmation({
         cancelLabel: "Volver",
         confirmLabel: "Cambiar meta",
-        message: `Tu meta principal pasará de “${allocation.goal.title}” a “${cleanTitle}”. Esto puede cambiar cómo se distribuye tu referencia mensual. No moveremos tus ahorros registrados.`,
+        message: `Tu meta principal pasará de “${allocation.goal.title}” a “${cleanTitle}”. Esto puede cambiar cómo se distribuye tu presupuesto para metas. No moveremos tus ahorros registrados.`,
         onCancel: () => setIsEditing(true),
         onConfirm: () =>
           persistGoalDetails({
@@ -1281,7 +1281,7 @@ function GoalCard({
                   <Text style={styles.editSummaryText}>
                     Recalcularemos el aporte recomendado y el tiempo estimado. Si
                     tienes varias metas, cuál es la principal, su fecha y su tipo pueden
-                    cambiar cómo se distribuye la referencia mensual. No moveremos dinero.
+                    cambiar cómo se distribuye el presupuesto para metas. No moveremos dinero.
                   </Text>
                 </View>
               </View>
@@ -1778,7 +1778,7 @@ export default function GoalsOverviewScreen() {
             <View style={styles.quickCreateCopy}>
               <Text style={styles.quickCreateTitle}>Agregar otra meta</Text>
               <Text style={styles.quickCreateText}>
-                Crea otro objetivo y la app recalculará el aporte sugerido según el saldo pendiente,
+                Crea otro objetivo y la app recalculará el aporte a cada meta según el saldo pendiente,
                 la fecha objetivo y la prioridad principal.
               </Text>
             </View>
