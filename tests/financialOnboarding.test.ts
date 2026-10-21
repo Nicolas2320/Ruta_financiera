@@ -32,6 +32,16 @@ function makeCompletedOnboarding(overrides: Partial<OnboardingData> = {}) {
 }
 
 describe("onboarding completion", () => {
+  it("treats the retired small-expense answer as unanswered", () => {
+    const normalized = normalizeOnboardingData({
+      ...makeCompletedOnboarding(),
+      hasSmallExpenses: "Sí",
+      smallExpensesRange: "No sé"
+    });
+
+    expect(normalized.smallExpensesRange).toBeNull();
+  });
+
   it("persists only the active profile schema", () => {
     const persisted = getPersistedOnboardingData({
       ...makeCompletedOnboarding(),

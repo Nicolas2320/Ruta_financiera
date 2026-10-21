@@ -84,7 +84,8 @@ export function normalizeOnboardingData(
       ? onboarding.smallExpenseCategories
       : [],
     smallExpensesRange:
-      typeof onboarding?.smallExpensesRange === "string"
+      typeof onboarding?.smallExpensesRange === "string" &&
+      onboarding.smallExpensesRange !== "No sé"
         ? onboarding.smallExpensesRange
         : null,
     smallExpensesIntention:

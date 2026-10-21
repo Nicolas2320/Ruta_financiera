@@ -349,6 +349,22 @@ export default function SimulationScreen() {
       storedPreference.protectedMarginMode === protectedMarginMode &&
       storedPreference.customProtectedMargin === customProtectedMarginToSave
   );
+  const storedProtectedMarginMatches = Boolean(
+    storedPreference &&
+      storedPreference.protectedMarginMode === protectedMarginMode &&
+      storedPreference.customProtectedMargin === customProtectedMarginToSave
+  );
+  const isCustomProtectedMarginValid =
+    protectedMarginMode !== "custom" ||
+    (customProtectedMarginInput.length > 0 &&
+      surplusBeforeProtection !== null &&
+      customProtectedMargin <= surplusBeforeProtection);
+  const canApplyProtectedMargin = Boolean(
+    strategyToSave &&
+      hasDistributionBase &&
+      isCustomProtectedMarginValid &&
+      !storedProtectedMarginMatches
+  );
   const monthlyOperatingCosts = simulationExperience.monthlyOperatingCosts;
   const cashflowIssueRoute =
     projectionInput.issues.find(
@@ -410,6 +426,14 @@ export default function SimulationScreen() {
         selectedAt: new Date().toISOString()
       }
     });
+  };
+
+  const handleApplyProtectedMargin = () => {
+    if (!strategyToSave || !canApplyProtectedMargin) {
+      return;
+    }
+
+    saveStrategyPreference(strategyToSave);
   };
 
   const handleContinue = () => {
@@ -552,9 +576,12 @@ export default function SimulationScreen() {
             title="Antes de repartir"
           >
             <ProtectedMarginControl
+              applied={Boolean(storedPreference) && storedProtectedMarginMatches}
+              applyDisabled={!canApplyProtectedMargin}
               customAmountInput={customProtectedMarginInput}
               distributableAmount={distributableAmount}
               mode={protectedMarginMode}
+              onApply={handleApplyProtectedMargin}
               onCustomAmountChange={handleCustomProtectedMarginChange}
               onModeChange={handleProtectedMarginModeChange}
               protectedAmount={protectedAmount}
@@ -794,6 +821,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start"
   },
   summaryMetric: {
+    alignItems: "center",
     borderRadius: radius.lg,
     borderWidth: 1,
     flexBasis: 260,

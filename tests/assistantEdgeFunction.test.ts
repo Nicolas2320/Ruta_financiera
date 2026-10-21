@@ -264,6 +264,15 @@ describe("assistant Edge Function", () => {
     expect(String(openAIRequestBody?.instructions)).toContain(
       "Nunca digas que un dato falta cuando su fuente es estimated"
     );
+    expect(String(openAIRequestBody?.instructions)).toContain(
+      "esa distribucion guardada prevalece"
+    );
+    expect(String(openAIRequestBody?.instructions)).toContain(
+      "No llames inconsistencia a diferencias validas"
+    );
+    expect(String(openAIRequestBody?.instructions)).toContain(
+      "emergencyFund.calculationBasis"
+    );
     expect(String(openAIRequestBody?.input)).toContain("<contexto_financiero_json>");
     expect(String(openAIRequestBody?.input)).toContain("<pregunta_usuario_json>");
   });

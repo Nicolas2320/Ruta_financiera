@@ -35,7 +35,9 @@ export type AssistantFinancialContext = {
     totalMonthlyOutflow: number | null;
     expensesToIncomeRatio: number | null;
     suggestedMonthlyContribution: number;
+    suggestedMonthlyContributionLabel: "Aporte recomendado";
     suggestedMonthlyContributionMeaning?: string;
+    shouldPresentSuggestedMonthlyContribution: boolean;
   };
   debt: {
     debtToIncomeRatio: number | null;
@@ -57,10 +59,14 @@ export type AssistantFinancialContext = {
     smallExpenses: string;
   };
   emergencyFund: {
+    availableSavingsReference: number | null;
+    calculationBasis: "dedicated_emergency_goal" | "general_savings" | "missing";
     coverageMonths: number | null;
+    currentAmount: number | null;
     label: string;
     missingForThreeMonths: number | null;
     status: string;
+    targetThreeMonths: number | null;
   };
   goal: {
     estimatedMonthsToGoal: number | null;
@@ -81,10 +87,14 @@ export type AssistantFinancialContext = {
       title: string;
     }>;
     monthlyGoalBudget: number;
+    monthlyGoalBudgetLabel: "Presupuesto para metas";
     monthlyGoalBudgetMode: "recommended" | "manual";
     monthlyContributionTotal: number;
+    monthlyContributionTotalLabel: "Total asignado a metas";
     primaryGoalMonthlyContribution: number | null;
+    primaryGoalMonthlyContributionLabel: "Aporte a la meta principal";
     remainingBudget: number;
+    source: "saved_distribution" | "recommended_fallback";
   };
   monthlyPlan: {
     actions: AssistantMonthlyPlanAction[];
@@ -93,12 +103,12 @@ export type AssistantFinancialContext = {
     focusTitle: string;
     nextPendingAction: AssistantMonthlyPlanAction | null;
     primaryGoalMonthlyContribution: number | null;
-    primaryGoalMonthlyContributionLabel: "Aporte meta";
+    primaryGoalMonthlyContributionLabel: "Aporte a la meta principal";
     primaryGoalMonthlyContributionMeaning: string;
     progressPercentage: number;
     realContributionThisMonth?: number;
     referenceMonthlyContribution: number;
-    referenceMonthlyContributionLabel: "Referencia mensual";
+    referenceMonthlyContributionLabel: "Presupuesto mensual del plan";
     referenceMonthlyContributionMeaning: string;
     totalActions: number;
   };

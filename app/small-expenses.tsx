@@ -75,8 +75,7 @@ const smallExpenseRanges = [
   "Menos de $100.000",
   "$100.000 – $250.000",
   "$250.000 – $500.000",
-  "Más de $500.000",
-  "No sé"
+  "Más de $500.000"
 ] as const;
 
 const exactSmallExpenseOption = "Ingresar cifra";
@@ -151,7 +150,7 @@ function BottomNavItem({
 
 export default function SmallExpensesScreen() {
   const router = useRouter();
-  const { screenPadding } = useResponsiveLayout();
+  const { isSmallPhone, screenPadding } = useResponsiveLayout();
   const params = useLocalSearchParams<{ source?: string }>();
   const {
     exactValues,
@@ -161,10 +160,17 @@ export default function SmallExpensesScreen() {
   } = useOnboarding();
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const isSpendingEditMode = source === "spending";
-  const isProfileEditMode = source === "profile";
   const isDashboardEditMode = source === "dashboard";
   const isImprovePlanEditMode = source === "improve-plan";
   const isStandaloneMode = !source;
+  const returnRoute: Route =
+    isSpendingEditMode || isStandaloneMode
+      ? "/spending"
+      : isDashboardEditMode
+        ? "/dashboard"
+        : isImprovePlanEditMode
+          ? "/improve-plan"
+          : { pathname: "/summary", params: { mode: "edit" } };
   const navigate = (route: Route) => router.push(route);
   const [selectedPresence, setSelectedPresence] = useState<string | null>(
     onboarding.hasSmallExpenses
@@ -205,7 +211,8 @@ export default function SmallExpensesScreen() {
     );
   }, [exactValues.smallExpenses, onboarding, onboardingSyncStatus]);
 
-  const shouldShowDetails = selectedPresence !== "No";
+  const shouldShowDetails =
+    selectedPresence === "Sí" || selectedPresence === "No estoy seguro";
   const parsedExactSmallExpenses = parseCOPInput(exactSmallExpensesInput);
   const canContinue = Boolean(
     selectedPresence &&
@@ -277,17 +284,7 @@ export default function SmallExpensesScreen() {
       return;
     }
 
-    router.push(
-      isSpendingEditMode
-        ? "/spending"
-        : isDashboardEditMode
-          ? "/dashboard"
-          : isImprovePlanEditMode
-            ? "/improve-plan"
-            : isProfileEditMode
-              ? { pathname: "/summary", params: { mode: "edit" } }
-              : "/spending"
-    );
+    router.push(returnRoute);
   };
 
   return (
@@ -300,26 +297,7 @@ export default function SmallExpensesScreen() {
       >
         <View style={styles.container}>
           <ContextHeader
-            onBack={() =>
-              router.push(
-                isSpendingEditMode || isStandaloneMode
-                  ? "/spending"
-                  : isDashboardEditMode
-                    ? "/dashboard"
-                    : isImprovePlanEditMode
-                      ? "/improve-plan"
-                      : { pathname: "/summary", params: { mode: "edit" } }
-              )
-            }
-            subtitle={
-              isSpendingEditMode || isStandaloneMode
-                ? "Volverás a Gastos."
-                : isDashboardEditMode
-                  ? "Volverás al Dashboard."
-                  : isImprovePlanEditMode
-                    ? "Volverás a Mejorar mi plan."
-                    : "Volverás al perfil financiero."
-            }
+            onBack={() => router.push(returnRoute)}
             title="Gastos pequeños"
           />
 
@@ -333,9 +311,9 @@ export default function SmallExpensesScreen() {
 
           <View style={styles.card}>
             <Text style={styles.questionTitle}>
-              ¿Sientes que tienes gastos pequeños frecuentes?
+              ¿Tienes gastos pequeños frecuentes?
             </Text>
-            <View style={styles.presenceGrid}>
+            <View style={[styles.presenceGrid, isSmallPhone && styles.presenceGridSmallPhone]}>
               {smallExpensePresence.map((presence) => {
                 const Icon = presence.icon;
 
@@ -349,7 +327,10 @@ export default function SmallExpensesScreen() {
                     }
                     onPress={() => handlePresenceSelect(presence.title)}
                     selected={selectedPresence === presence.title}
-                    style={styles.presenceCard}
+                    style={[
+                      styles.presenceCard,
+                      isSmallPhone && styles.presenceCardSmallPhone
+                    ]}
                     subtitle={presence.subtitle}
                     title={presence.title}
                     variant="tile"
@@ -359,7 +340,7 @@ export default function SmallExpensesScreen() {
             </View>
           </View>
 
-          {!shouldShowDetails ? (
+          {selectedPresence === "No" ? (
             <View style={styles.softCard}>
               <Text style={styles.questionTitle}>Puedes dejarlo así por ahora</Text>
               <Text style={styles.softText}>
@@ -436,7 +417,7 @@ export default function SmallExpensesScreen() {
             <PrimaryButton
               accessibilityLabel="Guardar cambios de gastos pequeños"
               disabled={!canContinue}
-              iconPosition="right"
+              icon={null}
               onPress={handleContinue}
               style={styles.primaryButton}
               title="Guardar cambios"
@@ -444,7 +425,7 @@ export default function SmallExpensesScreen() {
             <PrimaryButton
               accessibilityLabel="Volver a la pantalla anterior"
               icon={null}
-              onPress={() => router.back()}
+              onPress={() => router.push(returnRoute)}
               style={styles.secondaryButton}
               title="Volver"
               variant="secondary"
@@ -522,8 +503,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm
   },
+  presenceGridSmallPhone: {
+    flexDirection: "column"
+  },
   presenceCard: {
     minHeight: 130
+  },
+  presenceCardSmallPhone: {
+    minHeight: 96
   },
   softIcon: {
     alignItems: "center",

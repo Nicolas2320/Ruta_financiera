@@ -67,6 +67,12 @@ type IconProps = {
 
 type Tone = "primary" | "support" | "warning" | "purple" | "neutral" | "danger";
 
+type MonthlyPlanGoal = {
+  id: string;
+  isPrimary: boolean;
+  title: string;
+};
+
 type Route = Parameters<ReturnType<typeof useRouter>["push"]>[0];
 
 function toPercentWidth(value: number): `${number}%` {
@@ -340,18 +346,18 @@ function MonthlyPlanCard({
   actionCount,
   completed,
   completedCount,
+  goals,
   nextActionTitle,
   onRegisterProgress,
-  primaryGoalTitle,
   progressPercentage,
   compact = false
 }: {
   actionCount: number;
   completed: boolean;
   completedCount: number;
+  goals: MonthlyPlanGoal[];
   nextActionTitle?: string | null;
   onRegisterProgress: () => void;
-  primaryGoalTitle?: string | null;
   progressPercentage: number;
   compact?: boolean;
 }) {
@@ -367,14 +373,31 @@ function MonthlyPlanCard({
       </View>
       <View style={styles.monthlyPlanBody}>
 
-        {primaryGoalTitle ? (
+        {goals.length > 0 ? (
           <View style={styles.primaryGoalCard}>
             <View style={styles.primaryGoalIcon}>
-              <Flag color={colors.primary} size={20} strokeWidth={2.4} />
+              <Flag color={colors.surface} size={20} strokeWidth={2.4} />
             </View>
             <View style={styles.primaryGoalCopy}>
-              <Text style={styles.primaryGoalLabel}>Meta principal</Text>
-              <Text style={styles.primaryGoalTitle}>{primaryGoalTitle}</Text>
+              <Text style={styles.primaryGoalLabel}>Metas del plan</Text>
+              <View style={styles.goalTags}>
+                {goals.map((goal) => (
+                  <View
+                    accessibilityLabel={goal.isPrimary ? `Meta principal: ${goal.title}` : goal.title}
+                    key={goal.id}
+                    style={[styles.goalTag, goal.isPrimary && styles.primaryGoalTag]}
+                  >
+                    <Text
+                      style={[
+                        styles.goalTagText,
+                        goal.isPrimary && styles.primaryGoalTagText
+                      ]}
+                    >
+                      {goal.title}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
           </View>
         ) : null}
@@ -559,9 +582,11 @@ function ImprovePlanSummaryCard({
 }
 
 function RowCard({
+  accentTone,
   icon,
   title,
   value,
+  valueTone,
   text,
   tone = "primary",
   actionLabel,
@@ -569,9 +594,11 @@ function RowCard({
   children,
   compact = false
 }: {
+  accentTone?: Tone;
   icon: ReactNode;
   title: string;
   value: string;
+  valueTone?: Tone;
   text: string;
   tone?: Tone;
   actionLabel?: string;
@@ -579,13 +606,24 @@ function RowCard({
   children?: ReactNode;
   compact?: boolean;
 }) {
+  const categoryTone = accentTone ?? tone;
+  const metricTone = valueTone ?? tone;
+
   return (
     <View style={[styles.rowCard, compact && styles.rowCardPhone]}>
-      <IconBubble icon={icon} size="medium" tone={tone} />
+      <View
+        style={[
+          styles.rowCardAccent,
+          { backgroundColor: getToneColors(categoryTone).text }
+        ]}
+      />
+      <View style={styles.rowCardIcon}>
+        <IconBubble icon={icon} size="medium" tone={categoryTone} />
+      </View>
       <View style={styles.rowCardBody}>
         <Text style={styles.rowCardTitle}>{title}</Text>
         <View style={styles.rowCardValueLine}>
-          <Text style={[styles.rowCardValue, { color: getToneColors(tone).text }]}>{value}</Text>
+          <Text style={[styles.rowCardValue, { color: getToneColors(metricTone).text }]}>{value}</Text>
           {children}
         </View>
         <Text style={styles.text}>{text}</Text>
@@ -594,7 +632,11 @@ function RowCard({
         <Pressable
           accessibilityRole="button"
           onPress={onPress}
-          style={({ pressed }) => [styles.rowCardAction, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.rowCardAction,
+            compact && styles.rowCardActionPhone,
+            pressed && styles.pressed
+          ]}
         >
           <Text style={styles.rowCardActionText}>{actionLabel}</Text>
           <ChevronRight color={colors.primary} size={20} strokeWidth={2.5} />
@@ -708,6 +750,22 @@ export default function DashboardScreen() {
   );
   const primaryGoalTitle =
     primaryGoalAllocation?.goal.title ?? snapshot.goal.name ?? data.financialGoal;
+  const monthlyPlanGoals: MonthlyPlanGoal[] =
+    goalPlan.allocations.length > 0
+      ? [...goalPlan.allocations]
+          .sort((left, right) => {
+            const leftIsPrimary = left.goal.id === primaryGoalAllocation?.goal.id;
+            const rightIsPrimary = right.goal.id === primaryGoalAllocation?.goal.id;
+            return Number(rightIsPrimary) - Number(leftIsPrimary);
+          })
+          .map((allocation) => ({
+            id: allocation.goal.id,
+            isPrimary: allocation.goal.id === primaryGoalAllocation?.goal.id,
+            title: allocation.goal.title
+          }))
+      : primaryGoalTitle
+        ? [{ id: "primary-goal", isPrimary: true, title: primaryGoalTitle }]
+        : [];
   const monthlyGoalContext = useMemo<MonthlyGoalContext>(
     () => ({
       activeGoalCount: activeGoalAllocations.length,
@@ -829,6 +887,14 @@ export default function DashboardScreen() {
     metrics.expensePercentage !== null ? Math.min(metrics.expensePercentage, 100) : 0;
   const expensesMayExceedIncome =
     metrics.expensePercentage !== null && metrics.expensePercentage > 100;
+  const availableMarginPercentage =
+    metrics.expensePercentage !== null
+      ? Math.max(100 - metrics.expensePercentage, 0)
+      : null;
+  const deficitPercentage =
+    metrics.expensePercentage !== null
+      ? Math.max(metrics.expensePercentage - 100, 0)
+      : null;
   const primaryGoalTargetAmount = primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount;
   const primaryGoalTargetMonth = primaryGoalAllocation?.goal.targetMonth
     ? formatTargetMonth(primaryGoalAllocation.goal.targetMonth)
@@ -981,9 +1047,9 @@ export default function DashboardScreen() {
             compact={isPhone}
             completed={completedCount === actionCount}
             completedCount={completedCount}
+            goals={monthlyPlanGoals}
             nextActionTitle={nextActionTitle}
             onRegisterProgress={() => router.push("/action-plan")}
-            primaryGoalTitle={primaryGoalTitle}
             progressPercentage={progressPercentage}
           />
 
@@ -991,22 +1057,16 @@ export default function DashboardScreen() {
             <PanelCard compact={isPhone} title="Resumen financiero estimado">
               <View style={styles.metricsGrid}>
                 <MetricCard
-                  icon={<PiggyBank color={colors.support} size={28} strokeWidth={2.4} />}
-                  label="Ingreso mensual"
-                  tone="support"
-                  value={getAmountLabel(metrics.incomeMidpoint, exactMonthlyIncome !== null)}
-                />
-                <MetricCard
                   icon={<ArrowDownCircle color="#C2410C" size={28} strokeWidth={2.4} />}
                   label="Gastos principales"
                   tone="danger"
                   value={getAmountLabel(metrics.expenseMidpoint, exactMonthlyExpenses !== null)}
                 />
                 <MetricCard
-                  icon={<TrendingUp color={colors.support} size={28} strokeWidth={2.4} />}
-                  label="Margen mensual"
-                  tone={metrics.estimatedMargin !== null && metrics.estimatedMargin > 0 ? "support" : "warning"}
-                  value={getMarginLabel(metrics.estimatedMargin, hasExactCashflowAmounts)}
+                  icon={<PiggyBank color={colors.support} size={28} strokeWidth={2.4} />}
+                  label="Ingreso mensual"
+                  tone="support"
+                  value={getAmountLabel(metrics.incomeMidpoint, exactMonthlyIncome !== null)}
                 />
                 <MetricCard
                   icon={
@@ -1025,23 +1085,87 @@ export default function DashboardScreen() {
                       : "$0"
                   }
                 />
+                <MetricCard
+                  icon={<TrendingUp color={colors.support} size={28} strokeWidth={2.4} />}
+                  label="Margen mensual"
+                  tone={metrics.estimatedMargin !== null && metrics.estimatedMargin > 0 ? "support" : "warning"}
+                  value={getMarginLabel(metrics.estimatedMargin, hasExactCashflowAmounts)}
+                />
               </View>
 
               <View style={styles.comparisonBox}>
-                <View style={styles.comparisonHeader}>
-                  <Text style={styles.comparisonTitle}>Salidas mensuales vs ingresos</Text>
-                  <Text style={styles.comparisonValue}>
-                    {getExpensePercentageLabel(metrics.expensePercentage, hasExactCashflowAmounts)}
-                  </Text>
+                <Text style={styles.comparisonTitle}>Distribución del ingreso mensual</Text>
+                <View style={styles.comparisonLegend}>
+                  <View style={styles.comparisonLegendItem}>
+                    <View style={[styles.comparisonDot, styles.comparisonOutflowDot]} />
+                    <View style={styles.comparisonLegendCopy}>
+                      <Text style={styles.comparisonLegendLabel}>Salidas</Text>
+                      <Text style={styles.comparisonLegendValue}>
+                        {getExpensePercentageLabel(
+                          metrics.expensePercentage,
+                          hasExactCashflowAmounts
+                        )}
+                        {snapshot.cashflow.totalMonthlyOutflow !== null
+                          ? ` · ${getAmountLabel(
+                              snapshot.cashflow.totalMonthlyOutflow,
+                              hasExactCashflowAmounts
+                            )}`
+                          : ""}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.comparisonLegendItem}>
+                    <View
+                      style={[
+                        styles.comparisonDot,
+                        expensesMayExceedIncome
+                          ? styles.comparisonDeficitDot
+                          : styles.comparisonMarginDot
+                      ]}
+                    />
+                    <View style={styles.comparisonLegendCopy}>
+                      <Text style={styles.comparisonLegendLabel}>
+                        {expensesMayExceedIncome ? "Déficit mensual" : "Margen disponible"}
+                      </Text>
+                      <Text style={styles.comparisonLegendValue}>
+                        {getExpensePercentageLabel(
+                          expensesMayExceedIncome
+                            ? deficitPercentage
+                            : availableMarginPercentage,
+                          hasExactCashflowAmounts
+                        )}
+                        {metrics.estimatedMargin !== null
+                          ? ` · ${getMarginLabel(
+                              metrics.estimatedMargin,
+                              hasExactCashflowAmounts
+                            )}`
+                          : ""}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.expenseFill,
-                      expensesMayExceedIncome && styles.expenseFillWarning,
-                      { width: toPercentWidth(expenseBarWidth) }
-                    ]}
-                  />
+                <View
+                  accessibilityLabel="Comparación entre salidas y margen disponible"
+                  style={styles.comparisonTrack}
+                >
+                  {metrics.expensePercentage !== null ? (
+                    <>
+                      <View
+                        style={[
+                          styles.comparisonOutflowSegment,
+                          { width: toPercentWidth(expenseBarWidth) }
+                        ]}
+                      />
+                      {!expensesMayExceedIncome ? (
+                        <View
+                          style={[
+                            styles.comparisonMarginSegment,
+                            { width: toPercentWidth(availableMarginPercentage ?? 0) }
+                          ]}
+                        />
+                      ) : null}
+                    </>
+                  ) : null}
                 </View>
               </View>
             </PanelCard>
@@ -1049,6 +1173,7 @@ export default function DashboardScreen() {
           </View>
 
           <RowCard
+            accentTone="support"
             actionLabel={hasEmergencyFundGoal ? "Ver ahorro" : "Crear meta"}
             compact={isPhone}
             icon={<ShieldCheck color={colors.support} size={36} strokeWidth={2.4} />}
@@ -1056,6 +1181,7 @@ export default function DashboardScreen() {
             text={emergencyStatus.text}
             title="Fondo de emergencia"
             tone={emergencyStatus.tone}
+            valueTone={emergencyStatus.tone}
             value={
               snapshot.emergencyFund.currentSavings !== null
                 ? `Ahorro actual: ${getAmountLabel(
@@ -1069,9 +1195,10 @@ export default function DashboardScreen() {
           </RowCard>
 
           <RowCard
+            accentTone="neutral"
             compact={isPhone}
             actionLabel={hasSmallExpensesDetail ? "Revisar gastos" : "Detallar (opcional)"}
-            icon={<Coffee color="#B45309" size={36} strokeWidth={2.4} />}
+            icon={<Coffee color={colors.textSubtle} size={36} strokeWidth={2.4} />}
             onPress={() => router.push({ pathname: "/small-expenses", params: { source: "dashboard" } })}
             text={smallExpensesText}
             title="Gastos pequeños"
@@ -1104,13 +1231,7 @@ export default function DashboardScreen() {
             value={goalsValue}
           >
             <Chip label={goalStatus} tone={goalStatusTone} />
-            {totalGoalsCount > 1 ? (
-              <Chip
-                label={`Aporte ${getAmountLabel(goalPlan.monthlyContributionTotal)}`}
-                tone="support"
-              />
-            ) : null}
-            {completedGoalsChipLabel ? (
+            {!goalProgressLabel && completedGoalsChipLabel ? (
               <Chip label={completedGoalsChipLabel} tone="support" />
             ) : null}
             {goalProgressLabel ? (
@@ -1229,8 +1350,8 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   monthlyPlanProgressBlock: {
-    backgroundColor: colors.surfaceMuted,
-    borderColor: "#D7E7FF",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: radius.md,
     borderWidth: 1,
     gap: spacing.sm,
@@ -1257,7 +1378,7 @@ const styles = StyleSheet.create({
   },
   primaryGoalCard: {
     alignItems: "center",
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceMuted,
     borderColor: colors.primaryBorder,
     borderRadius: radius.md,
     borderWidth: 1,
@@ -1296,8 +1417,8 @@ const styles = StyleSheet.create({
   },
   nextActionCard: {
     alignItems: "center",
-    backgroundColor: colors.warningSoft,
-    borderColor: "#FED7AA",
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: "row",
@@ -1310,7 +1431,7 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   nextActionLabel: {
-    color: "#B45309",
+    color: colors.primaryDark,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
@@ -1323,7 +1444,7 @@ const styles = StyleSheet.create({
   },
   primaryGoalIcon: {
     alignItems: "center",
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary,
     borderRadius: radius.pill,
     height: 38,
     justifyContent: "center",
@@ -1335,16 +1456,36 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   primaryGoalLabel: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
   },
-  primaryGoalTitle: {
-    color: colors.text,
-    fontSize: typography.body,
+  goalTags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs
+  },
+  goalTag: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  primaryGoalTag: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary
+  },
+  goalTagText: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.caption
+  },
+  primaryGoalTagText: {
+    color: colors.primaryDark
   },
   monthlyPlanActions: {
     alignItems: "flex-start"
@@ -1486,18 +1627,73 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     justifyContent: "space-between"
   },
+  comparisonLegend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
   comparisonTitle: {
     color: colors.text,
-    flex: 1,
     fontSize: typography.body,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.body
   },
-  comparisonValue: {
-    color: colors.primary,
-    fontSize: typography.body,
+  comparisonLegendItem: {
+    alignItems: "flex-start",
+    flexBasis: 210,
+    flexDirection: "row",
+    flexGrow: 1,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  comparisonDot: {
+    borderRadius: radius.pill,
+    height: 10,
+    marginTop: 4,
+    width: 10
+  },
+  comparisonOutflowDot: {
+    backgroundColor: "#F97316"
+  },
+  comparisonMarginDot: {
+    backgroundColor: colors.support
+  },
+  comparisonDeficitDot: {
+    backgroundColor: "#C2410C"
+  },
+  comparisonLegendCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0
+  },
+  comparisonLegendLabel: {
+    color: colors.text,
+    fontSize: typography.caption,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.caption
+  },
+  comparisonLegendValue: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  comparisonTrack: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    height: 14,
+    overflow: "hidden"
+  },
+  comparisonOutflowSegment: {
+    backgroundColor: "#F97316",
+    height: "100%"
+  },
+  comparisonMarginSegment: {
+    backgroundColor: colors.support,
+    height: "100%"
   },
   progressTrack: {
     backgroundColor: "#E4EAF2",
@@ -1513,17 +1709,9 @@ const styles = StyleSheet.create({
   progressFillComplete: {
     backgroundColor: colors.support
   },
-  expenseFill: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    height: "100%"
-  },
-  expenseFillWarning: {
-    backgroundColor: "#F97316"
-  },
   rowCard: {
     ...shadows.card,
-    alignItems: "center",
+    alignItems: "flex-start",
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radius.lg,
@@ -1533,9 +1721,20 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.lg
   },
+  rowCardAccent: {
+    borderRadius: radius.pill,
+    bottom: spacing.lg,
+    left: 0,
+    position: "absolute",
+    top: spacing.lg,
+    width: 4
+  },
   rowCardPhone: {
     alignItems: "flex-start",
     padding: spacing.md
+  },
+  rowCardIcon: {
+    alignSelf: "center"
   },
   rowCardBody: {
     flexBasis: 240,
@@ -1556,15 +1755,26 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   rowCardValue: {
-    fontSize: typography.body,
+    fontSize: typography.question,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.question
   },
   rowCardAction: {
     alignItems: "center",
+    alignSelf: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
     flexDirection: "row",
     gap: spacing.xs,
-    minHeight: 44
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: spacing.md
+  },
+  rowCardActionPhone: {
+    alignSelf: "stretch",
+    width: "100%"
   },
   rowCardActionText: {
     color: colors.primary,
