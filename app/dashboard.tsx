@@ -582,9 +582,11 @@ function ImprovePlanSummaryCard({
 }
 
 function RowCard({
+  accentTone,
   icon,
   title,
   value,
+  valueTone,
   text,
   tone = "primary",
   actionLabel,
@@ -592,9 +594,11 @@ function RowCard({
   children,
   compact = false
 }: {
+  accentTone?: Tone;
   icon: ReactNode;
   title: string;
   value: string;
+  valueTone?: Tone;
   text: string;
   tone?: Tone;
   actionLabel?: string;
@@ -602,13 +606,24 @@ function RowCard({
   children?: ReactNode;
   compact?: boolean;
 }) {
+  const categoryTone = accentTone ?? tone;
+  const metricTone = valueTone ?? tone;
+
   return (
     <View style={[styles.rowCard, compact && styles.rowCardPhone]}>
-      <IconBubble icon={icon} size="medium" tone={tone} />
+      <View
+        style={[
+          styles.rowCardAccent,
+          { backgroundColor: getToneColors(categoryTone).text }
+        ]}
+      />
+      <View style={styles.rowCardIcon}>
+        <IconBubble icon={icon} size="medium" tone={categoryTone} />
+      </View>
       <View style={styles.rowCardBody}>
         <Text style={styles.rowCardTitle}>{title}</Text>
         <View style={styles.rowCardValueLine}>
-          <Text style={[styles.rowCardValue, { color: getToneColors(tone).text }]}>{value}</Text>
+          <Text style={[styles.rowCardValue, { color: getToneColors(metricTone).text }]}>{value}</Text>
           {children}
         </View>
         <Text style={styles.text}>{text}</Text>
@@ -617,7 +632,11 @@ function RowCard({
         <Pressable
           accessibilityRole="button"
           onPress={onPress}
-          style={({ pressed }) => [styles.rowCardAction, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.rowCardAction,
+            compact && styles.rowCardActionPhone,
+            pressed && styles.pressed
+          ]}
         >
           <Text style={styles.rowCardActionText}>{actionLabel}</Text>
           <ChevronRight color={colors.primary} size={20} strokeWidth={2.5} />
@@ -1154,6 +1173,7 @@ export default function DashboardScreen() {
           </View>
 
           <RowCard
+            accentTone="support"
             actionLabel={hasEmergencyFundGoal ? "Ver ahorro" : "Crear meta"}
             compact={isPhone}
             icon={<ShieldCheck color={colors.support} size={36} strokeWidth={2.4} />}
@@ -1161,6 +1181,7 @@ export default function DashboardScreen() {
             text={emergencyStatus.text}
             title="Fondo de emergencia"
             tone={emergencyStatus.tone}
+            valueTone={emergencyStatus.tone}
             value={
               snapshot.emergencyFund.currentSavings !== null
                 ? `Ahorro actual: ${getAmountLabel(
@@ -1174,9 +1195,10 @@ export default function DashboardScreen() {
           </RowCard>
 
           <RowCard
+            accentTone="neutral"
             compact={isPhone}
             actionLabel={hasSmallExpensesDetail ? "Revisar gastos" : "Detallar (opcional)"}
-            icon={<Coffee color="#B45309" size={36} strokeWidth={2.4} />}
+            icon={<Coffee color={colors.textSubtle} size={36} strokeWidth={2.4} />}
             onPress={() => router.push({ pathname: "/small-expenses", params: { source: "dashboard" } })}
             text={smallExpensesText}
             title="Gastos pequeños"
@@ -1209,13 +1231,7 @@ export default function DashboardScreen() {
             value={goalsValue}
           >
             <Chip label={goalStatus} tone={goalStatusTone} />
-            {totalGoalsCount > 1 ? (
-              <Chip
-                label={`Aporte ${getAmountLabel(goalPlan.monthlyContributionTotal)}`}
-                tone="support"
-              />
-            ) : null}
-            {completedGoalsChipLabel ? (
+            {!goalProgressLabel && completedGoalsChipLabel ? (
               <Chip label={completedGoalsChipLabel} tone="support" />
             ) : null}
             {goalProgressLabel ? (
@@ -1695,7 +1711,7 @@ const styles = StyleSheet.create({
   },
   rowCard: {
     ...shadows.card,
-    alignItems: "center",
+    alignItems: "flex-start",
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radius.lg,
@@ -1705,9 +1721,20 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.lg
   },
+  rowCardAccent: {
+    borderRadius: radius.pill,
+    bottom: spacing.lg,
+    left: 0,
+    position: "absolute",
+    top: spacing.lg,
+    width: 4
+  },
   rowCardPhone: {
     alignItems: "flex-start",
     padding: spacing.md
+  },
+  rowCardIcon: {
+    alignSelf: "center"
   },
   rowCardBody: {
     flexBasis: 240,
@@ -1728,15 +1755,26 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   rowCardValue: {
-    fontSize: typography.body,
+    fontSize: typography.question,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.question
   },
   rowCardAction: {
     alignItems: "center",
+    alignSelf: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
     flexDirection: "row",
     gap: spacing.xs,
-    minHeight: 44
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: spacing.md
+  },
+  rowCardActionPhone: {
+    alignSelf: "stretch",
+    width: "100%"
   },
   rowCardActionText: {
     color: colors.primary,
