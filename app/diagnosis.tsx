@@ -897,7 +897,9 @@ export default function DiagnosisScreen() {
               {shouldShowDebtDetailsCta && session ? (
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => router.push("/debts")}
+                  onPress={() =>
+                    router.push({ pathname: "/debts", params: { source: "diagnosis" } })
+                  }
                   style={({ pressed }) => [styles.debtCta, pressed && styles.pressed]}
                 >
                   <Text style={styles.debtCtaText}>{debtDetailsCtaLabel}</Text>
@@ -925,14 +927,14 @@ export default function DiagnosisScreen() {
           <View style={styles.actions}>
             <PrimaryButton
               accessibilityLabel="Ver simulación"
-              iconPosition="right"
+              icon={null}
               onPress={() => router.push({ pathname: "/simulation", params: { source: "flow" } })}
               title="Ver simulación"
             />
             <PrimaryButton
-              accessibilityLabel="Volver a la pantalla anterior"
+              accessibilityLabel="Volver al resumen"
               icon={null}
-              onPress={() => router.back()}
+              onPress={() => router.replace("/summary")}
               style={styles.secondaryButton}
               title="Volver"
               variant="secondary"

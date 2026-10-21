@@ -691,7 +691,7 @@ export default function SimulationScreen() {
               accessibilityLabel={
                 session ? "Ir al plan mensual" : "Ver vista previa de mi plan mensual"
               }
-              iconPosition="right"
+              icon={null}
               onPress={handleContinue}
               title={
                 session

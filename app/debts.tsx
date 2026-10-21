@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   AlertCircle,
@@ -1772,8 +1773,12 @@ function DebtFormContent({
 }
 
 export default function DebtsScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ source?: string }>();
   const { isPhone, screenPadding } = useResponsiveLayout();
   const { exactValues, onboarding, updateOnboarding } = useOnboarding();
+  const source = Array.isArray(params.source) ? params.source[0] : params.source;
+  const isDiagnosisMode = source === "diagnosis";
   const guidanceMode = normalizeFinancialGuidanceMode(
     onboarding.financialGuidanceMode
   );
@@ -2112,7 +2117,7 @@ export default function DebtsScreen() {
             </View>
           </View>
 
-          <SpendingSectionTabs activeTab="debts" />
+          {!isDiagnosisMode ? <SpendingSectionTabs activeTab="debts" /> : null}
 
           <SpendingSectionContent activeTab="debts">
           <View style={[styles.heroCard, isPhone && styles.cardPhone]}>
@@ -2425,6 +2430,26 @@ export default function DebtsScreen() {
             </View>
           </SectionCard>
           </SpendingSectionContent>
+
+          {isDiagnosisMode ? (
+            <View style={styles.diagnosisActions}>
+              <PrimaryButton
+                accessibilityLabel="Guardar deudas y volver al diagnóstico"
+                icon={null}
+                onPress={() => router.replace("/diagnosis")}
+                style={styles.diagnosisPrimaryButton}
+                title="Guardar"
+              />
+              <PrimaryButton
+                accessibilityLabel="Volver al diagnóstico"
+                icon={null}
+                onPress={() => router.replace("/diagnosis")}
+                style={styles.diagnosisSecondaryButton}
+                title="Volver"
+                variant="secondary"
+              />
+            </View>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -2573,7 +2598,7 @@ export default function DebtsScreen() {
         </Text>
       </AppModal>
 
-      <BottomNavigation activeRoute="/spending" />
+      {!isDiagnosisMode ? <BottomNavigation activeRoute="/spending" /> : null}
     </SafeAreaView>
   );
 }
@@ -2593,6 +2618,20 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     maxWidth: 760,
     width: "100%"
+  },
+  diagnosisActions: {
+    gap: spacing.sm,
+    paddingBottom: spacing.md
+  },
+  diagnosisPrimaryButton: {
+    borderRadius: 17,
+    minHeight: 56
+  },
+  diagnosisSecondaryButton: {
+    backgroundColor: colors.surface,
+    borderColor: "#CFE0FF",
+    borderRadius: 17,
+    minHeight: 54
   },
   headerCard: {
     ...shadows.card,
