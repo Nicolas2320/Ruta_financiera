@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
 import { formatCOP } from "../utils/financialRanges";
+import { PrimaryButton } from "./PrimaryButton";
 import { ExactAmountField } from "./ui/ExactAmountField";
 
 export type ProtectedMarginMode = "automatic" | "use_all" | "custom";
@@ -12,34 +13,40 @@ const options: Array<{
   mode: ProtectedMarginMode;
 }> = [
   {
-    description: "Deja libre el 10% del dinero disponible.",
-    label: "Automático",
+    description: "Conserva automáticamente el 10% como dinero libre.",
+    label: "Recomendado (10%)",
     mode: "automatic"
   },
   {
-    description: "Distribuye todo y puede dejar el mes en $0.",
-    label: "Usar todo",
+    description: "Destina todo a deudas y metas. No conservarás dinero libre.",
+    label: "Repartir todo",
     mode: "use_all"
   },
   {
-    description: "Tú decides cuánto no se reparte.",
-    label: "Definir monto",
+    description: "Decide cuánto dinero quieres conservar para usar libremente.",
+    label: "Elegir monto",
     mode: "custom"
   }
 ];
 
 export function ProtectedMarginControl({
+  applied,
+  applyDisabled,
   customAmountInput,
   distributableAmount,
   mode,
+  onApply,
   onCustomAmountChange,
   onModeChange,
   protectedAmount,
   surplusBeforeProtection
 }: {
+  applied: boolean;
+  applyDisabled: boolean;
   customAmountInput: string;
   distributableAmount: number | null;
   mode: ProtectedMarginMode;
+  onApply: () => void;
   onCustomAmountChange: (value: string) => void;
   onModeChange: (mode: ProtectedMarginMode) => void;
   protectedAmount: number | null;
@@ -57,8 +64,8 @@ export function ProtectedMarginControl({
       <View style={styles.copy}>
         <Text style={styles.title}>Dinero libre del mes</Text>
         <Text style={styles.description}>
-          Es la parte que no se destina a deudas ni metas. Puedes dejar el valor automático,
-          repartir todo o elegir cuánto conservar libre.
+          Es el dinero que puedes conservar para gastar en lo que quieras. No se destina a
+          deudas ni a metas.
         </Text>
       </View>
 
@@ -104,11 +111,11 @@ export function ProtectedMarginControl({
 
       <View style={styles.values}>
         <View style={styles.valueItem}>
-          <Text style={styles.valueLabel}>Disponible al comenzar</Text>
+          <Text style={styles.valueLabel}>Disponible después de gastos y cuotas</Text>
           <Text style={styles.valueText}>{getValueLabel(surplusBeforeProtection)}</Text>
         </View>
         <View style={styles.valueItem}>
-          <Text style={styles.valueLabel}>Queda libre</Text>
+          <Text style={styles.valueLabel}>Dinero libre</Text>
           <Text style={styles.valueText}>{getValueLabel(protectedAmount)}</Text>
         </View>
         <View style={[styles.valueItem, styles.valueItemPrimary]}>
@@ -118,6 +125,16 @@ export function ProtectedMarginControl({
           </Text>
         </View>
       </View>
+
+      {!applied ? (
+        <PrimaryButton
+          accessibilityLabel="Guardar distribución del dinero libre"
+          disabled={applyDisabled}
+          icon={null}
+          onPress={onApply}
+          title="Guardar"
+        />
+      ) : null}
 
     </View>
   );
