@@ -829,6 +829,14 @@ export default function DashboardScreen() {
     metrics.expensePercentage !== null ? Math.min(metrics.expensePercentage, 100) : 0;
   const expensesMayExceedIncome =
     metrics.expensePercentage !== null && metrics.expensePercentage > 100;
+  const availableMarginPercentage =
+    metrics.expensePercentage !== null
+      ? Math.max(100 - metrics.expensePercentage, 0)
+      : null;
+  const deficitPercentage =
+    metrics.expensePercentage !== null
+      ? Math.max(metrics.expensePercentage - 100, 0)
+      : null;
   const primaryGoalTargetAmount = primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount;
   const primaryGoalTargetMonth = primaryGoalAllocation?.goal.targetMonth
     ? formatTargetMonth(primaryGoalAllocation.goal.targetMonth)
@@ -991,22 +999,16 @@ export default function DashboardScreen() {
             <PanelCard compact={isPhone} title="Resumen financiero estimado">
               <View style={styles.metricsGrid}>
                 <MetricCard
-                  icon={<PiggyBank color={colors.support} size={28} strokeWidth={2.4} />}
-                  label="Ingreso mensual"
-                  tone="support"
-                  value={getAmountLabel(metrics.incomeMidpoint, exactMonthlyIncome !== null)}
-                />
-                <MetricCard
                   icon={<ArrowDownCircle color="#C2410C" size={28} strokeWidth={2.4} />}
                   label="Gastos principales"
                   tone="danger"
                   value={getAmountLabel(metrics.expenseMidpoint, exactMonthlyExpenses !== null)}
                 />
                 <MetricCard
-                  icon={<TrendingUp color={colors.support} size={28} strokeWidth={2.4} />}
-                  label="Margen mensual"
-                  tone={metrics.estimatedMargin !== null && metrics.estimatedMargin > 0 ? "support" : "warning"}
-                  value={getMarginLabel(metrics.estimatedMargin, hasExactCashflowAmounts)}
+                  icon={<PiggyBank color={colors.support} size={28} strokeWidth={2.4} />}
+                  label="Ingreso mensual"
+                  tone="support"
+                  value={getAmountLabel(metrics.incomeMidpoint, exactMonthlyIncome !== null)}
                 />
                 <MetricCard
                   icon={
@@ -1025,23 +1027,87 @@ export default function DashboardScreen() {
                       : "$0"
                   }
                 />
+                <MetricCard
+                  icon={<TrendingUp color={colors.support} size={28} strokeWidth={2.4} />}
+                  label="Margen mensual"
+                  tone={metrics.estimatedMargin !== null && metrics.estimatedMargin > 0 ? "support" : "warning"}
+                  value={getMarginLabel(metrics.estimatedMargin, hasExactCashflowAmounts)}
+                />
               </View>
 
               <View style={styles.comparisonBox}>
-                <View style={styles.comparisonHeader}>
-                  <Text style={styles.comparisonTitle}>Salidas mensuales vs ingresos</Text>
-                  <Text style={styles.comparisonValue}>
-                    {getExpensePercentageLabel(metrics.expensePercentage, hasExactCashflowAmounts)}
-                  </Text>
+                <Text style={styles.comparisonTitle}>Distribución del ingreso mensual</Text>
+                <View style={styles.comparisonLegend}>
+                  <View style={styles.comparisonLegendItem}>
+                    <View style={[styles.comparisonDot, styles.comparisonOutflowDot]} />
+                    <View style={styles.comparisonLegendCopy}>
+                      <Text style={styles.comparisonLegendLabel}>Salidas</Text>
+                      <Text style={styles.comparisonLegendValue}>
+                        {getExpensePercentageLabel(
+                          metrics.expensePercentage,
+                          hasExactCashflowAmounts
+                        )}
+                        {snapshot.cashflow.totalMonthlyOutflow !== null
+                          ? ` · ${getAmountLabel(
+                              snapshot.cashflow.totalMonthlyOutflow,
+                              hasExactCashflowAmounts
+                            )}`
+                          : ""}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.comparisonLegendItem}>
+                    <View
+                      style={[
+                        styles.comparisonDot,
+                        expensesMayExceedIncome
+                          ? styles.comparisonDeficitDot
+                          : styles.comparisonMarginDot
+                      ]}
+                    />
+                    <View style={styles.comparisonLegendCopy}>
+                      <Text style={styles.comparisonLegendLabel}>
+                        {expensesMayExceedIncome ? "Déficit mensual" : "Margen disponible"}
+                      </Text>
+                      <Text style={styles.comparisonLegendValue}>
+                        {getExpensePercentageLabel(
+                          expensesMayExceedIncome
+                            ? deficitPercentage
+                            : availableMarginPercentage,
+                          hasExactCashflowAmounts
+                        )}
+                        {metrics.estimatedMargin !== null
+                          ? ` · ${getMarginLabel(
+                              metrics.estimatedMargin,
+                              hasExactCashflowAmounts
+                            )}`
+                          : ""}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.expenseFill,
-                      expensesMayExceedIncome && styles.expenseFillWarning,
-                      { width: toPercentWidth(expenseBarWidth) }
-                    ]}
-                  />
+                <View
+                  accessibilityLabel="Comparación entre salidas y margen disponible"
+                  style={styles.comparisonTrack}
+                >
+                  {metrics.expensePercentage !== null ? (
+                    <>
+                      <View
+                        style={[
+                          styles.comparisonOutflowSegment,
+                          { width: toPercentWidth(expenseBarWidth) }
+                        ]}
+                      />
+                      {!expensesMayExceedIncome ? (
+                        <View
+                          style={[
+                            styles.comparisonMarginSegment,
+                            { width: toPercentWidth(availableMarginPercentage ?? 0) }
+                          ]}
+                        />
+                      ) : null}
+                    </>
+                  ) : null}
                 </View>
               </View>
             </PanelCard>
@@ -1296,8 +1362,8 @@ const styles = StyleSheet.create({
   },
   nextActionCard: {
     alignItems: "center",
-    backgroundColor: colors.warningSoft,
-    borderColor: "#FED7AA",
+    backgroundColor: "#F6F1FF",
+    borderColor: "#D8C7FF",
     borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: "row",
@@ -1310,7 +1376,7 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   nextActionLabel: {
-    color: "#B45309",
+    color: "#6D28D9",
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.caption
@@ -1486,18 +1552,73 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     justifyContent: "space-between"
   },
+  comparisonLegend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
   comparisonTitle: {
     color: colors.text,
-    flex: 1,
     fontSize: typography.body,
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.body
   },
-  comparisonValue: {
-    color: colors.primary,
-    fontSize: typography.body,
+  comparisonLegendItem: {
+    alignItems: "flex-start",
+    flexBasis: 210,
+    flexDirection: "row",
+    flexGrow: 1,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  comparisonDot: {
+    borderRadius: radius.pill,
+    height: 10,
+    marginTop: 4,
+    width: 10
+  },
+  comparisonOutflowDot: {
+    backgroundColor: "#F97316"
+  },
+  comparisonMarginDot: {
+    backgroundColor: colors.support
+  },
+  comparisonDeficitDot: {
+    backgroundColor: "#C2410C"
+  },
+  comparisonLegendCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0
+  },
+  comparisonLegendLabel: {
+    color: colors.text,
+    fontSize: typography.caption,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
+    lineHeight: typography.lineHeight.caption
+  },
+  comparisonLegendValue: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  comparisonTrack: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    height: 14,
+    overflow: "hidden"
+  },
+  comparisonOutflowSegment: {
+    backgroundColor: "#F97316",
+    height: "100%"
+  },
+  comparisonMarginSegment: {
+    backgroundColor: colors.support,
+    height: "100%"
   },
   progressTrack: {
     backgroundColor: "#E4EAF2",
@@ -1512,14 +1633,6 @@ const styles = StyleSheet.create({
   },
   progressFillComplete: {
     backgroundColor: colors.support
-  },
-  expenseFill: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    height: "100%"
-  },
-  expenseFillWarning: {
-    backgroundColor: "#F97316"
   },
   rowCard: {
     ...shadows.card,
