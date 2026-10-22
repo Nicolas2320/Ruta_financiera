@@ -643,6 +643,7 @@ export default function SimulationScreen() {
                 <DistributionComparisonSummary
                   compact={isPhone}
                   scenarios={distributionScenarios}
+                  selectedStrategyId={selectedDistributionId}
                 />
               </SectionCard>
           ) : null}

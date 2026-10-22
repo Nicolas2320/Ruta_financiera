@@ -91,7 +91,7 @@ export function buildDistributionComparison(
       label: scenario.label,
       peakMonthlyDebtPayment,
       status: scenario.status,
-      totalInterestCharged: timelineReady
+      totalInterestCharged: timelineReady && !scenario.timeline.hasUnknownInterestRates
         ? scenario.timeline.totalInterestCharged
         : null
     };

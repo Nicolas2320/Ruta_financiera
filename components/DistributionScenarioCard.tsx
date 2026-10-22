@@ -216,7 +216,9 @@ function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentat
           { label: "Pago del primer mes", value: formatCOP(firstDebtPayment) },
           {
             label: "Intereses estimados",
-            value: formatCOP(timeline.totalInterestCharged)
+            value: timeline.hasUnknownInterestRates
+              ? "No calculable"
+              : formatCOP(timeline.totalInterestCharged)
           }
         ]
       : focus === "goal"
