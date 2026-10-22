@@ -84,60 +84,6 @@ function ProjectionMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function GoalProgressSummary({
-  scenario
-}: {
-  scenario: DistributionScenarioPresentation;
-}) {
-  const goals = scenario.timeline.trackedGoals.filter(
-    (goal) => goal.targetAmount !== null
-  );
-
-  if (goals.length === 0) {
-    return null;
-  }
-  const explanation =
-    scenario.id === "reduce_interest"
-      ? "Esta estrategia dirige el dinero disponible a las deudas; por eso no se reparte entre las metas."
-      : "El dinero disponible no se reparte entre estas metas en este escenario.";
-
-  return (
-    <View style={styles.goalSummary}>
-      {goals.map((goal) => {
-        const targetAmount = goal.targetAmount ?? 0;
-        const progress = Math.min(
-          100,
-          Math.max(0, (goal.currentAmount / Math.max(1, targetAmount)) * 100)
-        );
-        const hasContribution = scenario.timeline.months.some((month) =>
-          month.goalContributions.some((contribution) => contribution.goalId === goal.goalId)
-        );
-
-        return (
-          <View key={goal.goalId} style={styles.goalSummaryItem}>
-            <View style={styles.goalSummaryCopy}>
-              <Text style={styles.goalSummaryTitle}>{goal.title}</Text>
-              <Text style={styles.goalSummaryStatus}>
-                {hasContribution ? "Meta en movimiento" : "Dinero no repartido a esta meta"}
-              </Text>
-            </View>
-            <View style={styles.goalSummaryProgress}>
-              <View style={styles.goalSummaryValues}>
-                <Text style={styles.goalSummaryValue}>{formatCOP(goal.currentAmount)} reunidos</Text>
-                <Text style={styles.goalSummaryValue}>de {formatCOP(targetAmount)}</Text>
-              </View>
-              <View style={styles.goalProgressTrack}>
-                <View style={[styles.goalProgressFill, { width: `${progress}%` }]} />
-              </View>
-              {!hasContribution ? <Text style={styles.goalSummaryExplanation}>{explanation}</Text> : null}
-            </View>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
 function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentation }) {
   const timeline = scenario.timeline;
   const [selectedGoalId, setSelectedGoalId] = useState(
@@ -295,8 +241,12 @@ function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentat
         timeline={timeline}
       />
 
-      {focus === "debt" && scenario.id !== "reduce_interest" ? (
-        <GoalProgressSummary scenario={scenario} />
+      {scenario.id === "current_reference" && scenario.timeline.trackedGoals.length > 0 ? (
+        <View style={styles.inactiveGoalsNotice}>
+          <Text style={styles.inactiveGoalsNoticeText}>
+            Esta alternativa no realiza aportes mensuales a tus metas.
+          </Text>
+        </View>
       ) : null}
 
       {focus !== "goal" && payoffEvents.length > 0 ? (
@@ -331,55 +281,212 @@ function TimelinePreview({ scenario }: { scenario: DistributionScenarioPresentat
   );
 }
 
-export function DistributionScenarioCard({
-  expanded,
+function getOutcomeLabels(scenario: DistributionScenarioPresentation) {
+  if (scenario.status !== "ready" || scenario.timeline.months.length === 0) {
+    return [];
+  }
+
+  const labels: string[] = [];
+  const firstMonth = scenario.timeline.months[0];
+
+  if (firstMonth.debtPayments.length === 0) {
+    labels.push("Sin deudas registradas");
+  } else if (!scenario.timeline.allDebtBalancesKnown) {
+    labels.push("Deudas: faltan saldos");
+  } else if (scenario.timeline.allKnownDebtsPaidMonth) {
+    labels.push(`Sin deudas: ${formatTargetMonth(scenario.timeline.allKnownDebtsPaidMonth)}`);
+  } else {
+    labels.push("Deudas: más de 10 años");
+  }
+
+  if (scenario.timeline.trackedGoal) {
+    labels.push(
+      scenario.timeline.goalCompletionMonth
+        ? `Meta: ${formatTargetMonth(scenario.timeline.goalCompletionMonth)}`
+        : scenario.goalContribution > 0
+          ? "Meta: por proyectar"
+          : "Metas: sin aporte mensual"
+    );
+  }
+
+  return labels;
+}
+
+export function DistributionStrategyOption({
+  applied,
   onResolve,
-  onSave,
   onSelect,
-  onSplitDebtPercentChange,
-  onToggle,
   resolveLabel = "Completar información",
   scenario,
-  saved = false,
-  selected = false
+  selected
 }: {
-  expanded: boolean;
+  applied: boolean;
   onResolve?: () => void;
-  onSave?: () => void;
   onSelect?: () => void;
-  onSplitDebtPercentChange?: (value: number) => void;
-  onToggle: () => void;
   resolveLabel?: string;
   scenario: DistributionScenarioPresentation;
-  saved?: boolean;
-  selected?: boolean;
+  selected: boolean;
 }) {
   const unavailable = scenario.status !== "ready";
+  const outcomes = getOutcomeLabels(scenario);
 
   return (
-    <View
-      style={[
-        styles.card,
-        selected && styles.cardSelected,
-        unavailable && styles.cardUnavailable
+    <Pressable
+      accessibilityLabel={`${scenario.label}. ${getHeadline(scenario)}${applied ? ". Estrategia actual" : selected ? ". Vista previa" : ""}`}
+      accessibilityRole={unavailable ? "button" : "radio"}
+      accessibilityState={{ disabled: unavailable && !onResolve, selected }}
+      disabled={unavailable && !onResolve}
+      onPress={unavailable ? onResolve : onSelect}
+      style={({ pressed }) => [
+        styles.optionCard,
+        selected && styles.optionCardSelected,
+        unavailable && styles.cardUnavailable,
+        pressed && styles.pressed
       ]}
     >
-      <View style={styles.header}>
-        <View style={styles.headerCopy}>
-          <View style={styles.titleRow}>
-            <Text style={styles.title}>{scenario.label}</Text>
-            <View style={[styles.badge, unavailable && styles.badgeUnavailable]}>
-              <Text style={[styles.badgeText, unavailable && styles.badgeTextUnavailable]}>
-                {getStatusLabel(scenario)}
-              </Text>
+      <View style={styles.optionHeader}>
+        <Text style={styles.optionTitle}>{scenario.label}</Text>
+        <View style={[styles.badge, unavailable && styles.badgeUnavailable]}>
+          <Text style={[styles.badgeText, unavailable && styles.badgeTextUnavailable]}>
+            {getStatusLabel(scenario)}
+          </Text>
+        </View>
+      </View>
+
+      <Text
+        style={[styles.optionImpact, unavailable && styles.headlineUnavailable]}
+      >
+        {getHeadline(scenario)}
+      </Text>
+
+      {outcomes.length > 0 ? (
+        <View style={styles.outcomeList}>
+          {outcomes.map((outcome) => (
+            <View key={outcome} style={styles.outcomeChip}>
+              <Text style={styles.outcomeChipText}>{outcome}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      <View style={styles.optionFooter}>
+        {applied ? (
+          <View style={styles.appliedBadge}>
+            <Check color={colors.support} size={14} strokeWidth={3} />
+            <Text style={styles.appliedBadgeText}>Estrategia actual</Text>
+          </View>
+        ) : selected ? (
+          <View style={styles.previewBadge}>
+            <View style={styles.previewDot} />
+            <Text style={styles.previewBadgeText}>Vista previa</Text>
+          </View>
+        ) : unavailable ? (
+          <View style={styles.resolveLink}>
+            <Text style={styles.resolveLinkText}>{resolveLabel}</Text>
+            <ArrowRight color={colors.primary} size={16} strokeWidth={2.5} />
+          </View>
+        ) : (
+          <Text style={styles.chooseLabel}>Ver esta estrategia</Text>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
+function DistributionOverview({ scenario }: { scenario: DistributionScenarioPresentation }) {
+  const segments = [
+    { color: colors.primary, label: "Extra a deudas", value: scenario.extraDebtPayment },
+    { color: financialTimelineChartColors.goal, label: "A metas", value: scenario.goalContribution },
+    { color: colors.textSubtle, label: "Sin repartir", value: scenario.unassignedAmount }
+  ].filter((segment) => segment.value > 0);
+  const distributionTotal = segments.reduce((total, segment) => total + segment.value, 0);
+
+  return (
+    <View style={styles.distributionOverview}>
+      <Text style={styles.distributionDetailTitle}>Distribución del primer mes</Text>
+      {distributionTotal > 0 ? (
+        <View style={styles.distributionTrack}>
+          {segments.map((segment) => (
+            <View
+              key={segment.label}
+              style={[
+                styles.distributionSegment,
+                {
+                  backgroundColor: segment.color,
+                  flexGrow: segment.value,
+                  flexBasis: 0
+                }
+              ]}
+            />
+          ))}
+        </View>
+      ) : null}
+      <View style={styles.distributionLegend}>
+        {segments.map((segment) => (
+          <View key={segment.label} style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: segment.color }]} />
+            <View>
+              <Text style={styles.legendLabel}>{segment.label}</Text>
+              <Text style={styles.legendValue}>{formatCOP(segment.value)}</Text>
             </View>
           </View>
+        ))}
+      </View>
+      <View style={styles.supportingAmounts}>
+        <AllocationValue label="Cuotas requeridas" value={formatCOP(scenario.baseDebtPayments)} />
+        <AllocationValue
+          label="Dinero libre que conservas"
+          value={
+            scenario.monthlyBalance === null
+              ? "No disponible"
+              : formatSignedCOP(scenario.monthlyBalance - scenario.unassignedAmount)
+          }
+        />
+      </View>
+    </View>
+  );
+}
+
+export function DistributionStrategyDetail({
+  applied,
+  onApply,
+  onProjectionToggle,
+  onSplitDebtPercentChange,
+  projectionExpanded,
+  scenario
+}: {
+  applied: boolean;
+  onApply?: () => void;
+  onProjectionToggle: () => void;
+  onSplitDebtPercentChange?: (value: number) => void;
+  projectionExpanded: boolean;
+  scenario: DistributionScenarioPresentation;
+}) {
+  if (scenario.status !== "ready") {
+    return null;
+  }
+
+  return (
+    <View style={styles.detailPanel}>
+      <View style={styles.detailHeader}>
+        <View style={styles.detailHeaderCopy}>
+          <Text style={styles.detailEyebrow}>DETALLE DE LA ESTRATEGIA</Text>
+          <Text style={styles.detailTitle}>{scenario.label}</Text>
           <Text style={styles.description}>{scenario.description}</Text>
+        </View>
+        <View style={applied ? styles.appliedBadge : styles.previewBadge}>
+          {applied ? (
+            <Check color={colors.support} size={14} strokeWidth={3} />
+          ) : (
+            <View style={styles.previewDot} />
+          )}
+          <Text style={applied ? styles.appliedBadgeText : styles.previewBadgeText}>
+            {applied ? "Estrategia actual" : "Vista previa"}
+          </Text>
         </View>
       </View>
 
       {scenario.id === "split_debt_goal" &&
-      scenario.status === "ready" &&
       scenario.debtSharePercent !== null &&
       onSplitDebtPercentChange ? (
         <DebtGoalAllocationSlider
@@ -388,159 +495,340 @@ export function DistributionScenarioCard({
         />
       ) : null}
 
-      <View style={[styles.headlineBox, unavailable && styles.headlineBoxUnavailable]}>
-        <Text style={[styles.headline, unavailable && styles.headlineUnavailable]}>
-          {getHeadline(scenario)}
-        </Text>
-      </View>
+      <DistributionOverview scenario={scenario} />
 
-      {!unavailable && onSelect ? (
-        <View style={styles.selectionActions}>
-          <Pressable
-            accessibilityRole="radio"
-            accessibilityState={{ selected }}
-            onPress={onSelect}
-            style={({ pressed }) => [
-              styles.selectButton,
-              selected && styles.selectButtonSelected,
-              pressed && styles.pressed
-            ]}
-          >
-            <View
-              style={[
-                styles.selectIndicator,
-                selected && styles.selectIndicatorSelected
-              ]}
-            >
-              {selected ? (
-                <Check color={colors.surface} size={14} strokeWidth={3} />
-              ) : null}
-            </View>
-            <Text
-              style={[
-                styles.selectButtonText,
-                selected && styles.selectButtonTextSelected
-              ]}
-            >
-              {selected ? "Seleccionada" : "Seleccionar"}
-            </Text>
-          </Pressable>
-          {selected ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: saved }}
-              disabled={saved}
-              onPress={onSave}
-              style={({ pressed }) => [
-                styles.saveButton,
-                saved && styles.saveButtonSaved,
-                pressed && !saved && styles.pressed
-              ]}
-            >
-              {saved ? <Check color={colors.support} size={17} strokeWidth={3} /> : null}
-              <Text style={[styles.saveButtonText, saved && styles.saveButtonTextSaved]}>
-                {saved ? "Guardado" : "Guardar"}
-              </Text>
-            </Pressable>
-          ) : null}
+      <Pressable
+        accessibilityRole="button"
+        onPress={onProjectionToggle}
+        style={({ pressed }) => [styles.projectionToggle, pressed && styles.pressed]}
+      >
+        <View>
+          <Text style={styles.projectionToggleTitle}>
+            {projectionExpanded ? "Ocultar proyección completa" : "Ver proyección completa"}
+          </Text>
+          <Text style={styles.projectionToggleHelper}>
+            Gráfica, fechas estimadas e hitos de pago
+          </Text>
         </View>
-      ) : null}
+        {projectionExpanded ? (
+          <ChevronUp color={colors.primary} size={20} strokeWidth={2.5} />
+        ) : (
+          <ChevronDown color={colors.primary} size={20} strokeWidth={2.5} />
+        )}
+      </Pressable>
 
-      {scenario.issueMessages.length > 1 ? (
-        <View style={styles.issueList}>
-          {scenario.issueMessages.slice(1).map((message) => (
-            <Text key={message} style={styles.issueText}>
+      {projectionExpanded ? <TimelinePreview scenario={scenario} /> : null}
+
+      {scenario.issueMessages.length > 0 ? (
+        <View style={styles.warningBox}>
+          <Text style={styles.warningTitle}>Resultado con información limitada</Text>
+          {scenario.issueMessages.map((message) => (
+            <Text key={message} style={styles.warningText}>
               • {message}
             </Text>
           ))}
         </View>
       ) : null}
 
-      {unavailable && onResolve ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={onResolve}
-          style={({ pressed }) => [styles.resolveButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.resolveButtonText}>{resolveLabel}</Text>
-          <ArrowRight color={colors.surface} size={19} strokeWidth={2.5} />
-        </Pressable>
-      ) : null}
-
-      {!unavailable ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={onToggle}
-          style={({ pressed }) => [styles.toggle, pressed && styles.pressed]}
-        >
-          <Text style={styles.toggleText}>
-            {expanded ? "Ocultar proyección" : "Ver proyección"}
-          </Text>
-          {expanded ? (
-            <ChevronUp color={colors.primary} size={18} strokeWidth={2.5} />
-          ) : (
-            <ChevronDown color={colors.primary} size={18} strokeWidth={2.5} />
-          )}
-        </Pressable>
-      ) : null}
-
-      {expanded && !unavailable ? (
-        <View style={styles.detail}>
-          <TimelinePreview scenario={scenario} />
-
-          <View style={styles.distributionDetail}>
-            <Text style={styles.distributionDetailTitle}>Distribución del primer mes</Text>
-            <View style={styles.allocations}>
-              <AllocationValue
-                label={
-                  scenario.id === "current_reference"
-                    ? "Cuotas registradas"
-                    : "Cuotas de deuda"
-                }
-                value={formatCOP(scenario.baseDebtPayments)}
-              />
-              <AllocationValue
-                label="Extra a deudas"
-                value={formatCOP(scenario.extraDebtPayment)}
-              />
-              {scenario.id === "reduce_interest" ? null : (
-                <AllocationValue label="A metas" value={formatCOP(scenario.goalContribution)} />
-              )}
-              <AllocationValue
-                label="Sin repartir"
-                value={formatCOP(scenario.unassignedAmount)}
-              />
-            </View>
-
-            <View style={styles.balanceRow}>
-              <Text style={styles.balanceLabel}>
-                Queda en el mes después de esta distribución
-              </Text>
-              <Text style={styles.balanceValue}>
-                {scenario.monthlyBalance === null
-                  ? "No disponible"
-                  : formatSignedCOP(scenario.monthlyBalance)}
-              </Text>
-            </View>
-          </View>
-
-          {scenario.issueMessages.length > 0 && !unavailable ? (
-            <View style={styles.warningBox}>
-              <Text style={styles.warningTitle}>Resultado con información limitada</Text>
-              {scenario.issueMessages.map((message) => (
-                <Text key={message} style={styles.warningText}>
-                  • {message}
-                </Text>
-              ))}
-            </View>
-          ) : null}
-        </View>
-      ) : null}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled: applied }}
+        disabled={applied}
+        onPress={onApply}
+        style={({ pressed }) => [
+          styles.applyButton,
+          applied && styles.applyButtonApplied,
+          pressed && !applied && styles.pressed
+        ]}
+      >
+        {applied ? <Check color={colors.support} size={18} strokeWidth={3} /> : null}
+        <Text style={[styles.applyButtonText, applied && styles.applyButtonTextApplied]}>
+          {applied ? "Esta es tu estrategia actual" : "Aplicar esta estrategia"}
+        </Text>
+      </Pressable>
+      <Text style={styles.applyHelper}>
+        Aplicarla actualiza tu plan mensual; no registra pagos ni separa dinero.
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  optionCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexBasis: 280,
+    flexGrow: 1,
+    gap: spacing.sm,
+    minHeight: 188,
+    padding: spacing.md
+  },
+  optionCardSelected: {
+    backgroundColor: "#F8FBFF",
+    borderColor: colors.primary,
+    borderWidth: 2
+  },
+  optionHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    justifyContent: "space-between"
+  },
+  optionTitle: {
+    color: colors.text,
+    flex: 1,
+    fontSize: typography.option,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.option,
+    minWidth: 150
+  },
+  optionImpact: {
+    color: colors.support,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  outcomeList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs
+  },
+  outcomeChip: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  outcomeChipText: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.small
+  },
+  optionFooter: {
+    alignItems: "flex-start",
+    flexGrow: 1,
+    justifyContent: "flex-end"
+  },
+  appliedBadge: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.supportSoft,
+    borderColor: colors.supportBorder,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  appliedBadgeText: {
+    color: colors.support,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.small
+  },
+  previewBadge: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  previewBadgeText: {
+    color: colors.primary,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.small
+  },
+  previewDot: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    height: 8,
+    width: 8
+  },
+  resolveLink: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.xs
+  },
+  resolveLinkText: {
+    color: colors.primary,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.small
+  },
+  chooseLabel: {
+    color: colors.primary,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.small
+  },
+  detailPanel: {
+    backgroundColor: colors.surface,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: spacing.lg,
+    padding: spacing.lg
+  },
+  detailHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    justifyContent: "space-between"
+  },
+  detailHeaderCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 220
+  },
+  detailEyebrow: {
+    color: colors.primary,
+    fontSize: typography.small,
+    fontWeight: typography.weight.black,
+    letterSpacing: 0.6,
+    lineHeight: typography.lineHeight.small
+  },
+  detailTitle: {
+    color: colors.text,
+    fontSize: typography.brand,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.brand
+  },
+  distributionOverview: {
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  distributionTrack: {
+    borderRadius: radius.pill,
+    flexDirection: "row",
+    height: 12,
+    overflow: "hidden"
+  },
+  distributionSegment: {
+    height: "100%",
+    minWidth: 2
+  },
+  distributionLegend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.lg
+  },
+  legendItem: {
+    alignItems: "flex-start",
+    flexBasis: 150,
+    flexDirection: "row",
+    flexGrow: 1,
+    gap: spacing.xs
+  },
+  legendDot: {
+    borderRadius: radius.pill,
+    height: 9,
+    marginTop: 4,
+    width: 9
+  },
+  legendLabel: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    lineHeight: typography.lineHeight.small
+  },
+  legendValue: {
+    color: colors.text,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  supportingAmounts: {
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    paddingTop: spacing.md
+  },
+  projectionToggle: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 58,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  projectionToggleTitle: {
+    color: colors.primary,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  projectionToggleHelper: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    lineHeight: typography.lineHeight.small
+  },
+  applyButton: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    justifyContent: "center",
+    minHeight: 50,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm
+  },
+  applyButtonApplied: {
+    backgroundColor: colors.supportSoft,
+    borderColor: colors.supportBorder
+  },
+  applyButtonText: {
+    color: colors.surface,
+    fontSize: typography.button,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.button
+  },
+  applyButtonTextApplied: {
+    color: colors.support
+  },
+  applyHelper: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    lineHeight: typography.lineHeight.small,
+    textAlign: "center"
+  },
+  inactiveGoalsNotice: {
+    backgroundColor: "#F3E8FF",
+    borderColor: "#D8B4FE",
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    padding: spacing.sm
+  },
+  inactiveGoalsNoticeText: {
+    color: financialTimelineChartColors.goal,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption
+  },
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.border,

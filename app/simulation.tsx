@@ -18,7 +18,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/BottomNavigation";
 import { DistributionComparisonSummary } from "../components/DistributionComparisonSummary";
-import { DistributionScenarioCard } from "../components/DistributionScenarioCard";
+import {
+  DistributionStrategyDetail,
+  DistributionStrategyOption
+} from "../components/DistributionScenarioCard";
 import { PrimaryButton } from "../components/PrimaryButton";
 import {
   ProtectedMarginControl,
@@ -264,9 +267,7 @@ export default function SimulationScreen() {
     useState<DistributionStrategyId>(() =>
       resolveStoredDistributionId(onboarding.simulationPlanPreference?.strategy)
     );
-  const [expandedDistributionId, setExpandedDistributionId] = useState<string>(() =>
-    resolveStoredDistributionId(onboarding.simulationPlanPreference?.strategy)
-  );
+  const [projectionExpanded, setProjectionExpanded] = useState(false);
   const [splitDebtPercent, setSplitDebtPercent] = useState(50);
 
   const projectionInput = useMemo(
@@ -354,6 +355,18 @@ export default function SimulationScreen() {
       storedPreference.protectedMarginMode === protectedMarginMode &&
       storedPreference.customProtectedMargin === customProtectedMarginToSave
   );
+  const isAppliedScenario = (scenarioId: DistributionStrategyId) =>
+    Boolean(
+      storedPreference &&
+        normalizedStoredStrategy === scenarioId &&
+        storedProtectedMarginMatches &&
+        (scenarioId !== "split_debt_goal" ||
+          storedPreference.debtShare === splitDebtPercent / 100)
+    );
+  const hasUnknownInterestRates = distributionScenarios.some(
+    (scenario) =>
+      scenario.status === "ready" && scenario.timeline.hasUnknownInterestRates
+  );
   const isCustomProtectedMarginValid =
     protectedMarginMode !== "custom" ||
     (customProtectedMarginInput.length > 0 &&
@@ -394,7 +407,7 @@ export default function SimulationScreen() {
     );
     const storedDistributionId = resolveStoredDistributionId(preference.strategy);
     setSelectedDistributionId(storedDistributionId);
-    setExpandedDistributionId(storedDistributionId);
+    setProjectionExpanded(false);
     if (preference.debtShare !== null) {
       setSplitDebtPercent(Math.round(preference.debtShare * 100));
     }
@@ -411,7 +424,7 @@ export default function SimulationScreen() {
 
     if (goalsOnlyScenario) {
       setSelectedDistributionId("accelerate_goal");
-      setExpandedDistributionId("accelerate_goal");
+      setProjectionExpanded(false);
     }
   }, [distributionScenarios, selectedDistributionScenario?.status]);
 
@@ -656,38 +669,32 @@ export default function SimulationScreen() {
             <Text style={styles.sectionDescription}>
               {simulationExperience.mode === "reported_debt"
                 ? "Con la cuota total que informaste podemos proyectar tus metas. Para comparar o adelantar deudas, registra al menos su saldo y cuota mensual."
-                : "Todas conservan primero tus gastos y cuotas requeridas. Lo único que cambia es el destino del dinero que queda disponible. Elige una para que Metas, Deudas, el dashboard y tu plan mensual usen la misma distribución."}
+                : "Elige una alternativa para ver su detalle. Todas conservan primero tus gastos, cuotas requeridas y dinero libre del mes."}
             </Text>
+            {hasUnknownInterestRates ? (
+              <View style={styles.interestNotice}>
+                <Text style={styles.interestNoticeText}>
+                  Los intereses no pueden compararse hasta que agregues las tasas de tus deudas.
+                </Text>
+              </View>
+            ) : null}
             <View style={styles.scenariosList}>
               {distributionScenarios.map((scenario) => (
-                <DistributionScenarioCard
-                  expanded={
-                    scenario.status === "ready" &&
-                    expandedDistributionId === scenario.id
-                  }
+                <DistributionStrategyOption
+                  applied={isAppliedScenario(scenario.id)}
                   key={scenario.id}
                   onResolve={
                     scenario.status === "ready"
                       ? undefined
                       : () => router.push(getResolutionRoute(scenario.issueCodes))
                   }
-                  onSplitDebtPercentChange={setSplitDebtPercent}
                   onSelect={
                     scenario.status === "ready"
-                      ? () => setSelectedDistributionId(scenario.id)
+                      ? () => {
+                          setSelectedDistributionId(scenario.id);
+                          setProjectionExpanded(false);
+                        }
                       : undefined
-                  }
-                  onSave={
-                    scenario.status === "ready" &&
-                    selectedDistributionId === scenario.id &&
-                    !storedSelectionMatches
-                      ? () => saveStrategyPreference(scenario.id)
-                      : undefined
-                  }
-                  onToggle={() =>
-                    setExpandedDistributionId((current) =>
-                      current === scenario.id ? "" : scenario.id
-                    )
                   }
                   resolveLabel={
                     scenario.issueCodes.includes("missing_debt_details")
@@ -695,11 +702,6 @@ export default function SimulationScreen() {
                       : undefined
                   }
                   scenario={scenario}
-                  saved={
-                    scenario.status === "ready" &&
-                    selectedDistributionId === scenario.id &&
-                    storedSelectionMatches
-                  }
                   selected={
                     scenario.status === "ready" &&
                     selectedDistributionId === scenario.id
@@ -707,11 +709,20 @@ export default function SimulationScreen() {
                 />
               ))}
             </View>
-            <Text style={styles.disclaimerText}>
-              Selecciona una estrategia y usa Guardar para aplicarla. Si cambias el
-              porcentaje entre deudas y metas, vuelve a guardarla. Esto no registra pagos
-              ni separa dinero.
-            </Text>
+            {selectedDistributionScenario?.status === "ready" ? (
+              <DistributionStrategyDetail
+                applied={storedSelectionMatches}
+                onApply={
+                  storedSelectionMatches
+                    ? undefined
+                    : () => saveStrategyPreference(selectedDistributionScenario.id)
+                }
+                onProjectionToggle={() => setProjectionExpanded((current) => !current)}
+                onSplitDebtPercentChange={setSplitDebtPercent}
+                projectionExpanded={projectionExpanded}
+                scenario={selectedDistributionScenario}
+              />
+            ) : null}
           </SectionCard>
 
           <View style={styles.actions}>
@@ -966,7 +977,21 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.body
   },
   scenariosList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.md
+  },
+  interestNotice: {
+    backgroundColor: colors.warningSoft,
+    borderColor: "#FED7AA",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing.sm
+  },
+  interestNoticeText: {
+    color: "#92400E",
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
   },
   sectionDescription: {
     color: colors.textMuted,

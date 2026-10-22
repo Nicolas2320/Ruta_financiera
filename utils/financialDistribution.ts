@@ -720,7 +720,7 @@ function getSplitScenario({
     };
   }
 
-  const debtBudget = base.distributableAmount * normalizedDebtShare;
+  const debtBudget = Math.round(base.distributableAmount * normalizedDebtShare);
   const goalBudget = base.distributableAmount - debtBudget;
   let debtResult = allocateExtraToDebts({
     allocations: base.debtAllocations,
