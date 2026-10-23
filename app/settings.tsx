@@ -5,7 +5,6 @@ import {
   BookOpen,
   ChevronRight,
   ClipboardList,
-  LineChart,
   LogOut,
   Settings,
   Trash2,
@@ -152,25 +151,6 @@ export default function SettingsScreen() {
               />
             ) : null}
           </View>
-
-          <Pressable
-            accessibilityLabel="Mejorar mi plan financiero"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: true }}
-            disabled
-            style={[styles.settingsLinkCard, styles.settingsLinkCardDisabled]}
-          >
-            <View style={styles.settingsLinkIcon}>
-              <LineChart color={colors.primary} size={24} strokeWidth={2.4} />
-            </View>
-            <View style={styles.settingsLinkBody}>
-              <Text style={styles.settingsLinkTitle}>Mejorar mi plan financiero</Text>
-              <Text style={styles.settingsLinkText}>
-                Edita ingreso, gastos mensuales y ahorro general. El detalle de gastos pequeños es opcional.
-              </Text>
-            </View>
-            <ChevronRight color={colors.textSubtle} size={22} strokeWidth={2.5} />
-          </Pressable>
 
           <Pressable
             accessibilityLabel="Editar perfil financiero"
@@ -452,9 +432,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
     padding: spacing.lg
-  },
-  settingsLinkCardDisabled: {
-    opacity: 0.5
   },
   settingsLinkIcon: {
     alignItems: "center",

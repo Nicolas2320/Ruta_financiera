@@ -3,7 +3,6 @@ import { useEffect, useMemo } from "react";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
-  ArrowDownCircle,
   Bot,
   CalendarCheck,
   ChevronRight,
@@ -13,9 +12,7 @@ import {
   Home,
   LineChart,
   PieChart,
-  PiggyBank,
   ShieldCheck,
-  TrendingUp,
   UserRound
 } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -29,13 +26,16 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { usePlan } from "../context/PlanContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { getDebtRatioLabel } from "../utils/debtCalculations";
-import { formatCOP, formatSignedCOP } from "../utils/financialRanges";
+import { getDebtPaymentTotalForPeriod } from "../utils/debtPayments";
+import { formatCOP } from "../utils/financialRanges";
+import { getGoalContributionPeriodSummary } from "../utils/goalContributions";
 import {
   getGoalPlanFromOnboarding,
   isEmergencyGoal,
   type GoalAllocation
 } from "../utils/goalPlanning";
 import { formatTargetMonth } from "../utils/monthYear";
+import { resolveMonthlyDistribution } from "../utils/monthlyDistribution";
 import {
   getEffectiveMonthlyPlanProgress,
   removeStoredGoalContributionActionsForPeriod
@@ -73,6 +73,18 @@ type MonthlyPlanGoal = {
   title: string;
 };
 
+type PlanAllocationPart = {
+  color: string;
+  value: number;
+};
+
+type PlanAllocationSegment = {
+  amount: number;
+  id: string;
+  label: string;
+  parts: PlanAllocationPart[];
+};
+
 type Route = Parameters<ReturnType<typeof useRouter>["push"]>[0];
 
 function toPercentWidth(value: number): `${number}%` {
@@ -95,24 +107,17 @@ function getAmountLabel(value: number | null, isExact = false) {
   return isExact ? formatCOP(value) : `${formatCOP(value)} aprox.`;
 }
 
-function getMarginLabel(value: number | null, isMorePrecise = false) {
-  if (value === null) {
-    return "No disponible";
-  }
+function getPeriodMonthLabel(periodKey: string) {
+  const [year, month] = periodKey.split("-").map(Number);
+  const date = new Date(year, Math.max(0, (month || 1) - 1), 1);
 
-  if (value <= 0) {
-    return isMorePrecise ? formatSignedCOP(value) : `${formatSignedCOP(value)} aprox.`;
-  }
-
-  return isMorePrecise ? formatCOP(value) : `${formatCOP(value)} aprox.`;
+  return date.toLocaleDateString("es-CO", { month: "long" });
 }
 
-function getExpensePercentageLabel(value: number | null, isMorePrecise = false) {
-  if (value === null) {
-    return "No disponible";
-  }
+function getPlanAllocationPercentage(amount: number, referenceTotal: number) {
+  if (referenceTotal <= 0) return 0;
 
-  return isMorePrecise ? `${value}%` : `${value}% aprox.`;
+  return Math.round((amount / referenceTotal) * 100);
 }
 
 function getRoundedMonthsLabel(value: number) {
@@ -511,6 +516,37 @@ function MetricCard({
   );
 }
 
+function PlanAllocationLegendItem({
+  label,
+  amount,
+  parts,
+  referenceTotal
+}: {
+  label: string;
+  amount: number;
+  parts: PlanAllocationPart[];
+  referenceTotal: number;
+}) {
+  return (
+    <View style={styles.planLegendItem}>
+      <View style={styles.planLegendSwatch}>
+        {parts.map((part, index) => (
+          <View
+            key={`${part.color}-${index}`}
+            style={{ backgroundColor: part.color, flexBasis: 0, flexGrow: part.value }}
+          />
+        ))}
+      </View>
+      <View style={styles.planLegendCopy}>
+        <Text style={styles.planLegendLabel}>{label}</Text>
+        <Text style={styles.planLegendValue}>
+          {getPlanAllocationPercentage(amount, referenceTotal)}% · {formatCOP(amount)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function ImprovePlanSummaryCard({
   count,
   state,
@@ -714,6 +750,29 @@ export default function DashboardScreen() {
   const metrics = useMemo(() => getMonthlyPlanMetrics(data, exactValues), [data, exactValues]);
   const snapshot = metrics.snapshot;
   const periodKey = getMonthlyPlanPeriodKey();
+  const periodMonthLabel = getPeriodMonthLabel(periodKey);
+  const monthlyDistribution = useMemo(
+    () => resolveMonthlyDistribution({ exactValues, onboarding }),
+    [exactValues, onboarding]
+  );
+  const registeredDebtPaymentsThisMonth = useMemo(
+    () =>
+      data.debts.reduce(
+        (total, debt) => total + getDebtPaymentTotalForPeriod(debt, periodKey),
+        0
+      ),
+    [data.debts, periodKey]
+  );
+  const registeredGoalContributionsThisMonth = useMemo(
+    () =>
+      data.goals.reduce(
+        (total, goal) => total + getGoalContributionPeriodSummary(goal, periodKey).amount,
+        0
+      ),
+    [data.goals, periodKey]
+  );
+  const registeredTotalThisMonth =
+    registeredDebtPaymentsThisMonth + registeredGoalContributionsThisMonth;
   const planPreference = useMemo(
     () => resolvePlanPreference({ exactValues, onboarding }),
     [exactValues, onboarding]
@@ -845,17 +904,71 @@ export default function DashboardScreen() {
         })
     )?.title ?? null;
   const precisionStatus = snapshot.precision;
-  const exactMonthlyIncome =
-    snapshot.sourceMap.monthlyIncome === "exact" ? snapshot.cashflow.monthlyIncome : null;
-  const exactMonthlyExpenses =
-    snapshot.sourceMap.monthlyExpenses === "exact" ? snapshot.cashflow.monthlyExpenses : null;
-  const hasExactCashflowAmounts =
-    snapshot.sourceMap.monthlyIncome === "exact" &&
-    snapshot.sourceMap.monthlyExpenses === "exact" &&
-    (snapshot.cashflow.monthlyExpensesIncludesSmallExpenses ||
-      snapshot.sourceMap.smallExpenses === "exact" ||
-      snapshot.sourceMap.smallExpenses === "reported_none") &&
-    !snapshot.debt.isPaymentEstimated;
+  const regularExpensesAmount = Math.max(0, metrics.expenseMidpoint ?? 0);
+  const activeDebtAmount = Math.max(0, monthlyDistribution.requiredDebtPaymentsTotal);
+  const extraDebtAmount = Math.max(0, monthlyDistribution.extraDebtPaymentsTotal);
+  const extraGoalAmount = Math.max(0, monthlyDistribution.goalContributionTotal);
+  const extraAllocationAmount = extraDebtAmount + extraGoalAmount;
+  const freeMoneyAmount = Math.max(
+    0,
+    monthlyDistribution.protectedMargin + monthlyDistribution.unassignedAmount
+  );
+  const extraAllocationLabel =
+    extraDebtAmount > 0 && extraGoalAmount > 0
+      ? "Extra a deudas y metas"
+      : extraDebtAmount > 0
+        ? "Extra a deuda"
+        : "Extra a metas";
+  const planAllocationSegments: PlanAllocationSegment[] = [];
+
+  if (regularExpensesAmount > 0) {
+    planAllocationSegments.push({
+      amount: regularExpensesAmount,
+      id: "expenses",
+      label: "Gastos habituales",
+      parts: [{ color: colors.warning, value: regularExpensesAmount }]
+    });
+  }
+  if (activeDebtAmount > 0) {
+    planAllocationSegments.push({
+      amount: activeDebtAmount,
+      id: "active-debts",
+      label: "Deudas activas",
+      parts: [{ color: colors.primaryDark, value: activeDebtAmount }]
+    });
+  }
+  if (freeMoneyAmount > 0) {
+    planAllocationSegments.push({
+      amount: freeMoneyAmount,
+      id: "free-money",
+      label: "Dinero libre",
+      parts: [{ color: colors.support, value: freeMoneyAmount }]
+    });
+  }
+  if (extraAllocationAmount > 0) {
+    planAllocationSegments.push({
+      amount: extraAllocationAmount,
+      id: "extra-allocation",
+      label: extraAllocationLabel,
+      parts: [
+        ...(extraDebtAmount > 0
+          ? [{ color: colors.primary, value: extraDebtAmount }]
+          : []),
+        ...(extraGoalAmount > 0
+          ? [{ color: colors.goal, value: extraGoalAmount }]
+          : [])
+      ]
+    });
+  }
+
+  const planAllocationTotal = planAllocationSegments.reduce(
+    (total, segment) => total + segment.amount,
+    0
+  );
+  const planAllocationReference = Math.max(
+    metrics.incomeMidpoint ?? 0,
+    planAllocationTotal
+  );
   const emergencyTone = getEmergencyTone(snapshot.emergencyFund.status);
   const emergencyStatus = {
     state: snapshot.emergencyFund.label,
@@ -883,18 +996,6 @@ export default function DashboardScreen() {
     primaryGoalAllocation && isCompletedGoalAllocation(primaryGoalAllocation)
       ? "Meta completada"
       : snapshot.goal.label;
-  const expenseBarWidth =
-    metrics.expensePercentage !== null ? Math.min(metrics.expensePercentage, 100) : 0;
-  const expensesMayExceedIncome =
-    metrics.expensePercentage !== null && metrics.expensePercentage > 100;
-  const availableMarginPercentage =
-    metrics.expensePercentage !== null
-      ? Math.max(100 - metrics.expensePercentage, 0)
-      : null;
-  const deficitPercentage =
-    metrics.expensePercentage !== null
-      ? Math.max(metrics.expensePercentage - 100, 0)
-      : null;
   const primaryGoalTargetAmount = primaryGoalAllocation?.targetAmount ?? snapshot.goal.targetAmount;
   const primaryGoalTargetMonth = primaryGoalAllocation?.goal.targetMonth
     ? formatTargetMonth(primaryGoalAllocation.goal.targetMonth)
@@ -1054,118 +1155,103 @@ export default function DashboardScreen() {
           />
 
           <View style={styles.twoColumnGrid}>
-            <PanelCard compact={isPhone} title="Resumen financiero estimado">
-              <View style={styles.metricsGrid}>
-                <MetricCard
-                  icon={<ArrowDownCircle color="#C2410C" size={28} strokeWidth={2.4} />}
-                  label="Gastos principales"
-                  tone="danger"
-                  value={getAmountLabel(metrics.expenseMidpoint, exactMonthlyExpenses !== null)}
-                />
-                <MetricCard
-                  icon={<PiggyBank color={colors.support} size={28} strokeWidth={2.4} />}
-                  label="Ingreso mensual"
-                  tone="support"
-                  value={getAmountLabel(metrics.incomeMidpoint, exactMonthlyIncome !== null)}
-                />
-                <MetricCard
-                  icon={
-                    <CreditCard
-                      color={getToneColors(dashboardDebtTone).text}
-                      size={28}
-                      strokeWidth={2.4}
-                    />
-                  }
-                  label="Cuotas de deuda"
-                  tone={dashboardDebtTone}
-                  value={
-                    snapshot.cashflow.monthlyDebtPayments > 0
-                      ? `${formatCOP(snapshot.cashflow.monthlyDebtPayments)}${snapshot.debt.isPaymentEstimated ? " aprox." : ""
-                      }`
-                      : "$0"
-                  }
-                />
-                <MetricCard
-                  icon={<TrendingUp color={colors.support} size={28} strokeWidth={2.4} />}
-                  label="Margen mensual"
-                  tone={metrics.estimatedMargin !== null && metrics.estimatedMargin > 0 ? "support" : "warning"}
-                  value={getMarginLabel(metrics.estimatedMargin, hasExactCashflowAmounts)}
-                />
+            <PanelCard compact={isPhone} title="Resumen financiero">
+              <View style={styles.financialSummarySection}>
+                <Text style={styles.financialSummaryTitle}>
+                  Actividad registrada en {periodMonthLabel}
+                </Text>
+                <View style={styles.metricsGrid}>
+                  <MetricCard
+                    icon={
+                      <CreditCard color={colors.danger} size={26} strokeWidth={2.4} />
+                    }
+                    label="Pagos a deudas"
+                    tone="danger"
+                    value={formatCOP(registeredDebtPaymentsThisMonth)}
+                  />
+                  <MetricCard
+                    icon={<Flag color={colors.goal} size={26} strokeWidth={2.4} />}
+                    label="Aportes a metas"
+                    tone="purple"
+                    value={formatCOP(registeredGoalContributionsThisMonth)}
+                  />
+                  <MetricCard
+                    icon={<PieChart color={colors.primary} size={26} strokeWidth={2.4} />}
+                    label="Total destinado"
+                    value={formatCOP(registeredTotalThisMonth)}
+                  />
+                </View>
+                <View style={styles.financialSummaryNote}>
+                  <Text style={styles.financialSummaryNoteText}>
+                    Solo incluye pagos y aportes registrados durante {periodMonthLabel}. No
+                    representa el saldo de tu cuenta.
+                  </Text>
+                </View>
               </View>
 
-              <View style={styles.comparisonBox}>
-                <Text style={styles.comparisonTitle}>Distribución del ingreso mensual</Text>
-                <View style={styles.comparisonLegend}>
-                  <View style={styles.comparisonLegendItem}>
-                    <View style={[styles.comparisonDot, styles.comparisonOutflowDot]} />
-                    <View style={styles.comparisonLegendCopy}>
-                      <Text style={styles.comparisonLegendLabel}>Salidas</Text>
-                      <Text style={styles.comparisonLegendValue}>
-                        {getExpensePercentageLabel(
-                          metrics.expensePercentage,
-                          hasExactCashflowAmounts
-                        )}
-                        {snapshot.cashflow.totalMonthlyOutflow !== null
-                          ? ` · ${getAmountLabel(
-                              snapshot.cashflow.totalMonthlyOutflow,
-                              hasExactCashflowAmounts
-                            )}`
-                          : ""}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.comparisonLegendItem}>
-                    <View
-                      style={[
-                        styles.comparisonDot,
-                        expensesMayExceedIncome
-                          ? styles.comparisonDeficitDot
-                          : styles.comparisonMarginDot
-                      ]}
-                    />
-                    <View style={styles.comparisonLegendCopy}>
-                      <Text style={styles.comparisonLegendLabel}>
-                        {expensesMayExceedIncome ? "Déficit mensual" : "Margen disponible"}
-                      </Text>
-                      <Text style={styles.comparisonLegendValue}>
-                        {getExpensePercentageLabel(
-                          expensesMayExceedIncome
-                            ? deficitPercentage
-                            : availableMarginPercentage,
-                          hasExactCashflowAmounts
-                        )}
-                        {metrics.estimatedMargin !== null
-                          ? ` · ${getMarginLabel(
-                              metrics.estimatedMargin,
-                              hasExactCashflowAmounts
-                            )}`
-                          : ""}
-                      </Text>
-                    </View>
-                  </View>
+              <View style={styles.financialSummaryDivider} />
+
+              <View style={styles.financialSummarySection}>
+                <View style={styles.financialSummaryHeading}>
+                  <Text style={styles.financialSummaryTitle}>Plan mensual desde ahora</Text>
+                  <Text style={styles.financialSummarySubtitle}>
+                    Proyección de un mes normal con tus deudas activas y la estrategia guardada.
+                  </Text>
                 </View>
-                <View
-                  accessibilityLabel="Comparación entre salidas y margen disponible"
-                  style={styles.comparisonTrack}
-                >
-                  {metrics.expensePercentage !== null ? (
-                    <>
-                      <View
-                        style={[
-                          styles.comparisonOutflowSegment,
-                          { width: toPercentWidth(expenseBarWidth) }
-                        ]}
-                      />
-                      {!expensesMayExceedIncome ? (
+
+                {planAllocationReference > 0 ? (
+                  <>
+                    <View
+                      accessibilityLabel="Distribución estimada del ingreso mensual"
+                      style={styles.planAllocationTrack}
+                    >
+                      {planAllocationSegments.map((segment) => (
                         <View
+                          key={segment.id}
                           style={[
-                            styles.comparisonMarginSegment,
-                            { width: toPercentWidth(availableMarginPercentage ?? 0) }
+                            styles.planAllocationSegment,
+                            {
+                              width: toPercentWidth(
+                                (segment.amount / planAllocationReference) * 100
+                              )
+                            }
                           ]}
+                        >
+                          {segment.parts.map((part, index) => (
+                            <View
+                              key={`${segment.id}-${index}`}
+                              style={{
+                                backgroundColor: part.color,
+                                flexBasis: 0,
+                                flexGrow: part.value
+                              }}
+                            />
+                          ))}
+                        </View>
+                      ))}
+                    </View>
+                    <View style={styles.planLegend}>
+                      {planAllocationSegments.map((segment) => (
+                        <PlanAllocationLegendItem
+                          amount={segment.amount}
+                          key={segment.id}
+                          label={segment.label}
+                          parts={segment.parts}
+                          referenceTotal={planAllocationReference}
                         />
-                      ) : null}
-                    </>
-                  ) : null}
+                      ))}
+                    </View>
+                  </>
+                ) : (
+                  <Text style={styles.financialSummarySubtitle}>
+                    Completa tus ingresos y gastos para construir esta distribución.
+                  </Text>
+                )}
+
+                <View style={styles.financialSummaryNote}>
+                  <Text style={styles.financialSummaryNoteText}>
+                    Es una proyección para planificar; no representa el saldo actual de tu cuenta.
+                  </Text>
                 </View>
               </View>
             </PanelCard>
@@ -1532,37 +1618,120 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: radius.md,
     borderWidth: 1,
-    flexBasis: "47%",
+    flexBasis: 190,
     flexGrow: 1,
-    gap: spacing.xs,
-    justifyContent: "center",
-    minHeight: 112,
-    minWidth: 128,
-    padding: spacing.sm
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 94,
+    minWidth: 170,
+    padding: spacing.md
   },
   metricIcon: {
     alignItems: "center",
     borderRadius: radius.pill,
-    height: 40,
+    height: 44,
     justifyContent: "center",
-    width: 40
+    width: 44
   },
   metricTextGroup: {
-    alignItems: "center",
-    gap: 2
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 0
   },
   metricLabel: {
     color: colors.text,
     fontSize: typography.caption,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption,
-    textAlign: "center"
+    lineHeight: typography.lineHeight.caption
   },
   metricValue: {
     fontSize: typography.sectionTitle,
     fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.sectionTitle,
-    textAlign: "center"
+    lineHeight: typography.lineHeight.sectionTitle
+  },
+  financialSummarySection: {
+    gap: spacing.md
+  },
+  financialSummaryHeading: {
+    gap: spacing.xs
+  },
+  financialSummaryTitle: {
+    color: colors.text,
+    fontSize: typography.question,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.question
+  },
+  financialSummarySubtitle: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
+  },
+  financialSummaryDivider: {
+    borderTopColor: colors.border,
+    borderTopWidth: 1
+  },
+  financialSummaryNote: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  financialSummaryNoteText: {
+    color: colors.primaryDark,
+    fontSize: typography.caption,
+    lineHeight: typography.lineHeight.caption
+  },
+  planAllocationTrack: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.pill,
+    flexDirection: "row",
+    height: 14,
+    overflow: "hidden"
+  },
+  planAllocationSegment: {
+    flexDirection: "row",
+    height: "100%",
+    overflow: "hidden"
+  },
+  planLegend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md
+  },
+  planLegendItem: {
+    alignItems: "flex-start",
+    flexBasis: 160,
+    flexDirection: "row",
+    flexGrow: 1,
+    gap: spacing.xs,
+    minWidth: 145
+  },
+  planLegendSwatch: {
+    borderRadius: radius.pill,
+    flexDirection: "row",
+    height: 12,
+    marginTop: 3,
+    overflow: "hidden",
+    width: 12
+  },
+  planLegendCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0
+  },
+  planLegendLabel: {
+    color: colors.text,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.caption
+  },
+  planLegendValue: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.small
   },
   improveSummary: {
     gap: spacing.md
@@ -1617,83 +1786,11 @@ const styles = StyleSheet.create({
   improveButtonTextDisabled: {
     color: colors.textSubtle
   },
-  comparisonBox: {
-    gap: spacing.sm,
-    marginTop: spacing.xs
-  },
   comparisonHeader: {
     alignItems: "center",
     flexDirection: "row",
     gap: spacing.md,
     justifyContent: "space-between"
-  },
-  comparisonLegend: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  comparisonTitle: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.body
-  },
-  comparisonLegendItem: {
-    alignItems: "flex-start",
-    flexBasis: 210,
-    flexDirection: "row",
-    flexGrow: 1,
-    gap: spacing.xs,
-    minWidth: 0
-  },
-  comparisonDot: {
-    borderRadius: radius.pill,
-    height: 10,
-    marginTop: 4,
-    width: 10
-  },
-  comparisonOutflowDot: {
-    backgroundColor: "#F97316"
-  },
-  comparisonMarginDot: {
-    backgroundColor: colors.support
-  },
-  comparisonDeficitDot: {
-    backgroundColor: "#C2410C"
-  },
-  comparisonLegendCopy: {
-    flex: 1,
-    gap: 2,
-    minWidth: 0
-  },
-  comparisonLegendLabel: {
-    color: colors.text,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  comparisonLegendValue: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.semibold,
-    lineHeight: typography.lineHeight.caption
-  },
-  comparisonTrack: {
-    backgroundColor: colors.surfaceMuted,
-    borderColor: colors.border,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    flexDirection: "row",
-    height: 14,
-    overflow: "hidden"
-  },
-  comparisonOutflowSegment: {
-    backgroundColor: "#F97316",
-    height: "100%"
-  },
-  comparisonMarginSegment: {
-    backgroundColor: colors.support,
-    height: "100%"
   },
   progressTrack: {
     backgroundColor: "#E4EAF2",

@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radius, spacing, typography } from "../../constants/theme";
 
-type SelectableCardVariant = "row" | "tile" | "center";
+type SelectableCardVariant = "row" | "tile" | "center" | "stack";
 
 type SelectableCardProps = {
   title: string;
@@ -20,6 +20,8 @@ type SelectableCardProps = {
   style?: StyleProp<ViewStyle>;
   titleStyle?: StyleProp<TextStyle>;
   subtitleStyle?: StyleProp<TextStyle>;
+  children?: ReactNode;
+  accessibilityLabel?: string;
 };
 
 export function SelectableCard({
@@ -34,15 +36,18 @@ export function SelectableCard({
   showControl = true,
   style,
   titleStyle,
-  subtitleStyle
+  subtitleStyle,
+  children,
+  accessibilityLabel
 }: SelectableCardProps) {
   const isTile = variant === "tile";
   const isCenter = variant === "center";
+  const isStack = variant === "stack";
   const isLargeControl = controlSize === "large";
 
   return (
     <Pressable
-      accessibilityLabel={title}
+      accessibilityLabel={accessibilityLabel ?? title}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
@@ -50,14 +55,15 @@ export function SelectableCard({
         styles.card,
         isTile && styles.tile,
         isCenter && styles.center,
+        isStack && styles.stack,
+        style,
         selected && styles.selected,
-        pressed && styles.pressed,
-        style
+        pressed && styles.pressed
       ]}
     >
       {leading ? <View style={[styles.leading, isCenter && styles.centerLeading]}>{leading}</View> : null}
 
-      <View style={[styles.copy, (isTile || isCenter) && styles.tileCopy]}>
+      <View style={[styles.copy, (isTile || isCenter) && styles.tileCopy, isStack && styles.stackCopy]}>
         <Text
           style={[
             styles.title,
@@ -70,6 +76,8 @@ export function SelectableCard({
         </Text>
         {subtitle ? <Text style={[styles.subtitle, subtitleStyle]}>{subtitle}</Text> : null}
       </View>
+
+      {children}
 
       {showControl ? (
         <View
@@ -104,12 +112,12 @@ const styles = StyleSheet.create({
   card: {
     alignItems: "center",
     backgroundColor: colors.surface,
-    borderColor: "#D6E4F7",
-    borderRadius: 13,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: "row",
     gap: spacing.sm,
-    minHeight: 47,
+    minHeight: 48,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
   },
@@ -129,8 +137,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.sm
   },
+  stack: {
+    alignItems: "stretch",
+    flexDirection: "column",
+    padding: spacing.md
+  },
   selected: {
-    backgroundColor: "#F7FAFF",
+    backgroundColor: colors.selectedSoft,
     borderColor: colors.primary,
     borderWidth: 2
   },
@@ -152,6 +165,9 @@ const styles = StyleSheet.create({
   tileCopy: {
     alignItems: "center",
     flex: 0,
+    width: "100%"
+  },
+  stackCopy: {
     width: "100%"
   },
   title: {
@@ -181,7 +197,7 @@ const styles = StyleSheet.create({
   },
   control: {
     alignItems: "center",
-    borderColor: "#C8D6EA",
+    borderColor: colors.primaryBorder,
     borderRadius: radius.pill,
     borderWidth: 1.5,
     height: 21,
@@ -199,13 +215,13 @@ const styles = StyleSheet.create({
   },
   floatingControlShell: {
     position: "absolute",
-    right: 12,
-    top: 12
+    right: spacing.sm,
+    top: spacing.sm
   },
   middleRightControlShell: {
     bottom: 0,
     position: "absolute",
-    right: 5,
+    right: spacing.xs,
     top: 0,
     width: 40
   }

@@ -259,6 +259,47 @@ describe("monthly distribution strategies", () => {
     expect(scenarios.splitDebtGoal.goalAllocations[0]).toMatchObject({ amount: 568_620 });
   });
 
+  it("keeps split allocations reconciled to the peso", () => {
+    const input = buildFinancialProjectionInput({
+      exactValues: {
+        monthlyExpenses: 1_220_000,
+        monthlyIncome: 3_000_001,
+        smallExpenses: 0
+      },
+      onboarding: makeOnboarding({
+        hasDebts: true,
+        debts: [
+          makeDebt({
+            annualInterestRate: 12,
+            monthlyPayment: 0,
+            monthlyPaymentType: "self_selected",
+            remainingAmount: 5_000_000
+          })
+        ],
+        goals: [makeGoal()]
+      })
+    });
+    const scenario = buildDistributionScenarios({
+      input,
+      protectedMarginPreference: { mode: "use_all" },
+      splitDebtShare: 0.55
+    }).splitDebtGoal;
+    const extraDebtPayment = scenario.debtAllocations.reduce(
+      (total, allocation) => total + allocation.extraPayment,
+      0
+    );
+    const goalContribution = scenario.goalAllocations.reduce(
+      (total, allocation) => total + allocation.amount,
+      0
+    );
+
+    expect(extraDebtPayment).toBe(979_001);
+    expect(goalContribution).toBe(801_000);
+    expect(extraDebtPayment + goalContribution + scenario.unassignedAmount).toBe(
+      scenario.distributableAmount
+    );
+  });
+
   it("redistributes a self-selected payment because it has no fixed monthly floor", () => {
     const input = buildFinancialProjectionInput({
       exactValues: {

@@ -82,7 +82,8 @@ describe("financial distribution comparison", () => {
     expect(comparison.every((row) => !row.bestCriteria.includes("interest"))).toBe(true);
     expect(comparison.find((row) => row.id === "reduce_interest")).toMatchObject({
       hasUnknownInterestRates: true,
-      status: "ready"
+      status: "ready",
+      totalInterestCharged: null
     });
     expect(comparison.find((row) => row.id === "split_debt_goal")?.status).toBe("ready");
     expect(

@@ -2333,7 +2333,7 @@ export default function DebtsScreen() {
               </FinancialEducationModal>
             }
             icon={<Banknote color={colors.primary} size={20} strokeWidth={2.4} />}
-            title="Evaluar nueva deuda"
+            title="Evaluar nueva deuda (Beta)"
             subtitle="Revisa si una nueva cuota mensual cabe en tu presupuesto antes de decidir."
           >
             <View style={styles.evaluationIntro}>
