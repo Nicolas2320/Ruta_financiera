@@ -1,17 +1,36 @@
-import { useState } from "react";
-import { ArrowRight, Check, ChevronDown, ChevronUp } from "lucide-react-native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  ArrowRight,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp
+} from "lucide-react-native";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent
+} from "react-native";
 
 import { colors, radius, spacing, typography } from "../constants/theme";
 import type { DistributionScenarioPresentation } from "../utils/financialDistributionPresentation";
 import { formatCOP, formatSignedCOP } from "../utils/financialRanges";
 import { formatTargetMonth } from "../utils/monthYear";
 import { DebtGoalAllocationSlider } from "./DebtGoalAllocationSlider";
+import { PrimaryButton } from "./PrimaryButton";
+import { SelectableCard } from "./ui/SelectableCard";
 import {
   FinancialTimelineChart,
   financialTimelineChartColors,
   type FinancialTimelineFocus
 } from "./FinancialTimelineChart";
+
+const MOBILE_STRATEGY_WIDTH = 236;
 
 function getStatusLabel(scenario: DistributionScenarioPresentation) {
   if (scenario.issueCodes.includes("missing_debt_details")) return "Faltan deudas";
@@ -314,6 +333,7 @@ function getOutcomeLabels(scenario: DistributionScenarioPresentation) {
 
 export function DistributionStrategyOption({
   applied,
+  compact,
   onResolve,
   onSelect,
   resolveLabel = "Completar información",
@@ -321,6 +341,7 @@ export function DistributionStrategyOption({
   selected
 }: {
   applied: boolean;
+  compact: boolean;
   onResolve?: () => void;
   onSelect?: () => void;
   resolveLabel?: string;
@@ -328,68 +349,184 @@ export function DistributionStrategyOption({
   selected: boolean;
 }) {
   const unavailable = scenario.status !== "ready";
-  const outcomes = getOutcomeLabels(scenario);
 
   return (
-    <Pressable
+    <SelectableCard
       accessibilityLabel={`${scenario.label}. ${getHeadline(scenario)}${applied ? ". Estrategia actual" : selected ? ". Vista previa" : ""}`}
-      accessibilityRole={unavailable ? "button" : "radio"}
-      accessibilityState={{ disabled: unavailable && !onResolve, selected }}
-      disabled={unavailable && !onResolve}
-      onPress={unavailable ? onResolve : onSelect}
-      style={({ pressed }) => [
+      onPress={(unavailable ? onResolve : onSelect) ?? (() => undefined)}
+      selected={selected}
+      showControl={false}
+      style={[
         styles.optionCard,
-        selected && styles.optionCardSelected,
-        unavailable && styles.cardUnavailable,
-        pressed && styles.pressed
+        compact && styles.optionCardCompact,
+        unavailable && styles.cardUnavailable
       ]}
+      title={scenario.label}
+      titleStyle={styles.optionTitle}
+      variant="stack"
     >
-      <View style={styles.optionHeader}>
-        <Text style={styles.optionTitle}>{scenario.label}</Text>
+      <View style={styles.optionMeta}>
         <View style={[styles.badge, unavailable && styles.badgeUnavailable]}>
           <Text style={[styles.badgeText, unavailable && styles.badgeTextUnavailable]}>
             {getStatusLabel(scenario)}
           </Text>
         </View>
-      </View>
-
-      <Text
-        style={[styles.optionImpact, unavailable && styles.headlineUnavailable]}
-      >
-        {getHeadline(scenario)}
-      </Text>
-
-      {outcomes.length > 0 ? (
-        <View style={styles.outcomeList}>
-          {outcomes.map((outcome) => (
-            <View key={outcome} style={styles.outcomeChip}>
-              <Text style={styles.outcomeChipText}>{outcome}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
-
-      <View style={styles.optionFooter}>
         {applied ? (
           <View style={styles.appliedBadge}>
-            <Check color={colors.support} size={14} strokeWidth={3} />
-            <Text style={styles.appliedBadgeText}>Estrategia actual</Text>
-          </View>
-        ) : selected ? (
-          <View style={styles.previewBadge}>
-            <View style={styles.previewDot} />
-            <Text style={styles.previewBadgeText}>Vista previa</Text>
+            <Text style={styles.appliedBadgeText}>Actual</Text>
           </View>
         ) : unavailable ? (
           <View style={styles.resolveLink}>
             <Text style={styles.resolveLinkText}>{resolveLabel}</Text>
             <ArrowRight color={colors.primary} size={16} strokeWidth={2.5} />
           </View>
-        ) : (
-          <Text style={styles.chooseLabel}>Ver esta estrategia</Text>
-        )}
+        ) : null}
       </View>
-    </Pressable>
+    </SelectableCard>
+  );
+}
+
+export function DistributionStrategyNavigator({
+  compact,
+  isApplied,
+  onResolve,
+  onSelect,
+  resolveLabel,
+  scenarios,
+  selectedId
+}: {
+  compact: boolean;
+  isApplied: (id: DistributionScenarioPresentation["id"]) => boolean;
+  onResolve: (scenario: DistributionScenarioPresentation) => void;
+  onSelect: (scenario: DistributionScenarioPresentation) => void;
+  resolveLabel: (scenario: DistributionScenarioPresentation) => string | undefined;
+  scenarios: DistributionScenarioPresentation[];
+  selectedId: DistributionScenarioPresentation["id"];
+}) {
+  const scrollRef = useRef<ScrollView>(null);
+  const selectedIndex = Math.max(
+    0,
+    scenarios.findIndex((scenario) => scenario.id === selectedId)
+  );
+  const snapInterval = MOBILE_STRATEGY_WIDTH + spacing.sm;
+
+  useEffect(() => {
+    if (!compact) return;
+    scrollRef.current?.scrollTo({
+      animated: true,
+      x: selectedIndex * snapInterval,
+      y: 0
+    });
+  }, [compact, selectedIndex, snapInterval]);
+
+  const selectAtIndex = (index: number) => {
+    const scenario = scenarios[index];
+    if (!scenario) return;
+    if (scenario.status === "ready") {
+      onSelect(scenario);
+      return;
+    }
+    onResolve(scenario);
+  };
+
+  const findReadyIndex = (direction: -1 | 1) => {
+    let nextIndex = selectedIndex + direction;
+    while (nextIndex >= 0 && nextIndex < scenarios.length) {
+      if (scenarios[nextIndex]?.status === "ready") return nextIndex;
+      nextIndex += direction;
+    }
+    return null;
+  };
+
+  const previousIndex = findReadyIndex(-1);
+  const nextIndex = findReadyIndex(1);
+  const renderOptions = () =>
+    scenarios.map((scenario) => (
+      <DistributionStrategyOption
+        applied={isApplied(scenario.id)}
+        compact={compact}
+        key={scenario.id}
+        onResolve={() => onResolve(scenario)}
+        onSelect={() => onSelect(scenario)}
+        resolveLabel={resolveLabel(scenario)}
+        scenario={scenario}
+        selected={scenario.status === "ready" && selectedId === scenario.id}
+      />
+    ));
+
+  const handleMomentumScrollEnd = (
+    event: NativeSyntheticEvent<NativeScrollEvent>
+  ) => {
+    const nextVisibleIndex = Math.max(
+      0,
+      Math.min(
+        scenarios.length - 1,
+        Math.round(event.nativeEvent.contentOffset.x / snapInterval)
+      )
+    );
+    const scenario = scenarios[nextVisibleIndex];
+    if (scenario?.status === "ready" && scenario.id !== selectedId) {
+      onSelect(scenario);
+    }
+  };
+
+  return (
+    <View style={styles.navigator}>
+      {compact ? (
+        <View style={styles.navigatorHeader}>
+          <Text style={styles.navigatorCounter}>
+            Estrategia {selectedIndex + 1} de {scenarios.length}
+          </Text>
+          <View style={styles.navigatorActions}>
+            <Pressable
+              accessibilityLabel="Ver estrategia anterior"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: previousIndex === null }}
+              disabled={previousIndex === null}
+              onPress={() => previousIndex !== null && selectAtIndex(previousIndex)}
+              style={({ pressed }) => [
+                styles.navigatorButton,
+                previousIndex === null && styles.navigatorButtonDisabled,
+                pressed && previousIndex !== null && styles.pressed
+              ]}
+            >
+              <ChevronLeft color={colors.primary} size={20} strokeWidth={2.5} />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Ver estrategia siguiente"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: nextIndex === null }}
+              disabled={nextIndex === null}
+              onPress={() => nextIndex !== null && selectAtIndex(nextIndex)}
+              style={({ pressed }) => [
+                styles.navigatorButton,
+                nextIndex === null && styles.navigatorButtonDisabled,
+                pressed && nextIndex !== null && styles.pressed
+              ]}
+            >
+              <ChevronRight color={colors.primary} size={20} strokeWidth={2.5} />
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {compact ? (
+        <ScrollView
+          contentContainerStyle={styles.navigatorTrackCompact}
+          decelerationRate="fast"
+          horizontal
+          onMomentumScrollEnd={handleMomentumScrollEnd}
+          ref={scrollRef}
+          showsHorizontalScrollIndicator={false}
+          snapToAlignment="start"
+          snapToInterval={snapInterval}
+        >
+          {renderOptions()}
+        </ScrollView>
+      ) : (
+        <View style={styles.navigatorTrack}>{renderOptions()}</View>
+      )}
+    </View>
   );
 }
 
@@ -465,6 +602,7 @@ export function DistributionStrategyDetail({
   if (scenario.status !== "ready") {
     return null;
   }
+  const outcomes = getOutcomeLabels(scenario);
 
   return (
     <View style={styles.detailPanel}>
@@ -475,15 +613,26 @@ export function DistributionStrategyDetail({
           <Text style={styles.description}>{scenario.description}</Text>
         </View>
         <View style={applied ? styles.appliedBadge : styles.previewBadge}>
-          {applied ? (
-            <Check color={colors.support} size={14} strokeWidth={3} />
-          ) : (
+          {!applied ? (
             <View style={styles.previewDot} />
-          )}
+          ) : null}
           <Text style={applied ? styles.appliedBadgeText : styles.previewBadgeText}>
             {applied ? "Estrategia actual" : "Vista previa"}
           </Text>
         </View>
+      </View>
+
+      <View style={styles.detailOutcome}>
+        <Text style={styles.optionImpact}>{getHeadline(scenario)}</Text>
+        {outcomes.length > 0 ? (
+          <View style={styles.outcomeList}>
+            {outcomes.map((outcome) => (
+              <View key={outcome} style={styles.outcomeChip}>
+                <Text style={styles.outcomeChipText}>{outcome}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
 
       {scenario.id === "split_debt_goal" &&
@@ -530,22 +679,19 @@ export function DistributionStrategyDetail({
         </View>
       ) : null}
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: applied }}
-        disabled={applied}
-        onPress={onApply}
-        style={({ pressed }) => [
-          styles.applyButton,
-          applied && styles.applyButtonApplied,
-          pressed && !applied && styles.pressed
-        ]}
-      >
-        {applied ? <Check color={colors.support} size={18} strokeWidth={3} /> : null}
-        <Text style={[styles.applyButtonText, applied && styles.applyButtonTextApplied]}>
-          {applied ? "Esta es tu estrategia actual" : "Aplicar esta estrategia"}
-        </Text>
-      </Pressable>
+      {applied ? (
+        <View style={styles.appliedConfirmation}>
+          <Check color={colors.support} size={18} strokeWidth={3} />
+          <Text style={styles.appliedConfirmationText}>Esta es tu estrategia actual</Text>
+        </View>
+      ) : (
+        <PrimaryButton
+          accessibilityLabel={`Aplicar la estrategia ${scenario.label}`}
+          icon={null}
+          onPress={onApply ?? (() => undefined)}
+          title="Aplicar esta estrategia"
+        />
+      )}
       <Text style={styles.applyHelper}>
         Aplicarla actualiza tu plan mensual; no registra pagos ni separa dinero.
       </Text>
@@ -555,41 +701,26 @@ export function DistributionStrategyDetail({
 
 const styles = StyleSheet.create({
   optionCard: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexBasis: 280,
+    flexBasis: 0,
     flexGrow: 1,
     gap: spacing.sm,
-    minHeight: 188,
-    padding: spacing.md
+    minWidth: 150
   },
-  optionCardSelected: {
-    backgroundColor: "#F8FBFF",
-    borderColor: colors.primary,
-    borderWidth: 2
-  },
-  optionHeader: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    justifyContent: "space-between"
+  optionCardCompact: {
+    flexBasis: "auto",
+    flexGrow: 0,
+    minWidth: 0,
+    width: MOBILE_STRATEGY_WIDTH
   },
   optionTitle: {
-    color: colors.text,
-    flex: 1,
-    fontSize: typography.option,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.option,
-    minWidth: 150
+    fontWeight: typography.weight.bold
   },
   optionImpact: {
     color: colors.support,
     fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption,
+    textAlign: "left"
   },
   outcomeList: {
     flexDirection: "row",
@@ -608,10 +739,11 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.small
   },
-  optionFooter: {
-    alignItems: "flex-start",
-    flexGrow: 1,
-    justifyContent: "flex-end"
+  optionMeta: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs
   },
   appliedBadge: {
     alignItems: "center",
@@ -628,7 +760,7 @@ const styles = StyleSheet.create({
   appliedBadgeText: {
     color: colors.support,
     fontSize: typography.small,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.small
   },
   previewBadge: {
@@ -646,7 +778,7 @@ const styles = StyleSheet.create({
   previewBadgeText: {
     color: colors.primary,
     fontSize: typography.small,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.small
   },
   previewDot: {
@@ -663,22 +795,66 @@ const styles = StyleSheet.create({
   resolveLinkText: {
     color: colors.primary,
     fontSize: typography.small,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.small
   },
-  chooseLabel: {
-    color: colors.primary,
-    fontSize: typography.small,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.small
+  navigator: {
+    gap: spacing.sm
+  },
+  navigatorHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  navigatorCounter: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.lineHeight.caption
+  },
+  navigatorActions: {
+    flexDirection: "row",
+    gap: spacing.xs
+  },
+  navigatorButton: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: "center",
+    width: 44
+  },
+  navigatorButtonDisabled: {
+    backgroundColor: colors.disabled,
+    borderColor: colors.disabledBorder,
+    opacity: 0.55
+  },
+  navigatorTrack: {
+    alignItems: "stretch",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  navigatorTrackCompact: {
+    alignItems: "stretch",
+    gap: spacing.sm,
+    paddingRight: spacing.xl
   },
   detailPanel: {
-    backgroundColor: colors.surface,
-    borderColor: colors.primaryBorder,
-    borderRadius: radius.lg,
-    borderWidth: 1,
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
     gap: spacing.lg,
-    padding: spacing.lg
+    paddingTop: spacing.lg
+  },
+  detailOutcome: {
+    backgroundColor: colors.supportSoft,
+    borderColor: colors.supportBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
   },
   detailHeader: {
     alignItems: "flex-start",
@@ -695,14 +871,14 @@ const styles = StyleSheet.create({
   detailEyebrow: {
     color: colors.primary,
     fontSize: typography.small,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     letterSpacing: 0.6,
     lineHeight: typography.lineHeight.small
   },
   detailTitle: {
     color: colors.text,
     fontSize: typography.brand,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.brand
   },
   distributionOverview: {
@@ -738,7 +914,7 @@ const styles = StyleSheet.create({
   legendDot: {
     borderRadius: radius.pill,
     height: 9,
-    marginTop: 4,
+    marginTop: spacing.xs,
     width: 9
   },
   legendLabel: {
@@ -749,7 +925,7 @@ const styles = StyleSheet.create({
   legendValue: {
     color: colors.text,
     fontSize: typography.caption,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.caption
   },
   supportingAmounts: {
@@ -775,7 +951,7 @@ const styles = StyleSheet.create({
   projectionToggleTitle: {
     color: colors.primary,
     fontSize: typography.caption,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.caption
   },
   projectionToggleHelper: {
@@ -783,32 +959,24 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     lineHeight: typography.lineHeight.small
   },
-  applyButton: {
+  appliedConfirmation: {
     alignItems: "center",
     alignSelf: "stretch",
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: colors.supportSoft,
+    borderColor: colors.supportBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: "row",
     gap: spacing.xs,
     justifyContent: "center",
-    minHeight: 50,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm
+    minHeight: 54,
+    paddingHorizontal: spacing.lg
   },
-  applyButtonApplied: {
-    backgroundColor: colors.supportSoft,
-    borderColor: colors.supportBorder
-  },
-  applyButtonText: {
-    color: colors.surface,
+  appliedConfirmationText: {
+    color: colors.support,
     fontSize: typography.button,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.semibold,
     lineHeight: typography.lineHeight.button
-  },
-  applyButtonTextApplied: {
-    color: colors.support
   },
   applyHelper: {
     color: colors.textMuted,
@@ -817,8 +985,8 @@ const styles = StyleSheet.create({
     textAlign: "center"
   },
   inactiveGoalsNotice: {
-    backgroundColor: "#F3E8FF",
-    borderColor: "#D8B4FE",
+    backgroundColor: colors.goalSoft,
+    borderColor: colors.goalBorder,
     borderRadius: radius.sm,
     borderWidth: 1,
     padding: spacing.sm
@@ -829,45 +997,11 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.caption
   },
-  card: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    gap: spacing.md,
-    padding: spacing.md
-  },
   cardUnavailable: {
-    backgroundColor: "#FAFBFC"
-  },
-  cardSelected: {
-    borderColor: colors.primary,
-    borderWidth: 2
-  },
-  header: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: spacing.sm
-  },
-  headerCopy: {
-    flex: 1,
-    gap: spacing.xs,
-    minWidth: 0
-  },
-  titleRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  title: {
-    color: colors.text,
-    flexGrow: 1,
-    fontSize: typography.brand,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.brand
+    backgroundColor: colors.background
   },
   badge: {
+    alignSelf: "flex-start",
     backgroundColor: colors.primarySoft,
     borderColor: colors.primaryBorder,
     borderRadius: radius.pill,
@@ -877,169 +1011,30 @@ const styles = StyleSheet.create({
   },
   badgeUnavailable: {
     backgroundColor: colors.warningSoft,
-    borderColor: "#FED7AA"
+    borderColor: colors.warningBorder
   },
   badgeText: {
     color: colors.primary,
     fontSize: typography.badge,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.badge
   },
   badgeTextUnavailable: {
-    color: "#B45309"
+    color: colors.warning
   },
   description: {
     color: colors.textMuted,
     fontSize: typography.body,
     lineHeight: typography.lineHeight.body
   },
-  headlineBox: {
-    backgroundColor: colors.supportSoft,
-    borderColor: colors.supportBorder,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: spacing.md
-  },
-  headlineBoxUnavailable: {
-    backgroundColor: colors.warningSoft,
-    borderColor: "#FED7AA"
-  },
-  headline: {
-    color: colors.support,
-    fontSize: typography.question,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.question
-  },
   headlineUnavailable: {
-    color: "#B45309"
-  },
-  selectionActions: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  selectButton: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    borderColor: colors.primaryBorder,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  selectButtonSelected: {
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.primary
-  },
-  selectIndicator: {
-    borderColor: colors.primary,
-    borderRadius: radius.pill,
-    borderWidth: 2,
-    height: 20,
-    width: 20,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  selectIndicatorSelected: {
-    backgroundColor: colors.primary
-  },
-  selectButtonText: {
-    color: colors.primary,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  selectButtonTextSelected: {
-    color: colors.primary
-  },
-  saveButton: {
-    alignItems: "center",
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  saveButtonSaved: {
-    backgroundColor: colors.supportSoft,
-    borderColor: colors.supportBorder
-  },
-  saveButtonText: {
-    color: colors.surface,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  saveButtonTextSaved: {
-    color: colors.support
-  },
-  issueList: {
-    gap: spacing.xs
-  },
-  issueText: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    lineHeight: typography.lineHeight.caption
-  },
-  resolveButton: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.sm,
-    minHeight: 48,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm
-  },
-  resolveButtonText: {
-    color: colors.surface,
-    fontSize: typography.button,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.button
-  },
-  toggle: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    gap: spacing.xs
-  },
-  toggleText: {
-    color: colors.primary,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  detail: {
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-    gap: spacing.md,
-    paddingTop: spacing.md
-  },
-  distributionDetail: {
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-    gap: spacing.sm,
-    paddingTop: spacing.md
+    color: colors.warning
   },
   distributionDetailTitle: {
     color: colors.text,
     fontSize: typography.option,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.option
-  },
-  allocations: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
   },
   allocationValue: {
     backgroundColor: colors.surfaceMuted,
@@ -1054,30 +1049,10 @@ const styles = StyleSheet.create({
   allocationLabel: {
     color: colors.textSubtle,
     fontSize: typography.caption,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.caption
   },
   allocationAmount: {
-    color: colors.text,
-    fontSize: typography.option,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.option
-  },
-  balanceRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    justifyContent: "space-between"
-  },
-  balanceLabel: {
-    color: colors.textMuted,
-    flex: 1,
-    fontSize: typography.caption,
-    lineHeight: typography.lineHeight.caption,
-    minWidth: 180
-  },
-  balanceValue: {
     color: colors.text,
     fontSize: typography.option,
     fontWeight: typography.weight.black,
@@ -1106,7 +1081,7 @@ const styles = StyleSheet.create({
   timelineEyebrow: {
     color: colors.primary,
     fontSize: typography.small,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     letterSpacing: 0.6,
     lineHeight: typography.lineHeight.small
   },
@@ -1136,12 +1111,12 @@ const styles = StyleSheet.create({
   timelineBadgeText: {
     color: colors.support,
     fontSize: typography.small,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.small
   },
   timelineGoalBadge: {
-    backgroundColor: "#F3E8FF",
-    borderColor: "#D8B4FE"
+    backgroundColor: colors.goalSoft,
+    borderColor: colors.goalBorder
   },
   timelineGoalBadgeText: {
     color: financialTimelineChartColors.goal
@@ -1171,76 +1146,13 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.option
   },
-  goalSummary: {
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-    gap: spacing.sm
-  },
-  goalSummaryItem: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md
-  },
-  goalSummaryCopy: {
-    flexBasis: 150,
-    flexGrow: 1,
-    gap: spacing.xs,
-    paddingTop: spacing.md
-  },
-  goalSummaryTitle: {
-    color: colors.text,
-    fontSize: typography.option,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.option
-  },
-  goalSummaryStatus: {
-    color: financialTimelineChartColors.goal,
-    fontSize: typography.caption,
-    fontWeight: typography.weight.black,
-    lineHeight: typography.lineHeight.caption
-  },
-  goalSummaryProgress: {
-    flexBasis: 240,
-    flexGrow: 2,
-    gap: spacing.xs,
-    minWidth: 200,
-    paddingTop: spacing.md
-  },
-  goalSummaryValues: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    justifyContent: "space-between"
-  },
-  goalSummaryValue: {
-    color: colors.textMuted,
-    fontSize: typography.small,
-    lineHeight: typography.lineHeight.small
-  },
-  goalProgressTrack: {
-    backgroundColor: "#E9DFFF",
-    borderRadius: radius.pill,
-    height: 9,
-    overflow: "hidden"
-  },
-  goalProgressFill: {
-    backgroundColor: financialTimelineChartColors.goal,
-    borderRadius: radius.pill,
-    height: "100%"
-  },
-  goalSummaryExplanation: {
-    color: colors.textMuted,
-    fontSize: typography.small,
-    lineHeight: typography.lineHeight.small
-  },
   timelineMilestones: {
     gap: spacing.sm
   },
   timelineMilestonesTitle: {
     color: colors.text,
     fontSize: typography.caption,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.caption
   },
   timelineMilestoneList: {
@@ -1259,17 +1171,17 @@ const styles = StyleSheet.create({
     backgroundColor: financialTimelineChartColors.payoff,
     borderRadius: radius.pill,
     height: 8,
-    marginTop: 4,
+    marginTop: spacing.xs,
     width: 8
   },
   timelineMilestoneCopy: {
     flex: 1,
-    gap: 1
+    gap: spacing.xs
   },
   timelineMilestoneMonth: {
     color: colors.support,
     fontSize: typography.small,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.small
   },
   timelineMilestoneText: {
@@ -1279,16 +1191,16 @@ const styles = StyleSheet.create({
   },
   warningBox: {
     backgroundColor: colors.warningSoft,
-    borderColor: "#FED7AA",
+    borderColor: colors.warningBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     gap: spacing.xs,
     padding: spacing.md
   },
   warningTitle: {
-    color: "#B45309",
+    color: colors.warning,
     fontSize: typography.caption,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.caption
   },
   warningText: {

@@ -304,13 +304,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexBasis: 180,
     flexGrow: 1,
-    gap: 3,
+    gap: spacing.xs,
     padding: spacing.md
   },
   highlightLabel: {
     color: colors.primary,
     fontSize: typography.small,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.small
   },
   highlightValue: {
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     padding: spacing.md
   },
   rowSelected: {
-    backgroundColor: "#F8FBFF",
+    backgroundColor: colors.selectedSoft,
     borderColor: colors.primary,
     borderWidth: 2
   },
@@ -367,27 +367,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 3
+    paddingVertical: spacing.xs
   },
   strategyBadgeUnavailable: { backgroundColor: colors.warningSoft },
   strategyBadgeText: {
     color: colors.primary,
     fontSize: typography.small,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.small
   },
-  strategyBadgeTextUnavailable: { color: "#B45309" },
+  strategyBadgeTextUnavailable: { color: colors.warning },
   selectedBadge: {
     alignSelf: "flex-start",
     backgroundColor: colors.primary,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 3
+    paddingVertical: spacing.xs
   },
   selectedBadgeText: {
     color: colors.surface,
     fontSize: typography.small,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.small
   },
   strategyNote: {
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexBasis: 160,
     flexGrow: 1,
-    gap: 2,
+    gap: spacing.xs,
     minWidth: 130,
     padding: spacing.sm
   },
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
   bestLabel: {
     color: colors.support,
     fontSize: typography.small,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.small
   },
   secondaryMetrics: {
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
   secondaryMetric: {
     flexBasis: 160,
     flexGrow: 1,
-    gap: 2,
+    gap: spacing.xs,
     minWidth: 140
   },
   secondaryLabel: {
@@ -466,11 +466,11 @@ const styles = StyleSheet.create({
   secondaryValue: {
     color: colors.text,
     fontSize: typography.caption,
-    fontWeight: typography.weight.black,
+    fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.caption
   },
   secondaryWarning: {
-    color: "#B45309",
+    color: colors.warning,
     fontSize: typography.small,
     lineHeight: typography.lineHeight.small
   }

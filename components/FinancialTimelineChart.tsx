@@ -32,8 +32,8 @@ export type FinancialTimelineFocus = "combined" | "debt" | "goal";
 
 const DEFAULT_VIEW_WIDTH = 900;
 const DEBT_COLOR = colors.primary;
-const GOAL_COLOR = "#7C3AED";
-const GOAL_DARK_COLOR = "#6D28D9";
+const GOAL_COLOR = colors.goal;
+const GOAL_DARK_COLOR = colors.goalDark;
 const PAYOFF_COLOR = colors.support;
 const GRID_COLOR = "#DDE5F0";
 const LABEL_COLOR = colors.textSubtle;

@@ -20,7 +20,7 @@ import { BottomNavigation } from "../components/BottomNavigation";
 import { DistributionComparisonSummary } from "../components/DistributionComparisonSummary";
 import {
   DistributionStrategyDetail,
-  DistributionStrategyOption
+  DistributionStrategyNavigator
 } from "../components/DistributionScenarioCard";
 import { PrimaryButton } from "../components/PrimaryButton";
 import {
@@ -60,7 +60,7 @@ function getToneColors(tone: Tone) {
   if (tone === "support") {
     return {
       background: colors.supportSoft,
-      border: "#B9E9CD",
+      border: colors.supportBorder,
       text: colors.support
     };
   }
@@ -68,22 +68,22 @@ function getToneColors(tone: Tone) {
   if (tone === "warning") {
     return {
       background: colors.warningSoft,
-      border: "#FED7AA",
-      text: "#B45309"
+      border: colors.warningBorder,
+      text: colors.warning
     };
   }
 
   if (tone === "purple") {
     return {
-      background: "#F1E8FF",
-      border: "#D8C7FF",
-      text: "#6D28D9"
+      background: colors.goalSoft,
+      border: colors.goalBorder,
+      text: colors.goalDark
     };
   }
 
   if (tone === "neutral") {
     return {
-      background: "#EEF2F7",
+      background: colors.surfaceMuted,
       border: colors.border,
       text: colors.textSubtle
     };
@@ -91,7 +91,7 @@ function getToneColors(tone: Tone) {
 
   return {
     background: colors.primarySoft,
-    border: "#CFE0FF",
+    border: colors.primaryBorder,
     text: colors.primary
   };
 }
@@ -560,7 +560,7 @@ export default function SimulationScreen() {
             />
             <SummaryMetric
               helper={debtMetricHelper}
-              icon={<ClipboardCheck color="#B45309" size={22} strokeWidth={2.4} />}
+              icon={<ClipboardCheck color={colors.warning} size={22} strokeWidth={2.4} />}
               label={debtMetricLabel}
               tone="warning"
               value={debtMetricValue}
@@ -678,37 +678,24 @@ export default function SimulationScreen() {
                 </Text>
               </View>
             ) : null}
-            <View style={styles.scenariosList}>
-              {distributionScenarios.map((scenario) => (
-                <DistributionStrategyOption
-                  applied={isAppliedScenario(scenario.id)}
-                  key={scenario.id}
-                  onResolve={
-                    scenario.status === "ready"
-                      ? undefined
-                      : () => router.push(getResolutionRoute(scenario.issueCodes))
-                  }
-                  onSelect={
-                    scenario.status === "ready"
-                      ? () => {
-                          setSelectedDistributionId(scenario.id);
-                          setProjectionExpanded(false);
-                        }
-                      : undefined
-                  }
-                  resolveLabel={
-                    scenario.issueCodes.includes("missing_debt_details")
-                      ? "Registrar mis deudas"
-                      : undefined
-                  }
-                  scenario={scenario}
-                  selected={
-                    scenario.status === "ready" &&
-                    selectedDistributionId === scenario.id
-                  }
-                />
-              ))}
-            </View>
+            <DistributionStrategyNavigator
+              compact={isPhone}
+              isApplied={isAppliedScenario}
+              onResolve={(scenario) =>
+                router.push(getResolutionRoute(scenario.issueCodes))
+              }
+              onSelect={(scenario) => {
+                setSelectedDistributionId(scenario.id);
+                setProjectionExpanded(false);
+              }}
+              resolveLabel={(scenario) =>
+                scenario.issueCodes.includes("missing_debt_details")
+                  ? "Registrar mis deudas"
+                  : undefined
+              }
+              scenarios={distributionScenarios}
+              selectedId={selectedDistributionId}
+            />
             {selectedDistributionScenario?.status === "ready" ? (
               <DistributionStrategyDetail
                 applied={storedSelectionMatches}
@@ -916,7 +903,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   goalSummaryRow: {
-    backgroundColor: "#F8FBFF",
+    backgroundColor: colors.selectedSoft,
     borderColor: colors.border,
     borderRadius: radius.md,
     borderWidth: 1,
@@ -946,7 +933,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 3
+    paddingVertical: spacing.xs
   },
   primaryGoalChipText: {
     color: colors.primary,
@@ -955,7 +942,7 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.small
   },
   valuePill: {
-    backgroundColor: "#F8FBFF",
+    backgroundColor: colors.selectedSoft,
     borderRadius: radius.md,
     borderWidth: 1,
     flexBasis: 180,
@@ -976,20 +963,15 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.body
   },
-  scenariosList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md
-  },
   interestNotice: {
     backgroundColor: colors.warningSoft,
-    borderColor: "#FED7AA",
+    borderColor: colors.warningBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     padding: spacing.sm
   },
   interestNoticeText: {
-    color: "#92400E",
+    color: colors.warningDark,
     fontSize: typography.caption,
     lineHeight: typography.lineHeight.caption
   },
@@ -1001,7 +983,7 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: "flex-start",
     backgroundColor: colors.warningSoft,
-    borderColor: "#FED7AA",
+    borderColor: colors.warningBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     gap: spacing.md,
@@ -1043,7 +1025,7 @@ const styles = StyleSheet.create({
   },
   scenarioEducationWarning: {
     backgroundColor: colors.warningSoft,
-    borderColor: "#FED7AA",
+    borderColor: colors.warningBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     gap: spacing.sm,
@@ -1071,8 +1053,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm
   },
   scenarioCardRecommended: {
-    backgroundColor: "#FBFFFC",
-    borderColor: "#B9E9CD",
+    backgroundColor: colors.supportSoft,
+    borderColor: colors.supportBorder,
     borderWidth: 2
   },
   scenarioTopRow: {
@@ -1149,7 +1131,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     alignSelf: "flex-start",
     backgroundColor: colors.primarySoft,
-    borderColor: "#CFE0FF",
+    borderColor: colors.primaryBorder,
     borderRadius: radius.pill,
     borderWidth: 1,
     flexDirection: "row",
@@ -1167,7 +1149,7 @@ const styles = StyleSheet.create({
     gap: spacing.md
   },
   progressTrack: {
-    backgroundColor: "#E4EAF2",
+    backgroundColor: colors.border,
     borderRadius: radius.pill,
     height: 12,
     overflow: "hidden"
@@ -1194,7 +1176,7 @@ const styles = StyleSheet.create({
   },
   disclaimerText: {
     backgroundColor: colors.supportSoft,
-    borderColor: "#B9E9CD",
+    borderColor: colors.supportBorder,
     borderRadius: radius.md,
     borderWidth: 1,
     color: colors.support,
