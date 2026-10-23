@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Text,
   View,
+  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent
 } from "react-native";
@@ -30,7 +31,7 @@ import {
   type FinancialTimelineFocus
 } from "./FinancialTimelineChart";
 
-const MOBILE_STRATEGY_WIDTH = 236;
+const MOBILE_STRATEGY_MAX_WIDTH = 236;
 
 function getStatusLabel(scenario: DistributionScenarioPresentation) {
   if (scenario.issueCodes.includes("missing_debt_details")) return "Faltan deudas";
@@ -305,27 +306,31 @@ function getOutcomeLabels(scenario: DistributionScenarioPresentation) {
     return [];
   }
 
-  const labels: string[] = [];
+  const labels: Array<{ kind: "debt" | "goal"; label: string }> = [];
   const firstMonth = scenario.timeline.months[0];
 
   if (firstMonth.debtPayments.length === 0) {
-    labels.push("Sin deudas registradas");
+    labels.push({ kind: "debt", label: "Sin deudas registradas" });
   } else if (!scenario.timeline.allDebtBalancesKnown) {
-    labels.push("Deudas: faltan saldos");
+    labels.push({ kind: "debt", label: "Deudas: faltan saldos" });
   } else if (scenario.timeline.allKnownDebtsPaidMonth) {
-    labels.push(`Sin deudas: ${formatTargetMonth(scenario.timeline.allKnownDebtsPaidMonth)}`);
+    labels.push({
+      kind: "debt",
+      label: `Sin deudas: ${formatTargetMonth(scenario.timeline.allKnownDebtsPaidMonth)}`
+    });
   } else {
-    labels.push("Deudas: más de 10 años");
+    labels.push({ kind: "debt", label: "Deudas: más de 10 años" });
   }
 
   if (scenario.timeline.trackedGoal) {
-    labels.push(
-      scenario.timeline.goalCompletionMonth
+    labels.push({
+      kind: "goal",
+      label: scenario.timeline.goalCompletionMonth
         ? `Meta: ${formatTargetMonth(scenario.timeline.goalCompletionMonth)}`
         : scenario.goalContribution > 0
           ? "Meta: por proyectar"
           : "Metas: sin aporte mensual"
-    );
+    });
   }
 
   return labels;
@@ -334,6 +339,7 @@ function getOutcomeLabels(scenario: DistributionScenarioPresentation) {
 export function DistributionStrategyOption({
   applied,
   compact,
+  compactWidth,
   onResolve,
   onSelect,
   resolveLabel = "Completar información",
@@ -342,6 +348,7 @@ export function DistributionStrategyOption({
 }: {
   applied: boolean;
   compact: boolean;
+  compactWidth?: number;
   onResolve?: () => void;
   onSelect?: () => void;
   resolveLabel?: string;
@@ -359,6 +366,7 @@ export function DistributionStrategyOption({
       style={[
         styles.optionCard,
         compact && styles.optionCardCompact,
+        compact && compactWidth ? { width: compactWidth } : null,
         unavailable && styles.cardUnavailable
       ]}
       title={scenario.label}
@@ -404,11 +412,18 @@ export function DistributionStrategyNavigator({
   selectedId: DistributionScenarioPresentation["id"];
 }) {
   const scrollRef = useRef<ScrollView>(null);
+  const [carouselWidth, setCarouselWidth] = useState(0);
   const selectedIndex = Math.max(
     0,
     scenarios.findIndex((scenario) => scenario.id === selectedId)
   );
-  const snapInterval = MOBILE_STRATEGY_WIDTH + spacing.sm;
+  const compactCardWidth = carouselWidth
+    ? Math.min(MOBILE_STRATEGY_MAX_WIDTH, carouselWidth - spacing.xl)
+    : MOBILE_STRATEGY_MAX_WIDTH;
+  const carouselInset = carouselWidth
+    ? Math.max(spacing.md, (carouselWidth - compactCardWidth) / 2)
+    : spacing.md;
+  const snapInterval = compactCardWidth + spacing.sm;
 
   useEffect(() => {
     if (!compact) return;
@@ -445,6 +460,7 @@ export function DistributionStrategyNavigator({
       <DistributionStrategyOption
         applied={isApplied(scenario.id)}
         compact={compact}
+        compactWidth={compact ? compactCardWidth : undefined}
         key={scenario.id}
         onResolve={() => onResolve(scenario)}
         onSelect={() => onSelect(scenario)}
@@ -467,6 +483,13 @@ export function DistributionStrategyNavigator({
     const scenario = scenarios[nextVisibleIndex];
     if (scenario?.status === "ready" && scenario.id !== selectedId) {
       onSelect(scenario);
+    }
+  };
+
+  const handleCarouselLayout = (event: LayoutChangeEvent) => {
+    const nextWidth = Math.round(event.nativeEvent.layout.width);
+    if (nextWidth > 0 && nextWidth !== carouselWidth) {
+      setCarouselWidth(nextWidth);
     }
   };
 
@@ -511,18 +534,23 @@ export function DistributionStrategyNavigator({
       ) : null}
 
       {compact ? (
-        <ScrollView
-          contentContainerStyle={styles.navigatorTrackCompact}
-          decelerationRate="fast"
-          horizontal
-          onMomentumScrollEnd={handleMomentumScrollEnd}
-          ref={scrollRef}
-          showsHorizontalScrollIndicator={false}
-          snapToAlignment="start"
-          snapToInterval={snapInterval}
-        >
-          {renderOptions()}
-        </ScrollView>
+        <View onLayout={handleCarouselLayout} style={styles.navigatorViewport}>
+          <ScrollView
+            contentContainerStyle={[
+              styles.navigatorTrackCompact,
+              { paddingHorizontal: carouselInset }
+            ]}
+            decelerationRate="fast"
+            horizontal
+            onMomentumScrollEnd={handleMomentumScrollEnd}
+            ref={scrollRef}
+            showsHorizontalScrollIndicator={false}
+            snapToAlignment="start"
+            snapToInterval={snapInterval}
+          >
+            {renderOptions()}
+          </ScrollView>
+        </View>
       ) : (
         <View style={styles.navigatorTrack}>{renderOptions()}</View>
       )}
@@ -537,38 +565,103 @@ function DistributionOverview({ scenario }: { scenario: DistributionScenarioPres
     { color: colors.textSubtle, label: "Sin repartir", value: scenario.unassignedAmount }
   ].filter((segment) => segment.value > 0);
   const distributionTotal = segments.reduce((total, segment) => total + segment.value, 0);
+  const isSplitStrategy = scenario.id === "split_debt_goal";
+  const primaryAllocation =
+    scenario.id === "reduce_interest"
+      ? {
+          color: colors.primary,
+          kind: "debt" as const,
+          label: "Extra a deudas",
+          value: scenario.extraDebtPayment
+        }
+      : scenario.id === "accelerate_goal"
+        ? {
+            color: financialTimelineChartColors.goal,
+            kind: "goal" as const,
+            label: "A metas",
+            value: scenario.goalContribution
+          }
+        : scenario.id === "current_reference"
+          ? {
+              color: colors.textSubtle,
+              kind: "neutral" as const,
+              label: "Permanece sin repartir",
+              value: scenario.unassignedAmount
+            }
+          : null;
 
   return (
     <View style={styles.distributionOverview}>
       <Text style={styles.distributionDetailTitle}>Distribución del primer mes</Text>
-      {distributionTotal > 0 ? (
-        <View style={styles.distributionTrack}>
-          {segments.map((segment) => (
+      {isSplitStrategy ? (
+        <>
+          {distributionTotal > 0 ? (
+            <View style={styles.distributionTrack}>
+              {segments.map((segment) => (
+                <View
+                  key={segment.label}
+                  style={[
+                    styles.distributionSegment,
+                    {
+                      backgroundColor: segment.color,
+                      flexGrow: segment.value,
+                      flexBasis: 0
+                    }
+                  ]}
+                />
+              ))}
+            </View>
+          ) : null}
+          <View style={styles.distributionLegend}>
+            {segments.map((segment) => (
+              <View key={segment.label} style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: segment.color }]} />
+                <View>
+                  <Text style={styles.legendLabel}>{segment.label}</Text>
+                  <Text style={styles.legendValue}>{formatCOP(segment.value)}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : primaryAllocation ? (
+        <View
+          style={[
+            styles.primaryAllocation,
+            primaryAllocation.kind === "debt"
+              ? styles.primaryAllocationDebt
+              : primaryAllocation.kind === "goal"
+                ? styles.primaryAllocationGoal
+                : styles.primaryAllocationNeutral
+          ]}
+        >
+          <View style={styles.primaryAllocationLabelRow}>
             <View
-              key={segment.label}
-              style={[
-                styles.distributionSegment,
-                {
-                  backgroundColor: segment.color,
-                  flexGrow: segment.value,
-                  flexBasis: 0
-                }
-              ]}
+              style={[styles.legendDot, { backgroundColor: primaryAllocation.color }]}
             />
-          ))}
+            <Text
+              style={[
+                styles.primaryAllocationLabel,
+                primaryAllocation.kind === "debt"
+                  ? styles.primaryAllocationLabelDebt
+                  : primaryAllocation.kind === "goal"
+                    ? styles.primaryAllocationLabelGoal
+                    : styles.primaryAllocationLabelNeutral
+              ]}
+            >
+              {primaryAllocation.label}
+            </Text>
+          </View>
+          <Text style={styles.primaryAllocationValue}>
+            {formatCOP(primaryAllocation.value)}
+          </Text>
+          {primaryAllocation.kind === "neutral" ? (
+            <Text style={styles.primaryAllocationHelper}>
+              Este dinero permanece disponible y no se destina a deudas ni metas.
+            </Text>
+          ) : null}
         </View>
       ) : null}
-      <View style={styles.distributionLegend}>
-        {segments.map((segment) => (
-          <View key={segment.label} style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: segment.color }]} />
-            <View>
-              <Text style={styles.legendLabel}>{segment.label}</Text>
-              <Text style={styles.legendValue}>{formatCOP(segment.value)}</Text>
-            </View>
-          </View>
-        ))}
-      </View>
       <View style={styles.supportingAmounts}>
         <AllocationValue label="Cuotas requeridas" value={formatCOP(scenario.baseDebtPayments)} />
         <AllocationValue
@@ -627,8 +720,23 @@ export function DistributionStrategyDetail({
         {outcomes.length > 0 ? (
           <View style={styles.outcomeList}>
             {outcomes.map((outcome) => (
-              <View key={outcome} style={styles.outcomeChip}>
-                <Text style={styles.outcomeChipText}>{outcome}</Text>
+              <View
+                key={outcome.kind}
+                style={[
+                  styles.outcomeChip,
+                  outcome.kind === "goal" ? styles.outcomeChipGoal : styles.outcomeChipDebt
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.outcomeChipText,
+                    outcome.kind === "goal"
+                      ? styles.outcomeChipTextGoal
+                      : styles.outcomeChipTextDebt
+                  ]}
+                >
+                  {outcome.label}
+                </Text>
               </View>
             ))}
           </View>
@@ -709,8 +817,7 @@ const styles = StyleSheet.create({
   optionCardCompact: {
     flexBasis: "auto",
     flexGrow: 0,
-    minWidth: 0,
-    width: MOBILE_STRATEGY_WIDTH
+    minWidth: 0
   },
   optionTitle: {
     fontWeight: typography.weight.bold
@@ -728,16 +835,29 @@ const styles = StyleSheet.create({
     gap: spacing.xs
   },
   outcomeChip: {
-    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
+  outcomeChipDebt: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder
+  },
+  outcomeChipGoal: {
+    backgroundColor: colors.goalSoft,
+    borderColor: colors.goalBorder
+  },
   outcomeChipText: {
-    color: colors.textMuted,
     fontSize: typography.small,
     fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.small
+  },
+  outcomeChipTextDebt: {
+    color: colors.primaryDark
+  },
+  outcomeChipTextGoal: {
+    color: colors.goalDark
   },
   optionMeta: {
     alignItems: "center",
@@ -839,8 +959,11 @@ const styles = StyleSheet.create({
   },
   navigatorTrackCompact: {
     alignItems: "stretch",
-    gap: spacing.sm,
-    paddingRight: spacing.xl
+    gap: spacing.sm
+  },
+  navigatorViewport: {
+    marginHorizontal: -spacing.md,
+    overflow: "hidden"
   },
   detailPanel: {
     borderTopColor: colors.border,
@@ -898,6 +1021,54 @@ const styles = StyleSheet.create({
   distributionSegment: {
     height: "100%",
     minWidth: 2
+  },
+  primaryAllocation: {
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.md
+  },
+  primaryAllocationDebt: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder
+  },
+  primaryAllocationGoal: {
+    backgroundColor: colors.goalSoft,
+    borderColor: colors.goalBorder
+  },
+  primaryAllocationNeutral: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border
+  },
+  primaryAllocationLabelRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.xs
+  },
+  primaryAllocationLabel: {
+    fontSize: typography.caption,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.caption
+  },
+  primaryAllocationLabelDebt: {
+    color: colors.primaryDark
+  },
+  primaryAllocationLabelGoal: {
+    color: colors.goalDark
+  },
+  primaryAllocationLabelNeutral: {
+    color: colors.textMuted
+  },
+  primaryAllocationValue: {
+    color: colors.text,
+    fontSize: typography.brand,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.brand
+  },
+  primaryAllocationHelper: {
+    color: colors.textMuted,
+    fontSize: typography.small,
+    lineHeight: typography.lineHeight.small
   },
   distributionLegend: {
     flexDirection: "row",

@@ -81,16 +81,18 @@ function getDifferenceLabel(value: string | null, earliest: string | null) {
 }
 
 function HighlightCard({
+  compact,
   detail,
   label,
   value
 }: {
+  compact: boolean;
   detail: string;
   label: string;
   value: string;
 }) {
   return (
-    <View style={styles.highlightCard}>
+    <View style={[styles.highlightCard, compact && styles.highlightCardCompact]}>
       <Text style={styles.highlightLabel}>{label}</Text>
       <Text style={styles.highlightValue}>{value}</Text>
       <Text style={styles.highlightDetail}>{detail}</Text>
@@ -243,6 +245,7 @@ export function DistributionComparisonSummary({
       <View style={[styles.highlights, compact && styles.highlightsCompact]}>
         {goalWinner ? (
           <HighlightCard
+            compact={compact}
             detail={formatTargetMonth(goalWinner.goalCompletionMonth)}
             label="Meta más rápida"
             value={scenarioById.get(goalWinner.id)?.label ?? goalWinner.label}
@@ -250,6 +253,7 @@ export function DistributionComparisonSummary({
         ) : null}
         {debtWinner ? (
           <HighlightCard
+            compact={compact}
             detail={formatTargetMonth(debtWinner.debtFreeMonth)}
             label="Deudas antes"
             value={scenarioById.get(debtWinner.id)?.label ?? debtWinner.label}
@@ -257,6 +261,7 @@ export function DistributionComparisonSummary({
         ) : null}
         {splitComparison && splitScenario?.status === "ready" ? (
           <HighlightCard
+            compact={compact}
             detail={`Meta: ${formatTargetMonth(splitComparison.goalCompletionMonth)} · Deudas: ${formatTargetMonth(splitComparison.debtFreeMonth)}`}
             label="Punto medio"
             value={splitScenario.badge}
@@ -306,6 +311,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     gap: spacing.xs,
     padding: spacing.md
+  },
+  highlightCardCompact: {
+    flexBasis: "auto",
+    flexGrow: 0,
+    minHeight: 0
   },
   highlightLabel: {
     color: colors.primary,
